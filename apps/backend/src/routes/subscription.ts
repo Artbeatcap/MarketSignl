@@ -76,46 +76,73 @@ subscriptionRoute.get('/status', async (c) => {
       });
     }
 
-    // If DB says not active but we have a Stripe customer, sync from Stripe (fixes missed webhooks)
+    // If DB says not active, try to sync from Stripe (fixes missed webhooks)
+    // Falls back to email lookup if stripe_customer_id is missing
     let resolvedSubscription = subscription;
-    if (
-      stripe &&
-      subscription.stripe_customer_id &&
-      subscription.status !== 'active'
-    ) {
+    if (stripe && subscription.status !== 'active') {
       try {
-        const stripeSubs = await stripe.subscriptions.list({
-          customer: subscription.stripe_customer_id,
-          status: 'active',
-          limit: 1,
-        });
-        if (stripeSubs.data.length > 0) {
-          const sub = stripeSubs.data[0];
-          const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id;
-          await supabaseAdmin
-            .from('subscriptions')
-            .upsert({
-              user_id: userId,
+        let stripeCustomerId = subscription.stripe_customer_id;
+
+        // If no stripe_customer_id stored, look up customer by email
+        if (!stripeCustomerId) {
+          const { data: profile } = await supabaseAdmin
+            .from('profiles')
+            .select('email')
+            .eq('id', userId)
+            .single();
+
+          if (profile?.email) {
+            const customers = await stripe.customers.list({
+              email: profile.email,
+              limit: 1,
+            });
+            if (customers.data.length > 0) {
+              stripeCustomerId = customers.data[0].id;
+              console.log(`[SUBSCRIPTION] Found Stripe customer by email lookup: ${stripeCustomerId}`);
+            }
+          }
+        }
+
+        if (stripeCustomerId) {
+          const stripeSubs = await stripe.subscriptions.list({
+            customer: stripeCustomerId,
+            status: 'active',
+            limit: 1,
+          });
+
+          if (stripeSubs.data.length > 0) {
+            const sub = stripeSubs.data[0];
+            const customerId = typeof sub.customer === 'string' ? sub.customer : sub.customer.id;
+            await supabaseAdmin
+              .from('subscriptions')
+              .upsert({
+                user_id: userId,
+                stripe_subscription_id: sub.id,
+                stripe_customer_id: customerId,
+                status: 'active',
+                platform: 'web',
+                current_period_start: new Date((sub.current_period_start ?? 0) * 1000).toISOString(),
+                current_period_end: new Date((sub.current_period_end ?? 0) * 1000).toISOString(),
+                updated_at: new Date().toISOString(),
+              }, { onConflict: 'user_id' });
+            await supabaseAdmin
+              .from('profiles')
+              .update({ is_pro: true })
+              .eq('id', userId);
+            resolvedSubscription = {
+              ...subscription,
+              status: 'active',
               stripe_subscription_id: sub.id,
               stripe_customer_id: customerId,
-              status: 'active',
-              platform: 'web',
               current_period_start: new Date((sub.current_period_start ?? 0) * 1000).toISOString(),
               current_period_end: new Date((sub.current_period_end ?? 0) * 1000).toISOString(),
-              updated_at: new Date().toISOString(),
-            }, { onConflict: 'user_id' });
-          await supabaseAdmin
-            .from('profiles')
-            .update({ is_pro: true })
-            .eq('id', userId);
-          resolvedSubscription = {
-            ...subscription,
-            status: 'active',
-            stripe_subscription_id: sub.id,
-            current_period_start: new Date((sub.current_period_start ?? 0) * 1000).toISOString(),
-            current_period_end: new Date((sub.current_period_end ?? 0) * 1000).toISOString(),
-          };
-          console.log(`[SUBSCRIPTION] Synced paid status from Stripe for user ${userId}`);
+            };
+            console.log(`[SUBSCRIPTION] Synced paid status from Stripe for user ${userId}`);
+          } else {
+            console.log(`[SUBSCRIPTION] No active Stripe subs for customer ${stripeCustomerId} (user ${userId})`);
+          }
+        } else {
+          console.log(`[SUBSCRIPTION] No Stripe customer found for user ${userId}`);
         }
       } catch (syncErr) {
         console.error('[SUBSCRIPTION] Stripe sync failed (continuing with DB state):', syncErr);
@@ -294,6 +321,7 @@ subscriptionRoute.post('/create-checkout', async (c) => {
 
   } catch (error: any) {
     console.error('Create checkout error:', error);
+    console.error('[SUBSCRIPTION] Stripe raw error:', { code: error?.code, message: error?.message });
     const msg = error?.message ?? '';
     const isTestLiveMismatch =
       error?.code === 'resource_missing' ||
