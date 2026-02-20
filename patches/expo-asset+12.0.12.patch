@@ -1,0 +1,745 @@
+diff --git a/node_modules/expo-asset/android/build.gradle b/node_modules/expo-asset/android/build.gradle
+index de0a615..b09f271 100644
+--- a/node_modules/expo-asset/android/build.gradle
++++ b/node_modules/expo-asset/android/build.gradle
+@@ -1,12 +1,57 @@
+-plugins {
+-  id 'com.android.library'
+-  id 'expo-module-gradle-plugin'
+-}
++apply plugin: 'com.android.library'
++apply plugin: 'kotlin-android'
++apply plugin: 'maven-publish'
+ 
+ group = 'expo.modules.asset'
+ version = '12.0.12'
+ 
++def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
++if (expoModulesCorePlugin.exists()) {
++  apply from: expoModulesCorePlugin
++  applyKotlinExpoModulesCorePlugin()
++  if (safeExtGet("expoProvidesDefaultConfig", false)) {
++    useExpoPublishing()
++    useCoreDependencies()
++  }
++}
++
++buildscript {
++  ext.safeExtGet = { prop, fallback ->
++    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
++  }
++  ext.getKotlinVersion = {
++    if (ext.has("kotlinVersion")) ext.kotlinVersion() else ext.safeExtGet("kotlinVersion", "1.8.10")
++  }
++  repositories { mavenCentral() }
++  dependencies {
++    classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${getKotlinVersion()}")
++  }
++}
++
++if (!safeExtGet("expoProvidesDefaultConfig", false)) {
++  afterEvaluate {
++    def releaseComponent = components.findByName("release")
++    if (releaseComponent != null) {
++      publishing {
++        publications { release(MavenPublication) { from releaseComponent } }
++        repositories { maven { url = mavenLocal().url } }
++      }
++    }
++  }
++}
++
+ android {
++  if (!safeExtGet("expoProvidesDefaultConfig", false)) {
++    compileSdkVersion safeExtGet("compileSdkVersion", 34)
++    defaultConfig {
++      minSdkVersion safeExtGet("minSdkVersion", 23)
++      targetSdkVersion safeExtGet("targetSdkVersion", 34)
++    }
++    publishing {
++      singleVariant("release") { withSourcesJar() }
++    }
++    lintOptions { abortOnError false }
++  }
+   namespace "expo.modules.asset"
+   defaultConfig {
+     versionCode 1
+@@ -15,6 +60,10 @@ android {
+ }
+ 
+ dependencies {
++  if (!safeExtGet("expoProvidesDefaultConfig", false)) {
++    implementation project(':expo-modules-core')
++    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:${getKotlinVersion()}"
++  }
+   testImplementation 'androidx.test:core:1.6.1'
+   testImplementation 'io.mockk:mockk:1.13.11'
+   testImplementation 'junit:junit:4.13.2'
+diff --git a/node_modules/expo-asset/android/build/.transforms/4cc9ed73e75e31fe43da8829609683a4/results.bin b/node_modules/expo-asset/android/build/.transforms/4cc9ed73e75e31fe43da8829609683a4/results.bin
+new file mode 100644
+index 0000000..e3f0ff0
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/.transforms/4cc9ed73e75e31fe43da8829609683a4/results.bin
+@@ -0,0 +1 @@
++i/classes_global-synthetics
+diff --git a/node_modules/expo-asset/android/build/.transforms/5568845661fd5b5c50dec198f72c0b56/results.bin b/node_modules/expo-asset/android/build/.transforms/5568845661fd5b5c50dec198f72c0b56/results.bin
+new file mode 100644
+index 0000000..0d259dd
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/.transforms/5568845661fd5b5c50dec198f72c0b56/results.bin
+@@ -0,0 +1 @@
++o/classes
+diff --git a/node_modules/expo-asset/android/build/.transforms/5568845661fd5b5c50dec198f72c0b56/transformed/classes/classes_dex/classes.dex b/node_modules/expo-asset/android/build/.transforms/5568845661fd5b5c50dec198f72c0b56/transformed/classes/classes_dex/classes.dex
+new file mode 100644
+index 0000000..d320119
+Binary files /dev/null and b/node_modules/expo-asset/android/build/.transforms/5568845661fd5b5c50dec198f72c0b56/transformed/classes/classes_dex/classes.dex differ
+diff --git a/node_modules/expo-asset/android/build/.transforms/83160d50f2f29e480414274b58482f60/results.bin b/node_modules/expo-asset/android/build/.transforms/83160d50f2f29e480414274b58482f60/results.bin
+new file mode 100644
+index 0000000..61a58fa
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/.transforms/83160d50f2f29e480414274b58482f60/results.bin
+@@ -0,0 +1 @@
++i/classes_dex
+diff --git a/node_modules/expo-asset/android/build/generated/source/buildConfig/release/expo/modules/asset/BuildConfig.java b/node_modules/expo-asset/android/build/generated/source/buildConfig/release/expo/modules/asset/BuildConfig.java
+new file mode 100644
+index 0000000..b369c1b
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/generated/source/buildConfig/release/expo/modules/asset/BuildConfig.java
+@@ -0,0 +1,10 @@
++/**
++ * Automatically generated file. DO NOT MODIFY
++ */
++package expo.modules.asset;
++
++public final class BuildConfig {
++  public static final boolean DEBUG = false;
++  public static final String LIBRARY_PACKAGE_NAME = "expo.modules.asset";
++  public static final String BUILD_TYPE = "release";
++}
+diff --git a/node_modules/expo-asset/android/build/intermediates/aapt_friendly_merged_manifests/release/aapt/AndroidManifest.xml b/node_modules/expo-asset/android/build/intermediates/aapt_friendly_merged_manifests/release/aapt/AndroidManifest.xml
+new file mode 100644
+index 0000000..3981bd7
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/intermediates/aapt_friendly_merged_manifests/release/aapt/AndroidManifest.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="expo.modules.asset" >
++
++    <uses-sdk android:minSdkVersion="21" />
++
++</manifest>
+\ No newline at end of file
+diff --git a/node_modules/expo-asset/android/build/intermediates/aapt_friendly_merged_manifests/release/aapt/output-metadata.json b/node_modules/expo-asset/android/build/intermediates/aapt_friendly_merged_manifests/release/aapt/output-metadata.json
+new file mode 100644
+index 0000000..1b40c80
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/intermediates/aapt_friendly_merged_manifests/release/aapt/output-metadata.json
+@@ -0,0 +1,18 @@
++{
++  "version": 3,
++  "artifactType": {
++    "type": "AAPT_FRIENDLY_MERGED_MANIFESTS",
++    "kind": "Directory"
++  },
++  "applicationId": "expo.modules.asset",
++  "variantName": "release",
++  "elements": [
++    {
++      "type": "SINGLE",
++      "filters": [],
++      "attributes": [],
++      "outputFile": "AndroidManifest.xml"
++    }
++  ],
++  "elementType": "File"
++}
+\ No newline at end of file
+diff --git a/node_modules/expo-asset/android/build/intermediates/aar_metadata/release/aar-metadata.properties b/node_modules/expo-asset/android/build/intermediates/aar_metadata/release/aar-metadata.properties
+new file mode 100644
+index 0000000..776557e
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/intermediates/aar_metadata/release/aar-metadata.properties
+@@ -0,0 +1,5 @@
++aarFormatVersion=1.0
++aarMetadataVersion=1.0
++minCompileSdk=1
++minCompileSdkExtension=0
++minAndroidGradlePluginVersion=1.0.0
+diff --git a/node_modules/expo-asset/android/build/intermediates/annotation_processor_list/release/annotationProcessors.json b/node_modules/expo-asset/android/build/intermediates/annotation_processor_list/release/annotationProcessors.json
+new file mode 100644
+index 0000000..9e26dfe
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/intermediates/annotation_processor_list/release/annotationProcessors.json
+@@ -0,0 +1 @@
++{}
+\ No newline at end of file
+diff --git a/node_modules/expo-asset/android/build/intermediates/compile_library_classes_jar/release/classes.jar b/node_modules/expo-asset/android/build/intermediates/compile_library_classes_jar/release/classes.jar
+new file mode 100644
+index 0000000..7ae05f6
+Binary files /dev/null and b/node_modules/expo-asset/android/build/intermediates/compile_library_classes_jar/release/classes.jar differ
+diff --git a/node_modules/expo-asset/android/build/intermediates/compile_r_class_jar/release/R.jar b/node_modules/expo-asset/android/build/intermediates/compile_r_class_jar/release/R.jar
+new file mode 100644
+index 0000000..6a4cb4d
+Binary files /dev/null and b/node_modules/expo-asset/android/build/intermediates/compile_r_class_jar/release/R.jar differ
+diff --git a/node_modules/expo-asset/android/build/intermediates/compile_symbol_list/release/R.txt b/node_modules/expo-asset/android/build/intermediates/compile_symbol_list/release/R.txt
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/expo-asset/android/build/intermediates/incremental/mergeReleaseJniLibFolders/merger.xml b/node_modules/expo-asset/android/build/intermediates/incremental/mergeReleaseJniLibFolders/merger.xml
+new file mode 100644
+index 0000000..9970bf2
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/intermediates/incremental/mergeReleaseJniLibFolders/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\src\main\jniLibs"/></dataSet><dataSet config="release" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\src\release\jniLibs"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/expo-asset/android/build/intermediates/incremental/mergeReleaseShaders/merger.xml b/node_modules/expo-asset/android/build/intermediates/incremental/mergeReleaseShaders/merger.xml
+new file mode 100644
+index 0000000..79f3915
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/intermediates/incremental/mergeReleaseShaders/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\src\main\shaders"/></dataSet><dataSet config="release" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\src\release\shaders"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/expo-asset/android/build/intermediates/incremental/packageReleaseAssets/merger.xml b/node_modules/expo-asset/android/build/intermediates/incremental/packageReleaseAssets/merger.xml
+new file mode 100644
+index 0000000..52c7c20
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/intermediates/incremental/packageReleaseAssets/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\src\main\assets"/></dataSet><dataSet config="release" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\src\release\assets"/></dataSet><dataSet config="generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\build\intermediates\shader_assets\release\out"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/expo-asset/android/build/intermediates/incremental/release/packageReleaseResources/compile-file-map.properties b/node_modules/expo-asset/android/build/intermediates/incremental/release/packageReleaseResources/compile-file-map.properties
+new file mode 100644
+index 0000000..310d26b
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/intermediates/incremental/release/packageReleaseResources/compile-file-map.properties
+@@ -0,0 +1 @@
++#Sat Feb 14 23:25:57 EST 2026
+diff --git a/node_modules/expo-asset/android/build/intermediates/incremental/release/packageReleaseResources/merger.xml b/node_modules/expo-asset/android/build/intermediates/incremental/release/packageReleaseResources/merger.xml
+new file mode 100644
+index 0000000..d7b2075
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/intermediates/incremental/release/packageReleaseResources/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\src\main\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main" generated-set="main$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\src\main\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="release$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\src\release\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="release" generated-set="release$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\src\release\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\build\generated\res\resValues\release"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated" generated-set="generated$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\build\generated\res\resValues\release"/></dataSet><mergedItems/></merger>
+\ No newline at end of file
+diff --git a/node_modules/expo-asset/android/build/intermediates/java_res/release/out/META-INF/expo-asset_release.kotlin_module b/node_modules/expo-asset/android/build/intermediates/java_res/release/out/META-INF/expo-asset_release.kotlin_module
+new file mode 100644
+index 0000000..a2c2720
+Binary files /dev/null and b/node_modules/expo-asset/android/build/intermediates/java_res/release/out/META-INF/expo-asset_release.kotlin_module differ
+diff --git a/node_modules/expo-asset/android/build/intermediates/javac/release/classes/expo/modules/asset/BuildConfig.class b/node_modules/expo-asset/android/build/intermediates/javac/release/classes/expo/modules/asset/BuildConfig.class
+new file mode 100644
+index 0000000..eb2fa36
+Binary files /dev/null and b/node_modules/expo-asset/android/build/intermediates/javac/release/classes/expo/modules/asset/BuildConfig.class differ
+diff --git a/node_modules/expo-asset/android/build/intermediates/local_only_symbol_list/release/R-def.txt b/node_modules/expo-asset/android/build/intermediates/local_only_symbol_list/release/R-def.txt
+new file mode 100644
+index 0000000..78ac5b8
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/intermediates/local_only_symbol_list/release/R-def.txt
+@@ -0,0 +1,2 @@
++R_DEF: Internal format may change without notice
++local
+diff --git a/node_modules/expo-asset/android/build/intermediates/manifest_merge_blame_file/release/manifest-merger-blame-release-report.txt b/node_modules/expo-asset/android/build/intermediates/manifest_merge_blame_file/release/manifest-merger-blame-release-report.txt
+new file mode 100644
+index 0000000..79d5c57
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/intermediates/manifest_merge_blame_file/release/manifest-merger-blame-release-report.txt
+@@ -0,0 +1,7 @@
++1<?xml version="1.0" encoding="utf-8"?>
++2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++3    package="expo.modules.asset" >
++4
++5    <uses-sdk android:minSdkVersion="21" />
++6
++7</manifest>
+diff --git a/node_modules/expo-asset/android/build/intermediates/merged_manifest/release/AndroidManifest.xml b/node_modules/expo-asset/android/build/intermediates/merged_manifest/release/AndroidManifest.xml
+new file mode 100644
+index 0000000..3981bd7
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/intermediates/merged_manifest/release/AndroidManifest.xml
+@@ -0,0 +1,7 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="expo.modules.asset" >
++
++    <uses-sdk android:minSdkVersion="21" />
++
++</manifest>
+\ No newline at end of file
+diff --git a/node_modules/expo-asset/android/build/intermediates/navigation_json/release/navigation.json b/node_modules/expo-asset/android/build/intermediates/navigation_json/release/navigation.json
+new file mode 100644
+index 0000000..0637a08
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/intermediates/navigation_json/release/navigation.json
+@@ -0,0 +1 @@
++[]
+\ No newline at end of file
+diff --git a/node_modules/expo-asset/android/build/intermediates/runtime_library_classes_jar/release/classes.jar b/node_modules/expo-asset/android/build/intermediates/runtime_library_classes_jar/release/classes.jar
+new file mode 100644
+index 0000000..8d6de95
+Binary files /dev/null and b/node_modules/expo-asset/android/build/intermediates/runtime_library_classes_jar/release/classes.jar differ
+diff --git a/node_modules/expo-asset/android/build/intermediates/symbol_list_with_package_name/release/package-aware-r.txt b/node_modules/expo-asset/android/build/intermediates/symbol_list_with_package_name/release/package-aware-r.txt
+new file mode 100644
+index 0000000..25f8595
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/intermediates/symbol_list_with_package_name/release/package-aware-r.txt
+@@ -0,0 +1 @@
++expo.modules.asset
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab
+new file mode 100644
+index 0000000..f2761b8
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream
+new file mode 100644
+index 0000000..6cdb1c1
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream.len
+new file mode 100644
+index 0000000..468508e
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.keystream.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.len
+new file mode 100644
+index 0000000..01bdaa1
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.values.at b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.values.at
+new file mode 100644
+index 0000000..4b0d5d8
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.values.at differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i
+new file mode 100644
+index 0000000..6365f98
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/inputs/source-to-output.tab_i.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab
+new file mode 100644
+index 0000000..2c2b956
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream
+new file mode 100644
+index 0000000..423812c
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream.len
+new file mode 100644
+index 0000000..8143849
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.keystream.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.len
+new file mode 100644
+index 0000000..01bdaa1
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.values.at b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.values.at
+new file mode 100644
+index 0000000..fc0e221
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.values.at differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i
+new file mode 100644
+index 0000000..c3bcae2
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab_i.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab
+new file mode 100644
+index 0000000..96874c0
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream
+new file mode 100644
+index 0000000..423812c
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream.len
+new file mode 100644
+index 0000000..8143849
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.keystream.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.len
+new file mode 100644
+index 0000000..01bdaa1
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.values.at b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.values.at
+new file mode 100644
+index 0000000..a248adf
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.values.at differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i
+new file mode 100644
+index 0000000..c3bcae2
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab_i.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab
+new file mode 100644
+index 0000000..bdf584a
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream
+new file mode 100644
+index 0000000..3dbeadf
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream.len
+new file mode 100644
+index 0000000..68d7fbd
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.keystream.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.len
+new file mode 100644
+index 0000000..2a17e6e
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.values.at b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.values.at
+new file mode 100644
+index 0000000..6ede21c
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab.values.at differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i
+new file mode 100644
+index 0000000..1dd8035
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/constants.tab_i.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab
+new file mode 100644
+index 0000000..0114d5b
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream
+new file mode 100644
+index 0000000..88305a0
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream.len
+new file mode 100644
+index 0000000..d1ea5bf
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.keystream.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.len
+new file mode 100644
+index 0000000..a541356
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.values.at b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.values.at
+new file mode 100644
+index 0000000..91b4471
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.values.at differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i
+new file mode 100644
+index 0000000..477e456
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab_i.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab
+new file mode 100644
+index 0000000..bdf584a
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.keystream b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.keystream
+new file mode 100644
+index 0000000..3dbeadf
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.keystream differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.keystream.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.keystream.len
+new file mode 100644
+index 0000000..68d7fbd
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.keystream.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.len
+new file mode 100644
+index 0000000..2a17e6e
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.values.at b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.values.at
+new file mode 100644
+index 0000000..46d6744
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab.values.at differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab_i b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab_i
+new file mode 100644
+index 0000000..1dd8035
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab_i differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab_i.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/package-parts.tab_i.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab
+new file mode 100644
+index 0000000..6f2585e
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream
+new file mode 100644
+index 0000000..8a3380a
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream.len
+new file mode 100644
+index 0000000..6b14139
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.keystream.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.len
+new file mode 100644
+index 0000000..93a595b
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.at b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.at
+new file mode 100644
+index 0000000..c1d2907
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.at differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i
+new file mode 100644
+index 0000000..4bf8a6d
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab_i.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab
+new file mode 100644
+index 0000000..73d574d
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream
+new file mode 100644
+index 0000000..6cdb1c1
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream.len
+new file mode 100644
+index 0000000..468508e
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.keystream.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.len
+new file mode 100644
+index 0000000..01bdaa1
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.values.at b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.values.at
+new file mode 100644
+index 0000000..534c735
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.values.at differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i
+new file mode 100644
+index 0000000..6365f98
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab_i.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab
+new file mode 100644
+index 0000000..27f01ec
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream
+new file mode 100644
+index 0000000..a0f95eb
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream.len
+new file mode 100644
+index 0000000..c259288
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.keystream.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.len
+new file mode 100644
+index 0000000..01bdaa1
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.values.at b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.values.at
+new file mode 100644
+index 0000000..f8a9806
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab.values.at differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i
+new file mode 100644
+index 0000000..aa19153
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/subtypes.tab_i.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab
+new file mode 100644
+index 0000000..0bea046
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream
+new file mode 100644
+index 0000000..423812c
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream.len
+new file mode 100644
+index 0000000..8143849
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.keystream.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.len
+new file mode 100644
+index 0000000..01bdaa1
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.values.at b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.values.at
+new file mode 100644
+index 0000000..2a7655e
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab.values.at differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i
+new file mode 100644
+index 0000000..c3bcae2
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/jvm/kotlin/supertypes.tab_i.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/counters.tab b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/counters.tab
+new file mode 100644
+index 0000000..2ceb12b
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/counters.tab
+@@ -0,0 +1,2 @@
++2
++0
+\ No newline at end of file
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab
+new file mode 100644
+index 0000000..2f5cfe5
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream
+new file mode 100644
+index 0000000..6cdb1c1
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream.len
+new file mode 100644
+index 0000000..468508e
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.keystream.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.len
+new file mode 100644
+index 0000000..01bdaa1
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.values.at b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.values.at
+new file mode 100644
+index 0000000..7d30a43
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.values.at differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i
+new file mode 100644
+index 0000000..3c4c992
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/file-to-id.tab_i.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab
+new file mode 100644
+index 0000000..ba52634
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream
+new file mode 100644
+index 0000000..100d205
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream.len
+new file mode 100644
+index 0000000..ccfcbf4
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.len
+new file mode 100644
+index 0000000..01bdaa1
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.values.at b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.values.at
+new file mode 100644
+index 0000000..319447c
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.values.at differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i
+new file mode 100644
+index 0000000..f768a77
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab
+new file mode 100644
+index 0000000..51507b7
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream
+new file mode 100644
+index 0000000..ace862a
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream.len
+new file mode 100644
+index 0000000..180f383
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.keystream.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.len
+new file mode 100644
+index 0000000..b492c4d
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.at b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.at
+new file mode 100644
+index 0000000..b423b99
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.at differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab_i b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab_i
+new file mode 100644
+index 0000000..3eee5ba
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab_i differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab_i.len b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab_i.len
+new file mode 100644
+index 0000000..131e265
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/caches-jvm/lookups/lookups.tab_i.len differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/last-build.bin b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/last-build.bin
+new file mode 100644
+index 0000000..8817c1f
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/cacheable/last-build.bin differ
+diff --git a/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/local-state/build-history.bin b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/local-state/build-history.bin
+new file mode 100644
+index 0000000..ac65860
+Binary files /dev/null and b/node_modules/expo-asset/android/build/kotlin/compileReleaseKotlin/local-state/build-history.bin differ
+diff --git a/node_modules/expo-asset/android/build/outputs/logs/manifest-merger-release-report.txt b/node_modules/expo-asset/android/build/outputs/logs/manifest-merger-release-report.txt
+new file mode 100644
+index 0000000..9b79a28
+--- /dev/null
++++ b/node_modules/expo-asset/android/build/outputs/logs/manifest-merger-release-report.txt
+@@ -0,0 +1,14 @@
++-- Merging decision tree log ---
++manifest
++ADDED from C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\src\main\AndroidManifest.xml:1:1-2:12
++INJECTED from C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\src\main\AndroidManifest.xml:1:1-2:12
++	package
++		INJECTED from C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\src\main\AndroidManifest.xml
++uses-sdk
++INJECTED from C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\src\main\AndroidManifest.xml reason: use-sdk injection requested
++INJECTED from C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\src\main\AndroidManifest.xml
++INJECTED from C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\src\main\AndroidManifest.xml
++	android:targetSdkVersion
++		INJECTED from C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\src\main\AndroidManifest.xml
++	android:minSdkVersion
++		INJECTED from C:\Users\Art\VScode\chartsignl_80eb2710\node_modules\expo-asset\android\src\main\AndroidManifest.xml
+diff --git a/node_modules/expo-asset/android/build/tmp/compileReleaseJavaWithJavac/previous-compilation-data.bin b/node_modules/expo-asset/android/build/tmp/compileReleaseJavaWithJavac/previous-compilation-data.bin
+new file mode 100644
+index 0000000..698f425
+Binary files /dev/null and b/node_modules/expo-asset/android/build/tmp/compileReleaseJavaWithJavac/previous-compilation-data.bin differ
+diff --git a/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/META-INF/expo-asset_release.kotlin_module b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/META-INF/expo-asset_release.kotlin_module
+new file mode 100644
+index 0000000..a2c2720
+Binary files /dev/null and b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/META-INF/expo-asset_release.kotlin_module differ
+diff --git a/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$definition$lambda$3$$inlined$Coroutine$1.class b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$definition$lambda$3$$inlined$Coroutine$1.class
+new file mode 100644
+index 0000000..6dc62fe
+Binary files /dev/null and b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$definition$lambda$3$$inlined$Coroutine$1.class differ
+diff --git a/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$definition$lambda$3$$inlined$Coroutine$2.class b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$definition$lambda$3$$inlined$Coroutine$2.class
+new file mode 100644
+index 0000000..bbaf7f0
+Binary files /dev/null and b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$definition$lambda$3$$inlined$Coroutine$2.class differ
+diff --git a/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$definition$lambda$3$$inlined$Coroutine$3.class b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$definition$lambda$3$$inlined$Coroutine$3.class
+new file mode 100644
+index 0000000..2ab2f49
+Binary files /dev/null and b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$definition$lambda$3$$inlined$Coroutine$3.class differ
+diff --git a/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$definition$lambda$3$$inlined$Coroutine$4.class b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$definition$lambda$3$$inlined$Coroutine$4.class
+new file mode 100644
+index 0000000..57a952e
+Binary files /dev/null and b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$definition$lambda$3$$inlined$Coroutine$4.class differ
+diff --git a/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$downloadAsset$1.class b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$downloadAsset$1.class
+new file mode 100644
+index 0000000..eedcdab
+Binary files /dev/null and b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$downloadAsset$1.class differ
+diff --git a/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$downloadAsset$2.class b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$downloadAsset$2.class
+new file mode 100644
+index 0000000..df174c7
+Binary files /dev/null and b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$downloadAsset$2.class differ
+diff --git a/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$getMD5HashOfFileContent$1$1$1.class b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$getMD5HashOfFileContent$1$1$1.class
+new file mode 100644
+index 0000000..d6a14aa
+Binary files /dev/null and b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$getMD5HashOfFileContent$1$1$1.class differ
+diff --git a/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$getMD5HashOfFilePath$1.class b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$getMD5HashOfFilePath$1.class
+new file mode 100644
+index 0000000..89a5af5
+Binary files /dev/null and b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule$getMD5HashOfFilePath$1.class differ
+diff --git a/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule.class b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule.class
+new file mode 100644
+index 0000000..c82dc57
+Binary files /dev/null and b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/AssetModule.class differ
+diff --git a/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/ResourceAssetKt.class b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/ResourceAssetKt.class
+new file mode 100644
+index 0000000..f831167
+Binary files /dev/null and b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/ResourceAssetKt.class differ
+diff --git a/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/UnableToDownloadAssetException.class b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/UnableToDownloadAssetException.class
+new file mode 100644
+index 0000000..cc8619b
+Binary files /dev/null and b/node_modules/expo-asset/android/build/tmp/kotlin-classes/release/expo/modules/asset/UnableToDownloadAssetException.class differ

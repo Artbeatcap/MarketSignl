@@ -1,4 +1,4 @@
-package com.chartsignl.app
+package com.optionsplungellc.chartsignl
 
 import android.app.Application
 import android.content.res.Configuration

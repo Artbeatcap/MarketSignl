@@ -691,6 +691,7 @@ const styles = StyleSheet.create({
   },
   signOutButton: {
     marginBottom: spacing.lg,
+    backgroundColor: colors.white,
   },
   versionText: {
     ...typography.bodySm,

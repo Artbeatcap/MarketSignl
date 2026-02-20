@@ -7,24 +7,29 @@ import type {
 } from '@chartsignl/core';
 
 import { API_URL } from './apiConfig';
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+import { getAccessToken } from './supabase';
 
-// Get access token directly from localStorage to avoid Supabase's hanging getSession()
-function getAccessTokenFromStorage(): string | null {
-  if (Platform.OS !== 'web') return null;
-  
-  try {
-    // Supabase stores the session in localStorage with a specific key format
-    const storageKey = `sb-${SUPABASE_URL.split('//')[1].split('.')[0]}-auth-token`;
-    const storedData = localStorage.getItem(storageKey);
-    if (storedData) {
-      const parsed = JSON.parse(storedData);
-      return parsed?.access_token || null;
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+
+// Get access token: web = localStorage (avoids Supabase getSession hang), native = Supabase SecureStore
+async function getToken(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    if (!SUPABASE_URL || typeof SUPABASE_URL !== 'string') return null;
+    try {
+      const storageKey = `sb-${SUPABASE_URL.split('//')[1].split('.')[0]}-auth-token`;
+      const storedData = localStorage.getItem(storageKey);
+      if (storedData) {
+        const parsed = JSON.parse(storedData);
+        return parsed?.access_token || null;
+      }
+    } catch (error) {
+      console.error('Error reading token from storage:', error);
     }
-  } catch (error) {
-    console.error('Error reading token from storage:', error);
+    return null;
   }
-  return null;
+  // Native (iOS/Android): use Supabase session via SecureStore
+  const token = await getAccessToken();
+  return token ?? null;
 }
 
 // Generic fetch wrapper with auth
@@ -34,7 +39,7 @@ async function apiFetch<T>(
   options: RequestInit = {},
   accessToken?: string | null
 ): Promise<T> {
-  const token = accessToken ?? getAccessTokenFromStorage();
+  const token = accessToken ?? (await getToken());
   
   if (!token) {
     throw new Error('Not authenticated');

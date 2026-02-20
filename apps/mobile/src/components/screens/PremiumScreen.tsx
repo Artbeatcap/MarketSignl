@@ -113,6 +113,8 @@ export default function PremiumScreen() {
   const successHandledRef = useRef(false);
 
   useEffect(() => {
+    // Temporary diagnostic: RevenueCat Android key when Premium mounts (check Logcat)
+    console.log('RC Android Key:', process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ? 'SET' : 'MISSING');
     loadOfferings();
   }, []);
 
@@ -191,11 +193,11 @@ export default function PremiumScreen() {
         return; // No RevenueCat on web
       }
       
-      // Only load RevenueCat on mobile
-      const Purchases = (await import('react-native-purchases')).default;
-      const offeringsData = await Purchases.getOfferings();
+      // Use subscription service so RevenueCat is configured before getOfferings
+      await subscriptionService.initialize();
+      const offeringsData = await subscriptionService.getOfferings();
       
-      if (offeringsData.current !== null) {
+      if (offeringsData?.current != null) {
         setOfferings(offeringsData.current);
         const monthlyPackage = offeringsData.current.availablePackages.find(
           (pkg) => pkg.identifier === '$rc_monthly' || pkg.packageType === 'MONTHLY'
@@ -303,11 +305,12 @@ export default function PremiumScreen() {
 
     try {
       setIsPurchasing(true);
-      const Purchases = (await import('react-native-purchases')).default;
-      await Purchases.logIn(user.id);
-      const purchaseResult = await Purchases.purchasePackage(selectedPackage);
-      
-      if (purchaseResult.customerInfo.entitlements.active['premium']) {
+      const result = await subscriptionService.purchaseSubscription(
+        selectedPackage,
+        user.id,
+        session?.access_token ?? undefined
+      );
+      if (result.success) {
         await refreshSubscription();
         Alert.alert(
           'Welcome to Premium! 🎉',
@@ -319,7 +322,7 @@ export default function PremiumScreen() {
       }
     } catch (error: any) {
       console.error('Purchase error:', error);
-      if (error.userCancelled) return;
+      if (error?.userCancelled || error?.message === 'Purchase cancelled') return;
       Alert.alert(
         'Purchase Failed',
         error.message || 'An error occurred during purchase. Please try again.',
@@ -346,14 +349,11 @@ export default function PremiumScreen() {
       return;
     }
 
-    // Mobile: Use RevenueCat
+    // Mobile: Use subscription service (same configured RevenueCat instance)
     try {
       setIsRestoring(true);
-      const Purchases = (await import('react-native-purchases')).default;
-      await Purchases.logIn(user.id);
-      const customerInfo = await Purchases.restorePurchases();
-      
-      if (customerInfo.entitlements.active['premium']) {
+      const hasPremium = await subscriptionService.restorePurchases(user.id);
+      if (hasPremium) {
         await refreshSubscription();
         Alert.alert(
           'Purchases Restored',

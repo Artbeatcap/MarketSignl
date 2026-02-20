@@ -7,6 +7,7 @@
     "packages/*"
   ],
   "scripts": {
+    "postinstall": "patch-package",
     "gen-deploy-deletion": "node scripts/gen-deploy-deletion.js",
     "dev": "turbo run dev",
     "dev:mobile": "turbo run dev --filter=mobile",
@@ -16,11 +17,13 @@
     "lint": "turbo run lint",
     "type-check": "turbo run type-check",
     "clean": "turbo run clean && rm -rf node_modules",
-    "android": "expo run:android",
+    "ensure-mobile-deps": "node scripts/ensure-mobile-node-modules.js",
+    "android": "npm run ensure-mobile-deps && expo run:android",
     "ios": "expo run:ios"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
+    "patch-package": "^8.0.1",
     "prettier": "^3.1.0",
     "turbo": "^2.0.0",
     "typescript": "^5.3.0"
@@ -30,8 +33,15 @@
   },
   "packageManager": "npm@10.2.0",
   "dependencies": {
+    "@react-native-community/cli-platform-android": "^20.1.1",
+    "@react-native-community/cli-server-api": "^12.3.6",
     "expo": "~50.0.17",
+    "expo-asset": "^12.0.12",
+    "expo-font": "~11.10.3",
     "react": "18.2.0",
-    "react-native": "0.73.6"
+    "react-native": "0.73.6",
+    "react-native-safe-area-context": "^4.8.2",
+    "react-native-screens": "^3.29.0",
+    "react-native-svg": "^14.1.0"
   }
 }

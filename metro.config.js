@@ -13,10 +13,10 @@ const config = getDefaultConfig(workspaceRoot);
 config.projectRoot = workspaceRoot;
 config.watchFolders = [projectRoot];
 
-// Resolve modules from both workspace root and project root
+// Monorepo: resolve from repo root node_modules first (hoisted deps), then apps/mobile
 config.resolver.nodeModulesPaths = [
-  path.resolve(workspaceRoot, 'node_modules'),
   path.resolve(projectRoot, 'node_modules'),
+  path.resolve(workspaceRoot, 'node_modules'),
 ];
 
 module.exports = config;

@@ -45,8 +45,8 @@ const intervalConfig: Record<
   // Intraday: use warmup to avoid EMA cutoff at chart start (market hours create gaps).
   '1d': { timespan: 'minute', multiplier: 5, daysBack: 1, emaWarmupBars: 200 },
   '5d': { timespan: 'minute', multiplier: 30, daysBack: 5, emaWarmupBars: 100 },
-  // Hourly bars only exist during market hours; use larger warmup to guarantee >=21 bars.
-  '1mo': { timespan: 'hour', multiplier: 1, daysBack: 30, emaWarmupBars: 100 },
+  // Daily bars (Polygon hourly is stale; daily is current). 30 warmup bars; 45 daysBack ≈ 32 trading days.
+  '1mo': { timespan: 'day', multiplier: 1, daysBack: 45, emaWarmupBars: 30 },
   '3mo': { timespan: 'day', multiplier: 1, daysBack: 140, emaWarmupBars: 30 },
   '6mo': { timespan: 'day', multiplier: 1, daysBack: 180, emaWarmupBars: 30 },
   '1y': { timespan: 'day', multiplier: 1, daysBack: 365, emaWarmupBars: 30 },

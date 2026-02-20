@@ -192,11 +192,8 @@ export default function AuthCallbackScreen() {
 
           setStatus('success');
           setMessage('Success!');
-          
-          // Navigate to /home (AuthGate will then send authenticated users to main app)
-          setTimeout(() => {
-            router.replace('/(onboarding)/home');
-          }, 1000);
+          // Navigate immediately (AuthGate will redirect authenticated users to main app)
+          router.replace('/(tabs)/analyze');
         } else {
           // No session found - might be an invalid or expired link
           setErrorMessage('The link may have expired or is invalid. Please try again.');

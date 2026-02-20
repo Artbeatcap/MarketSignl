@@ -23,9 +23,6 @@ import { updateProfile } from '../../lib/api';
 import { colors, typography, spacing, borderRadius } from '../../theme';
 import { API_URL } from '../../lib/apiConfig';
 
-// Complete auth session in browser
-WebBrowser.maybeCompleteAuthSession();
-
 // Auth flow states
 type AuthStep = 'email' | 'password';
 type AccountStatus = 'unknown' | 'exists' | 'new';
@@ -37,7 +34,7 @@ const ENABLE_APPLE_AUTH = false; // Set true when Apple sign-in is configured
 export default function AccountScreen() {
   const router = useRouter();
   const { answers } = useOnboardingStore();
-  const { setPendingEmailVerification, setSession, setUserPendingVerification } = useAuthStore();
+  const { session, setPendingEmailVerification, setSession, setUserPendingVerification } = useAuthStore();
   
   // Flow state
   const [step, setStep] = useState<AuthStep>('email');
@@ -61,6 +58,15 @@ export default function AccountScreen() {
       setTimeout(() => passwordInputRef.current?.focus(), 100);
     }
   }, [step]);
+
+  // If session appears while we're on this screen (e.g., from deep link OAuth),
+  // navigate to main app immediately
+  useEffect(() => {
+    if (session && isLoading) {
+      setIsLoading(false);
+      router.replace('/(tabs)/analyze');
+    }
+  }, [session, isLoading, router]);
 
   // Check if email exists in database (backend check-email is reliable; Supabase signIn returns same error for new vs wrong password)
   const handleEmailSubmit = async () => {
@@ -313,49 +319,130 @@ export default function AccountScreen() {
   };
 
   // Handle social auth (Google/Apple)
+  // On native we listen for the deep link on this screen (Expo Router doesn't navigate to /auth/callback on Android onNewIntent).
   const handleSocialAuth = async (provider: 'google' | 'apple') => {
     setIsLoading(true);
     setError(null);
 
     try {
-      // On web, use explicit origin + path so Supabase redirects to /auth/callback (not root)
-      const redirectUrl =
-        Platform.OS === 'web' && typeof window !== 'undefined'
-          ? `${window.location.origin}/auth/callback`
-          : AuthSession.makeRedirectUri({
-              scheme: 'chartsignl',
-              path: 'auth/callback',
-            });
+      const redirectUrl = AuthSession.makeRedirectUri({
+        scheme: 'chartsignl',
+        path: 'auth/callback',
+      });
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const webRedirect = `${window.location.origin}/auth/callback`;
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: { redirectTo: webRedirect, skipBrowserRedirect: false },
+        });
+        if (error) throw error;
+        if (data?.url) window.location.href = data.url;
+        return;
+      }
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: redirectUrl,
-          skipBrowserRedirect: false,
+          skipBrowserRedirect: true,
         },
       });
 
       if (error) throw error;
+      if (!data?.url) throw new Error('No OAuth URL returned');
 
-      if (data?.url) {
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          // Redirect in same window (no popup)
-          window.location.href = data.url;
-          return;
-        }
-        const result = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          redirectUrl
-        );
+      // Set up deep link listener BEFORE opening browser (catches callback when app is brought to front)
+      const tokenPromise = new Promise<string | null>((resolve) => {
+        const timeout = setTimeout(() => resolve(null), 120000);
 
-        if (result.type === 'cancel') {
-          setIsLoading(false);
-          return;
+        const sub = Linking.addEventListener('url', (event: { url: string }) => {
+          if (event.url.includes('auth/callback') || event.url.includes('access_token')) {
+            clearTimeout(timeout);
+            sub.remove();
+            resolve(event.url);
+          }
+        });
+
+        Linking.getInitialURL().then((url) => {
+          if (url && (url.includes('auth/callback') || url.includes('access_token'))) {
+            clearTimeout(timeout);
+            sub.remove();
+            resolve(url);
+          }
+        });
+      });
+
+      void WebBrowser.openBrowserAsync(data.url, { showInRecents: true });
+
+      const callbackUrl = await tokenPromise;
+
+      if (!callbackUrl) {
+        setIsLoading(false);
+        return;
+      }
+
+      // Parse tokens from the callback URL
+      const hashStart = callbackUrl.indexOf('#');
+      const queryStart = callbackUrl.indexOf('?');
+      const hashPart = hashStart >= 0 ? callbackUrl.slice(hashStart + 1) : '';
+      const queryPart =
+        queryStart >= 0 && (hashStart < 0 || queryStart < hashStart)
+          ? callbackUrl.slice(queryStart + 1).split('#')[0]
+          : '';
+
+      let accessToken: string | null = null;
+      let refreshToken: string | null = null;
+
+      if (hashPart) {
+        const p = new URLSearchParams(hashPart);
+        accessToken = p.get('access_token');
+        refreshToken = p.get('refresh_token');
+      }
+      if (!accessToken && queryPart) {
+        const p = new URLSearchParams(queryPart);
+        accessToken = p.get('access_token');
+        refreshToken = p.get('refresh_token');
+      }
+
+      if (!accessToken) {
+        throw new Error('No access token found in callback');
+      }
+
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken || '',
+      });
+      if (sessionError) throw sessionError;
+
+      await new Promise((r) => setTimeout(r, 300));
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session) {
+        setSession(session);
+
+        if (answers.tradingStyle) {
+          try {
+            await updateProfile({
+              tradingStyle: answers.tradingStyle,
+              experienceLevel: answers.experienceLevel,
+            });
+          } catch (e) {
+            console.warn('Failed to save onboarding preferences:', e);
+          }
         }
+
+        void WebBrowser.dismissBrowser();
+
+        router.replace('/(tabs)/analyze');
+      } else {
+        throw new Error('Session not established');
       }
     } catch (err) {
       let errorMessage = 'Authentication failed';
-      
       if (err instanceof Error) {
         if (err.message.includes('Provider not enabled')) {
           errorMessage = `${provider === 'google' ? 'Google' : 'Apple'} sign-in is not configured yet.`;
@@ -363,8 +450,8 @@ export default function AccountScreen() {
           errorMessage = err.message;
         }
       }
-      
       setError(errorMessage);
+    } finally {
       setIsLoading(false);
     }
   };

@@ -10,7 +10,6 @@ import {
   Alert,
   Platform,
   Image,
-  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -20,6 +19,7 @@ import { fetchMarketDataWithIndicators, formatPrice, calculatePriceChange } from
 import { findLocalLevels, detectTrend, analyzeChartData } from '../../lib/chartAnalysis';
 import { getUsage } from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
+import { API_URL } from '../../lib/apiConfig';
 import { FREE_ANALYSIS_LIMIT, CHART_INTERVAL_OPTIONS, CHART_COLORS } from '@chartsignl/core';
 import type { ChartViewType, ChartInterval, AILevel, EnhancedAIAnalysis, ScoredLevel } from '@chartsignl/core';
 
@@ -175,8 +175,8 @@ export default function AnalyzeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.webWrapper}>
-        <View style={styles.webInner}>
+      <View style={styles.webWrapper} pointerEvents="box-none">
+        <View style={styles.webInner} pointerEvents="box-none">
           {/* Email Verification Modal - shows once after signup */}
           {showEmailVerificationModal && (
             <EmailVerificationBanner 
@@ -506,23 +506,6 @@ export default function AnalyzeScreen() {
           </Card>
         )}
 
-        {/* Privacy Footer */}
-        <View style={styles.footer}>
-          <TouchableOpacity
-            onPress={() => {
-              if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                window.location.href = '/privacy';
-              } else {
-                Linking.openURL('https://chartsignl.com/privacy');
-              }
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.footerText}>
-              Privacy Policy
-            </Text>
-          </TouchableOpacity>
-        </View>
           </ScrollView>
 
           {/* Symbol Search Modal */}
@@ -1034,16 +1017,5 @@ const styles = StyleSheet.create({
     color: colors.red[600],
     marginBottom: spacing.xs,
     lineHeight: 22,
-  },
-  // Footer
-  footer: {
-    alignItems: 'center',
-    marginTop: spacing.xl,
-    marginBottom: spacing.md,
-  },
-  footerText: {
-    ...typography.bodySm,
-    color: colors.primary[600],
-    fontWeight: '500',
   },
 });

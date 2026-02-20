@@ -176,6 +176,11 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 
 Alternatively, in `android/gradle.properties` uncomment and set `org.gradle.java.home` to your JDK 17 path (see the comment in that file).
 
+**Monorepo (JS bundle in AAB):** Dependencies live in the repo root `node_modules`; `apps/mobile/node_modules` may be empty. Before your first Android release build (or if you see "Metro can't find dependencies" or an AAB without JS):
+
+1. From the **project root**: `npm install` then `npm run ensure-mobile-deps`. This links or populates `apps/mobile/node_modules` so Metro and the bundle step resolve packages.
+2. Metro is configured to resolve from the root `node_modules` first; Gradle runs Node from the repo root so the JS bundle is included in the AAB.
+
 Set these environment variables (e.g. in your shell or CI secrets) before running the release build:
 
 | Variable | Description |
@@ -187,6 +192,7 @@ Set these environment variables (e.g. in your shell or CI secrets) before runnin
 **Production AAB (for Google Play):** use `bundleRelease`. From the project root in PowerShell:
 
 ```powershell
+npm run ensure-mobile-deps
 $env:CHARTSIGNL_RELEASE_STORE_PASSWORD = "your-store-password"
 $env:CHARTSIGNL_RELEASE_KEY_PASSWORD = "your-key-password"
 # optional if not 'chartsignl':

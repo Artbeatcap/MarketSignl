@@ -1,11 +1,72 @@
-import { useEffect, useRef } from 'react';
+import React, { Component, useEffect, useRef } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
-import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Platform, Text, Linking } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { subscriptionService } from '../services/subscription.service';
 import { colors } from '../theme';
+
+type ErrorBoundaryState = { hasError: boolean; error: Error | null };
+
+class RootErrorBoundary extends Component<
+  { children: React.ReactNode },
+  ErrorBoundaryState
+> {
+  state: ErrorBoundaryState = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error('RootErrorBoundary caught:', error.message, error.stack);
+    // #region agent log
+    try {
+      const msg = error.message || '';
+      fetch('http://127.0.0.1:7243/ingest/40355958-aed9-4b22-9cb1-0b68d3805912', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: '_layout.tsx:RootErrorBoundary.componentDidCatch',
+          message: 'RootErrorBoundary caught',
+          data: {
+            errorMessage: msg,
+            hasRNSVG: msg.includes('RNSVG'),
+            hasPath: msg.includes('RNSVGPath'),
+          },
+          timestamp: Date.now(),
+          hypothesisId: msg.includes('RNSVG') ? 'H1' : 'H_other',
+        }),
+      }).catch(() => {});
+    } catch (_) {}
+    // #endregion
+  }
+
+  render() {
+    if (this.state.hasError && this.state.error) {
+      const showStack = typeof __DEV__ !== 'undefined' && __DEV__ && this.state.error.stack;
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>Something went wrong</Text>
+          <Text style={styles.errorMessage}>{this.state.error.message}</Text>
+          {showStack ? (
+            <Text style={styles.errorStack} selectable>
+              {this.state.error.stack}
+            </Text>
+          ) : null}
+          <Text style={styles.errorHint}>Close and reopen the app to try again.</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+// Temporary diagnostic: RevenueCat Android key at load time (check Logcat)
+console.log('RC Android Key:', process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY ? 'SET' : 'MISSING');
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,18 +84,37 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const hasSeenNonEmptySegments = useRef(false);
 
   useEffect(() => {
-    // Initialize subscription service (handles RevenueCat on mobile, skips on web)
-    const initSubscription = async () => {
+    const init = async () => {
       try {
         await subscriptionService.initialize();
       } catch (error) {
         console.error('Error initializing subscription service:', error);
       }
+      try {
+        await initialize();
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+      }
     };
-
-    initSubscription();
-    initialize();
+    init();
   }, [initialize]);
+
+  // ADD THIS — Diagnostic: log ALL deep links globally
+  useEffect(() => {
+    console.log('🔗 Setting up global Linking listener');
+
+    // Check if there's already a URL waiting (cold start)
+    Linking.getInitialURL().then((url) => {
+      console.log('🔗 getInitialURL:', url);
+    });
+
+    // Listen for ALL incoming deep links (warm start)
+    const sub = Linking.addEventListener('url', (event) => {
+      console.log('🔗 DEEP LINK RECEIVED:', event.url);
+    });
+
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     if (!isInitialized || isLoading) {
@@ -96,14 +176,20 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       console.log('AuthGate: No auth, redirecting to home');
       router.replace('/(onboarding)/home');
     } else if (hasAuth && inAuthGroup && !isResetPassword) {
-      // User is signed in but on an auth screen (except reset-password)
-      // Only redirect if they're on onboarding pages, not settings
-      if (segments[0] === '(onboarding)') {
-        console.log('AuthGate: Has auth, on onboarding, redirecting to analyze');
+      // User is signed in but on an auth/onboarding screen — redirect to main app
+      if (segments[0] === '(onboarding)' || segments[0] === 'auth') {
+        console.log('AuthGate: Has auth, on auth/onboarding, redirecting to analyze');
         router.replace('/(tabs)/analyze');
       }
     }
   }, [isInitialized, isLoading, session, user, segments, router]);
+
+  // Hide native splash once we're ready to show content (splash stays up during init)
+  useEffect(() => {
+    if (isInitialized && !isLoading) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [isInitialized, isLoading]);
 
   // Show loading screen while initializing
   if (!isInitialized || isLoading) {
@@ -117,22 +203,73 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function RootContentWithInsets() {
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      style={[
+        styles.screenWrapper,
+        { paddingTop: insets.top, paddingBottom: insets.bottom },
+      ]}
+    >
+      <Slot />
+    </View>
+  );
+}
+
 export default function RootLayout() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <StatusBar style="dark" />
-      <AuthGate>
-        <Slot />
-      </AuthGate>
-    </QueryClientProvider>
+    <RootErrorBoundary>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <StatusBar style="dark" />
+          <AuthGate>
+            <RootContentWithInsets />
+          </AuthGate>
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </RootErrorBoundary>
   );
 }
 
 const styles = StyleSheet.create({
+  screenWrapper: {
+    flex: 1,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.background,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    padding: 24,
+  },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.neutral[900],
+    marginBottom: 8,
+  },
+  errorMessage: {
+    fontSize: 14,
+    color: colors.neutral[700],
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  errorStack: {
+    fontSize: 11,
+    color: colors.neutral[600],
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginBottom: 16,
+    maxHeight: 200,
+  },
+  errorHint: {
+    fontSize: 12,
+    color: colors.neutral[500],
   },
 });

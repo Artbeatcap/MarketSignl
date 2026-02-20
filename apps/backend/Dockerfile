@@ -8,8 +8,10 @@ COPY package.json package-lock.json* ./
 COPY apps/backend/package.json ./apps/backend/
 COPY packages/core/package.json ./packages/core/
 
-# Install dependencies
-RUN npm ci --workspace=backend --workspace=@chartsignl/core
+# Install dependencies (--ignore-scripts skips root postinstall/patch-package; patches are Expo-only)
+RUN npm ci --workspace=backend --workspace=@chartsignl/core --ignore-scripts
+# Workspaces hoist to root; ensure backend node_modules exists so runner COPY succeeds (resolution uses root)
+RUN mkdir -p /app/apps/backend/node_modules
 
 # Copy source code
 COPY packages/core ./packages/core

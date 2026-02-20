@@ -13,27 +13,40 @@ let purchasesLoadAttempted = false;
  * Uses require() inside a function so Metro bundler can handle it conditionally
  */
 function getPurchases(): any {
-  // On web, never load RevenueCat
   if (Platform.OS === 'web') {
     return null;
   }
 
-  // If already loaded, return it
   if (Purchases) {
     return Purchases;
   }
 
-  // If we've already tried and failed, don't try again
   if (purchasesLoadAttempted) {
     return null;
   }
 
-  // Try to load RevenueCat dynamically
-  // Using require() inside a function ensures it's only evaluated when called
-  // Metro bundler should handle this correctly when Platform.OS !== 'web'
   try {
     purchasesLoadAttempted = true;
-    Purchases = require('react-native-purchases').default;
+    const module = require('react-native-purchases').default;
+
+    // Verify the native bridge is actually available
+    // (JS module loads fine but native module can be null in dev builds)
+    if (!module || typeof module.configure !== 'function') {
+      console.warn('RevenueCat native module not available (dev build?)');
+      return null;
+    }
+
+    // Test if the native bridge is actually connected
+    // by checking a property that requires native access
+    try {
+      // This will throw if native module is null
+      module.setLogLevel && module.setLogLevel(module.LOG_LEVEL?.DEBUG);
+    } catch (e) {
+      console.warn('RevenueCat native bridge not connected (dev build?) - skipping');
+      return null;
+    }
+
+    Purchases = module;
     return Purchases;
   } catch (error) {
     console.warn('RevenueCat not available:', error);
@@ -102,7 +115,8 @@ class SubscriptionService {
           await PurchasesModule.configure({ apiKey: iosKey });
           console.log('RevenueCat initialized for iOS');
         } else {
-          console.warn('RevenueCat iOS key not found - mobile subscriptions coming soon');
+          console.error('❌ REVENUECAT IOS KEY IS MISSING - subscriptions will not work!');
+          console.error('Checked: EXPO_PUBLIC_REVENUECAT_IOS_KEY and REVENUECAT_IOS_KEY');
         }
       } else if (Platform.OS === 'android') {
         const androidKey = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY || process.env.REVENUECAT_ANDROID_KEY;
@@ -110,7 +124,8 @@ class SubscriptionService {
           await PurchasesModule.configure({ apiKey: androidKey });
           console.log('RevenueCat initialized for Android');
         } else {
-          console.warn('RevenueCat Android key not found - mobile subscriptions coming soon');
+          console.error('❌ REVENUECAT ANDROID KEY IS MISSING - subscriptions will not work!');
+          console.error('Checked: EXPO_PUBLIC_REVENUECAT_ANDROID_KEY and REVENUECAT_ANDROID_KEY');
         }
       }
       this.isInitialized = true;
@@ -149,25 +164,24 @@ class SubscriptionService {
       }
     }
 
-    // Mobile: Check RevenueCat first, then sync with Supabase
+    // Mobile: Check RevenueCat first, then fall back to BACKEND API (not raw Supabase)
     const PurchasesModule = getPurchases();
+
+    // If RevenueCat native module isn't available, go straight to backend API
     if (!PurchasesModule) {
-      // Fallback to Supabase only
-      return this.getSubscriptionStatusFromSupabase(userId);
+      console.warn('RevenueCat not available, falling back to backend API');
+      return this.getSubscriptionStatusFromBackend(accessToken, userId);
     }
 
     try {
-      // Identify user with RevenueCat
       await PurchasesModule.logIn(userId);
-      
       const customerInfo = await PurchasesModule.getCustomerInfo();
       const hasPremium = typeof customerInfo.entitlements.active['premium'] !== 'undefined';
-      
+
       if (hasPremium) {
         const activeEntitlement = customerInfo.entitlements.active['premium'];
         const platform = activeEntitlement.store === 'APP_STORE' ? 'ios' : 'android';
-        
-        // Sync with Supabase
+
         await this.syncSubscriptionToSupabase(userId, {
           status: 'active',
           platform,
@@ -183,13 +197,38 @@ class SubscriptionService {
           platform,
         };
       } else {
-        // No active entitlement, check Supabase as fallback
-        return this.getSubscriptionStatusFromSupabase(userId);
+        // No RC entitlement — check backend (catches Stripe-only subscribers)
+        return this.getSubscriptionStatusFromBackend(accessToken, userId);
       }
     } catch (error) {
       console.error('Error getting subscription status from RevenueCat:', error);
-      // Fallback to Supabase
-      return this.getSubscriptionStatusFromSupabase(userId);
+      // RevenueCat failed — fall back to backend API (includes Stripe sync)
+      return this.getSubscriptionStatusFromBackend(accessToken, userId);
+    }
+  }
+
+  /**
+   * Get subscription status via backend API (includes Stripe auto-sync)
+   * Used as fallback on mobile when RevenueCat is unavailable or fails
+   */
+  private async getSubscriptionStatusFromBackend(
+    accessToken?: string | null,
+    userId?: string
+  ): Promise<SubscriptionStatus> {
+    try {
+      const response = await api.getSubscriptionStatus(accessToken);
+      return {
+        tier: response.isActive ? 'pro' : 'free',
+        isActive: response.isActive,
+        expiresAt: response.expiresAt ? new Date(response.expiresAt) : undefined,
+        platform: response.platform as 'ios' | 'android' | 'web' | undefined,
+        currentPeriodStart: response.currentPeriodStart ? new Date(response.currentPeriodStart) : undefined,
+        currentPeriodEnd: response.currentPeriodEnd ? new Date(response.currentPeriodEnd) : undefined,
+      };
+    } catch (error) {
+      console.error('Error getting subscription status from backend:', error);
+      // Last resort: try Supabase directly
+      return this.getSubscriptionStatusFromSupabase(userId ?? '');
     }
   }
 

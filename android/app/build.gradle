@@ -2,20 +2,41 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
-// Monorepo: Expo app lives in apps/mobile; bundle and Metro must run from there.
-def repoRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath().replace('\\', '/')
+// Monorepo: Expo app in apps/mobile; deps hoisted to repo root. Repo root = parent of android/ (rootProject.projectDir).
+def repoRootFile = rootProject.projectDir.getParentFile()
+def repoRoot = repoRootFile.getAbsolutePath().replace('\\', '/')
 def projectRoot = repoRoot + "/apps/mobile"
-def appRoot = file("../../apps/mobile")
-def resolveAppEntryScript = new File(["node", "--print", "require.resolve('expo/package.json')"].execute(null, appRoot).text.trim()).getParentFile().absolutePath.replace('\\', '/') + "/scripts/resolveAppEntry.js"
+def appRoot = file("${repoRoot}/apps/mobile")
+def nodeCwd = repoRootFile  // run node from repo root so hoisted node_modules are found
+def exeNode = { String script ->
+    def proc = ["node", "--print", script].execute(null, nodeCwd)
+    proc.waitForOrKill(10000)
+    proc.text?.trim() ?: ""
+}
+def expoPkgPath = exeNode("require.resolve('expo/package.json')")
+def expoDir = expoPkgPath ? new File(expoPkgPath).getParentFile() : null
+def resolveAppEntryScript = (expoDir != null ? expoDir.absolutePath.replace('\\', '/') : repoRoot + "/node_modules/expo") + "/scripts/resolveAppEntry.js"
+def reactNativePkgPath = exeNode("require.resolve('react-native/package.json')")
+def reactNativeDirFile = reactNativePkgPath ? new File(reactNativePkgPath).getParentFile() : null
+def reactNativeDirPath = (reactNativeDirFile != null ? reactNativeDirFile.absolutePath.replace('\\', '/') : repoRoot + "/node_modules/react-native")
+def codegenPkgPath = exeNode("require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })")
+def codegenDirFile = codegenPkgPath ? new File(codegenPkgPath).getParentFile() : null
+def codegenDirPath = (codegenDirFile != null ? codegenDirFile.absolutePath.replace('\\', '/') : repoRoot + "/node_modules/@react-native/codegen")
+def cliPath = exeNode("require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })")
+def cliResolved = cliPath ?: (repoRoot + "/node_modules/@expo/cli")
+def cliDir = cliResolved.endsWith(".json") ? new File(cliResolved).getParentFile().absolutePath : cliResolved
+// Resolve cli-platform-android via Node so we get the package that actually contains native_modules.gradle (may be nested under react-native)
+def cliPlatformAndroidPkg = exeNode("require.resolve('@react-native-community/cli-platform-android/package.json', { paths: [require.resolve('react-native/package.json')] })")
+def cliPlatformAndroidDirFile = cliPlatformAndroidPkg ? new File(cliPlatformAndroidPkg).getParentFile() : new File(repoRootFile, "node_modules/@react-native-community/cli-platform-android")
 
 react {
     root = appRoot
-    def entryPath = ["node", resolveAppEntryScript, projectRoot, "android", "absolute"].execute(null, appRoot).text.trim()
+    def entryPath = ["node", resolveAppEntryScript, projectRoot, "android", "absolute"].execute(null, nodeCwd).text?.trim() ?: ""
     entryFile = file(entryPath ?: "${repoRoot}/node_modules/expo-router/entry.js")
-    reactNativeDir = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, appRoot).text.trim()).getParentFile().getAbsoluteFile()
-    hermesCommand = new File(["node", "--print", "require.resolve('react-native/package.json')"].execute(null, appRoot).text.trim()).getParentFile().getAbsolutePath() + "/sdks/hermesc/%OS-BIN%/hermesc"
-    codegenDir = new File(["node", "--print", "require.resolve('@react-native/codegen/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, appRoot).text.trim()).getParentFile().getAbsoluteFile()
-    cliFile = new File(["node", "--print", "require.resolve('@expo/cli', { paths: [require.resolve('expo/package.json')] })"].execute(null, appRoot).text.trim())
+    reactNativeDir = file(reactNativeDirPath)
+    hermesCommand = reactNativeDirPath + "/sdks/hermesc/%OS-BIN%/hermesc"
+    codegenDir = file(codegenDirPath)
+    cliFile = file(cliDir)
     bundleCommand = "export:embed"
 }
 
@@ -33,8 +54,8 @@ android {
         applicationId 'com.optionsplungellc.chartsignl'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "1.0.0"
+        versionCode 26
+        versionName "1.0.26"
         buildConfigField("boolean", "REACT_NATIVE_UNSTABLE_USE_RUNTIME_SCHEDULER_ALWAYS", (findProperty("reactNative.unstable_useRuntimeSchedulerAlways") ?: true).toString())
 
         resConfigs "en"  // Only include English, filters out cb, fb
@@ -103,6 +124,7 @@ android {
 
 dependencies {
     implementation("com.facebook.react:react-android")
+    implementation("androidx.activity:activity-ktx:1.9.0")
 
     // Force Play Billing Library 6+ (required by Google Play; RevenueCat uses it transitively)
     implementation("com.android.billingclient:billing:6.1.0")
@@ -131,5 +153,5 @@ dependencies {
     }
 }
 
-apply from: new File(["node", "--print", "require.resolve('@react-native-community/cli-platform-android/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim(), "../native_modules.gradle");
+apply from: new File(cliPlatformAndroidDirFile, "native_modules.gradle")
 applyNativeModulesAppBuildGradle(project)

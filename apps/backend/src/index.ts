@@ -41,6 +41,7 @@ import marketDataRoute from './routes/marketData.js';
 import subscriptionRoute from './routes/subscription.js';
 import authRoute from './routes/auth.js';
 import deleteAccountRoute from './routes/delete-account.js';
+import webhooksRoute from './routes/webhooks.js';
 
 const app = new Hono();
 
@@ -106,6 +107,7 @@ app.route('/api/market-data', marketDataRoute);
 app.route('/api/subscription', subscriptionRoute);
 app.route('/api/auth', authRoute);
 app.route('/api/auth', deleteAccountRoute);
+app.route('/webhooks', webhooksRoute);
 
 // 404 handler
 app.notFound((c) => {

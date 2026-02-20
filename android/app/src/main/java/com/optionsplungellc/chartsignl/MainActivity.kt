@@ -1,7 +1,8 @@
-package com.chartsignl.app
+package com.optionsplungellc.chartsignl
 
 import android.os.Build
 import android.os.Bundle
+import androidx.activity.enableEdgeToEdge
 
 import com.optionsplungellc.chartsignl.BuildConfig
 import com.optionsplungellc.chartsignl.R
@@ -19,6 +20,7 @@ class MainActivity : ReactActivity() {
     // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme);
     super.onCreate(null)
+    enableEdgeToEdge()
   }
 
   /**
