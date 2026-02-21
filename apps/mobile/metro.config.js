@@ -8,7 +8,9 @@ const workspaceRoot = path.resolve(projectRoot, '../..');
 const config = getDefaultConfig(projectRoot);
 
 // 1. Watch all files in the monorepo so Metro sees changes in packages/*
-config.watchFolders = [workspaceRoot];
+// Merge with Expo's default watchFolders so expo-doctor passes
+const defaultWatchFolders = config.watchFolders || [];
+config.watchFolders = [...defaultWatchFolders, workspaceRoot];
 
 // 2. Resolve node_modules from repo root FIRST (hoisted deps), then apps/mobile
 //    Critical for Android release build so the JS bundle can be created

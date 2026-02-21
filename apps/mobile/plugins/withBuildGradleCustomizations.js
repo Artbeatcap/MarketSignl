@@ -30,6 +30,12 @@ function withBuildGradleCustomizations(config) {
       );
     }
 
+    // --- Fix Kotlin version for SDK 52 (RN 0.76) ---
+    buildGradle = buildGradle.replace(
+      /kotlinVersion\s*=\s*["'][\d.]+["']/,
+      'kotlinVersion = "1.9.25"'
+    );
+
     config.modResults.contents = buildGradle;
     return config;
   });

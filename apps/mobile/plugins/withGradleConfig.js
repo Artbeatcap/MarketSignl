@@ -19,10 +19,10 @@ const ROOT_EXT_BLOCK = `
 // buildscript.ext is not visible to subprojects; rootProject.ext is.
 ext {
     buildToolsVersion = findProperty('android.buildToolsVersion') ?: '35.0.0'
-    minSdkVersion = Integer.parseInt(findProperty('android.minSdkVersion') ?: '23')
+    minSdkVersion = Integer.parseInt(findProperty('android.minSdkVersion') ?: '24')
     compileSdkVersion = Integer.parseInt(findProperty('android.compileSdkVersion') ?: '35')
     targetSdkVersion = Integer.parseInt(findProperty('android.targetSdkVersion') ?: '35')
-    kotlinVersion = findProperty('android.kotlinVersion') ?: '1.9.23'
+    kotlinVersion = findProperty('android.kotlinVersion') ?: '1.9.25'
     ndkVersion = "26.1.10909125"
 }
 `;
@@ -114,6 +114,8 @@ function withGradleConfig(config) {
     setProperty("android.compileSdkVersion", "35");
     setProperty("android.targetSdkVersion", "35");
     setProperty("android.buildToolsVersion", "35.0.0");
+    setProperty("android.kotlinVersion", "1.9.25");
+    setProperty("android.minSdkVersion", "24");
 
     // Jetifier cannot handle Java 21 bytecode (e.g. bcprov-jdk18on); exclude from transform
     setProperty("android.jetifier.ignorelist", "bcprov-jdk18on");
