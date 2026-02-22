@@ -2,7 +2,7 @@ import React, { Component, useEffect, useRef } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet, Platform, Text, Linking } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
+import { SystemBars } from 'react-native-edge-to-edge';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
@@ -222,7 +222,7 @@ export default function RootLayout() {
     <RootErrorBoundary>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <StatusBar style="dark" />
+          <SystemBars style="dark" />
           <AuthGate>
             <RootContentWithInsets />
           </AuthGate>

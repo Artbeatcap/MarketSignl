@@ -23,7 +23,6 @@ ext {
     compileSdkVersion = Integer.parseInt(findProperty('android.compileSdkVersion') ?: '35')
     targetSdkVersion = Integer.parseInt(findProperty('android.targetSdkVersion') ?: '35')
     kotlinVersion = findProperty('android.kotlinVersion') ?: '1.9.25'
-    ndkVersion = "26.1.10909125"
 }
 `;
 

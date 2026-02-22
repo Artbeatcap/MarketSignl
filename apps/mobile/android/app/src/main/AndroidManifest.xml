@@ -26,7 +26,6 @@
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="chartsignl"/>
-        <data android:scheme="com.optionsplungellc.chartsignl"/>
         <data android:scheme="exp+chartsignl"/>
       </intent-filter>
       <intent-filter android:autoVerify="true" data-generated="true">

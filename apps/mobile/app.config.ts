@@ -79,6 +79,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
           compileSdkVersion: 35,
           targetSdkVersion: 35,
           buildToolsVersion: "35.0.0",
+          ndkVersion: "27.1.12297006",
         },
       },
     ],
@@ -98,8 +99,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // Gradle properties: keystore passwords (from secrets/.env.signing) + arch filter
     "./plugins/withGradleConfig",
 
-    // --- Uncomment when upgrading to SDK 53 ---
-    // 'react-native-edge-to-edge',
+    ["react-native-edge-to-edge", { android: { parentTheme: "Light", enforceNavigationBarContrast: false } }],
   ],
 
   // =========================================================================
