@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import Stripe from 'stripe';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
+import { notifySubscription } from '../lib/growthhub.js';
 const subscriptionRoute = new Hono();
 
 // Initialize Stripe
@@ -425,6 +426,23 @@ subscriptionRoute.post('/webhook', async (c) => {
           .eq('id', userId);
 
         console.log(`Subscription activated for user ${userId}`);
+
+        // Fire GrowthHub subscription webhook (non-blocking)
+        if (subscription.status === 'active') {
+          const customer = await stripe.customers.retrieve(customerId);
+          const email =
+            typeof (customer as any).email === 'string' ? (customer as any).email : null;
+
+          if (email) {
+            notifySubscription(email, 'web').catch(() => {});
+            console.log('[Webhook] Subscription activated event fired for:', email);
+          } else {
+            console.log(
+              '[Webhook] Subscription activated but no customer email found for user',
+              userId
+            );
+          }
+        }
         break;
       }
 

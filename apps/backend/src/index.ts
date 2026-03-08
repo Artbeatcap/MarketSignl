@@ -79,6 +79,15 @@ app.use('*', cors({
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
 
+// Root - avoid 404 for GET /
+app.get('/', (c) => {
+  return c.json({
+    name: 'ChartSignl API',
+    version: '1.0.0',
+    docs: '/health (health check), /api/* (API routes)',
+  });
+});
+
 // Health check
 app.get('/health', (c) => {
   console.log('[HEALTH] Health check endpoint hit');

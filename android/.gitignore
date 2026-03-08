@@ -10,9 +10,7 @@ build/
 local.properties
 *.iml
 *.hprof
+.cxx/
 
 # Bundle artifacts
 *.jsbundle
-
-# Keystores (release keystore must not be committed)
-*.keystore

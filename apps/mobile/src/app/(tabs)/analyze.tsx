@@ -11,13 +11,13 @@ import {
   Platform,
   Image,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, SymbolSearch, StockChart, EmailVerificationBanner } from '../../components';
 import { useAuthStore } from '../../store/authStore';
 import { fetchMarketDataWithIndicators, formatPrice, calculatePriceChange } from '../../lib/marketData';
 import { findLocalLevels, detectTrend, analyzeChartData } from '../../lib/chartAnalysis';
-import { getUsage } from '../../lib/api';
+import { getUsage, getAnalysis } from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import { API_URL } from '../../lib/apiConfig';
 import { FREE_ANALYSIS_LIMIT, CHART_INTERVAL_OPTIONS, CHART_COLORS } from '@chartsignl/core';
@@ -45,6 +45,22 @@ export default function AnalyzeScreen() {
   });
   const [showLevels, setShowLevels] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const { analysisId } = useLocalSearchParams<{ analysisId?: string }>();
+
+  // Load saved analysis when navigated from history
+  useEffect(() => {
+    if (!analysisId) return;
+    getAnalysis(analysisId).then((res) => {
+      if (res.success && res.analysis) {
+        const saved = res.analysis as unknown as EnhancedAIAnalysis;
+        setAiAnalysis(saved);
+        if (saved.symbol) setSelectedSymbol(saved.symbol);
+        if (saved.timeframe) setSelectedInterval(saved.timeframe as ChartInterval);
+        setShowLevels(true);
+      }
+    });
+  }, [analysisId]);
 
   // Fetch usage stats
   const { data: usage } = useQuery({

@@ -29,7 +29,12 @@ type AccountStatus = 'unknown' | 'exists' | 'new';
 
 // Feature flags for OAuth
 const ENABLE_SOCIAL_AUTH = true;
-const ENABLE_APPLE_AUTH = false; // Set true when Apple sign-in is configured
+const ENABLE_APPLE_AUTH = true;
+
+let AppleAuthentication: typeof import('expo-apple-authentication') | null = null;
+if (Platform.OS === 'ios') {
+  AppleAuthentication = require('expo-apple-authentication');
+}
 
 export default function AccountScreen() {
   const router = useRouter();
@@ -319,12 +324,77 @@ export default function AccountScreen() {
   };
 
   // Handle social auth (Google/Apple)
-  // On native we listen for the deep link on this screen (Expo Router doesn't navigate to /auth/callback on Android onNewIntent).
+  // On iOS + Apple: native expo-apple-authentication + signInWithIdToken. On Android/web: OAuth redirect.
   const handleSocialAuth = async (provider: 'google' | 'apple') => {
     setIsLoading(true);
     setError(null);
 
     try {
+      // --- NATIVE APPLE SIGN-IN (iOS only) ---
+      if (provider === 'apple' && Platform.OS === 'ios' && AppleAuthentication) {
+        try {
+          const credential = await AppleAuthentication.signInAsync({
+            requestedScopes: [
+              AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+              AppleAuthentication.AppleAuthenticationScope.EMAIL,
+            ],
+          });
+
+          if (!credential.identityToken) {
+            throw new Error('No identity token returned from Apple');
+          }
+
+          const { data, error: signInError } = await supabase.auth.signInWithIdToken({
+            provider: 'apple',
+            token: credential.identityToken,
+          });
+
+          if (signInError) throw signInError;
+
+          // Apple only sends the user's name on the FIRST sign-in ever. Persist immediately.
+          if (credential.fullName?.givenName || credential.fullName?.familyName) {
+            const displayName = [
+              credential.fullName?.givenName,
+              credential.fullName?.familyName,
+            ].filter(Boolean).join(' ');
+
+            if (displayName && data.session) {
+              updateProfile({ display_name: displayName }).catch((e) =>
+                console.warn('Failed to save Apple display name:', e)
+              );
+            }
+          }
+
+          if (data.session) {
+            setSession(data.session);
+
+            if (answers.tradingStyle) {
+              try {
+                await updateProfile({
+                  tradingStyle: answers.tradingStyle,
+                  experienceLevel: answers.experienceLevel,
+                });
+              } catch (e) {
+                console.warn('Failed to save onboarding preferences:', e);
+              }
+            }
+
+            router.replace('/(tabs)/analyze');
+            return;
+          }
+
+          throw new Error('No session returned from Supabase');
+        } catch (appleError: unknown) {
+          const err = appleError as { code?: string };
+          if (err.code === 'ERR_REQUEST_CANCELED') {
+            setIsLoading(false);
+            return;
+          }
+          throw appleError;
+        }
+      }
+
+      // --- WEB OAUTH REDIRECT (Google on all platforms, Apple on Android/Web) ---
       const redirectUrl = AuthSession.makeRedirectUri({
         scheme: 'chartsignl',
         path: 'auth/callback',
@@ -352,7 +422,6 @@ export default function AccountScreen() {
       if (error) throw error;
       if (!data?.url) throw new Error('No OAuth URL returned');
 
-      // Set up deep link listener BEFORE opening browser (catches callback when app is brought to front)
       const tokenPromise = new Promise<string | null>((resolve) => {
         const timeout = setTimeout(() => resolve(null), 120000);
 
@@ -382,7 +451,6 @@ export default function AccountScreen() {
         return;
       }
 
-      // Parse tokens from the callback URL
       const hashStart = callbackUrl.indexOf('#');
       const queryStart = callbackUrl.indexOf('?');
       const hashPart = hashStart >= 0 ? callbackUrl.slice(hashStart + 1) : '';
@@ -417,12 +485,10 @@ export default function AccountScreen() {
 
       await new Promise((r) => setTimeout(r, 300));
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const { data: { session: newSession } } = await supabase.auth.getSession();
 
-      if (session) {
-        setSession(session);
+      if (newSession) {
+        setSession(newSession);
 
         if (answers.tradingStyle) {
           try {
@@ -436,7 +502,6 @@ export default function AccountScreen() {
         }
 
         void WebBrowser.dismissBrowser();
-
         router.replace('/(tabs)/analyze');
       } else {
         throw new Error('Session not established');
@@ -517,7 +582,7 @@ export default function AccountScreen() {
               <GoogleLogo size={18} />
               <Text style={styles.socialButtonText}>Google</Text>
             </TouchableOpacity>
-            {ENABLE_APPLE_AUTH && (
+            {(Platform.OS === 'ios' || ENABLE_APPLE_AUTH) && (
               <TouchableOpacity
                 style={styles.socialButton}
                 onPress={() => handleSocialAuth('apple')}
@@ -618,7 +683,7 @@ export default function AccountScreen() {
               <GoogleLogo size={18} />
               <Text style={styles.socialButtonText}>Google</Text>
             </TouchableOpacity>
-            {ENABLE_APPLE_AUTH && (
+            {(Platform.OS === 'ios' || ENABLE_APPLE_AUTH) && (
               <TouchableOpacity
                 style={styles.socialButton}
                 onPress={() => handleSocialAuth('apple')}
@@ -721,7 +786,7 @@ export default function AccountScreen() {
               <GoogleLogo size={18} />
               <Text style={styles.socialButtonText}>Google</Text>
             </TouchableOpacity>
-            {ENABLE_APPLE_AUTH && (
+            {(Platform.OS === 'ios' || ENABLE_APPLE_AUTH) && (
               <TouchableOpacity
                 style={styles.socialButton}
                 onPress={() => handleSocialAuth('apple')}

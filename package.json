@@ -9,9 +9,10 @@
   "scripts": {
     "postinstall": "patch-package",
     "gen-deploy-deletion": "node scripts/gen-deploy-deletion.js",
-    "dev": "turbo run dev",
-    "dev:mobile": "turbo run dev --filter=mobile",
-    "dev:backend": "turbo run dev --filter=backend",
+    "dev": "npm run dev -w backend",
+    "dev:all": "concurrently -k -n backend,mobile -c blue,green \"npm run dev -w backend\" \"npm run dev -w mobile\"",
+    "dev:mobile": "npm run dev -w mobile",
+    "dev:backend": "npm run dev -w backend",
     "build": "turbo run build",
     "build:web": "turbo run build:web --filter=mobile",
     "lint": "turbo run lint",
@@ -22,6 +23,7 @@
     "ios": "expo run:ios"
   },
   "devDependencies": {
+    "concurrently": "^9.0.0",
     "@types/node": "^20.10.0",
     "patch-package": "^8.0.1",
     "prettier": "^3.1.0",
@@ -35,14 +37,15 @@
   "dependencies": {
     "@react-native-community/cli-platform-android": "^20.1.1",
     "@react-native-community/cli-server-api": "^12.3.6",
-    "expo": "~53.0.0",
+    "expo": "~54.0.33",
     "expo-asset": "^12.0.12",
-    "expo-font": "~11.10.3",
-    "expo-router": "~5.1.11",
-    "react": "19.0.0",
-    "react-native": "0.79.6",
-    "react-native-safe-area-context": "5.4.0",
-    "react-native-screens": "~4.11.1",
-    "react-native-svg": "15.11.2"
+    "expo-font": "~14.0.11",
+    "expo-router": "~6.0.23",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
+    "react-native-svg": "15.12.1",
+    "react-native-worklets": "^0.7.0"
   }
 }

@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, SafeAreaView, Image, Platform, ScrollView, Linking } from 'react-native';
+import { View, Text, StyleSheet, Image, Platform, ScrollView, Linking } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Button } from '../../components';
 import { colors, typography, spacing } from '../../theme';

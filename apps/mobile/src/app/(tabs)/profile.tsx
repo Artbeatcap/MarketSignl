@@ -1,4 +1,5 @@
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, TouchableOpacity, Alert, Platform, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform, Linking } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,7 +8,8 @@ import { useAuthStore } from '../../store/authStore';
 import { getCurrentUser, getUsage } from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import { FREE_ANALYSIS_LIMIT, TRADING_STYLE_OPTIONS } from '@chartsignl/core';
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
+import { API_URL } from '../../lib/apiConfig';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -26,7 +28,8 @@ export default function ProfileScreen() {
 
   const profile = profileData?.user;
   const usage = usageData;
-  
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // Calculate remaining analyses for display
   const remainingAnalyses = usage?.isPro 
     ? Infinity 
@@ -116,6 +119,101 @@ export default function ProfileScreen() {
           text: 'Sign Out',
           style: 'destructive',
           onPress: performSignOut,
+        },
+      ]
+    );
+  };
+
+  const handleDeleteAccount = async () => {
+    const email = user?.email ?? profile?.email;
+    if (!email) {
+      if (Platform.OS === 'web') {
+        window.alert('Unable to determine your email. Please sign out and try again.');
+      } else {
+        Alert.alert('Error', 'Unable to determine your email. Please sign out and try again.', [{ text: 'OK' }]);
+      }
+      return;
+    }
+
+    const runApiAndShowResult = async () => {
+      setIsDeleting(true);
+      try {
+        const response = await fetch(`${API_URL}/api/auth/delete-account`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            reason: 'User requested deletion from app settings',
+          }),
+        });
+
+        if (response.ok) {
+          const successTitle = 'Check Your Email';
+          const successMessage = `We've sent a confirmation link to ${email}. Click the link to complete your account deletion. The link expires in 24 hours.`;
+          if (Platform.OS === 'web') {
+            window.alert(`${successTitle}\n\n${successMessage}`);
+            await performSignOut();
+          } else {
+            Alert.alert(successTitle, successMessage, [
+              { text: 'OK', onPress: performSignOut },
+            ]);
+          }
+        } else {
+          const errorMessage = 'Failed to process deletion request. Please try again or contact support@chartsignl.com';
+          if (Platform.OS === 'web') {
+            window.alert(`Error\n\n${errorMessage}`);
+          } else {
+            Alert.alert('Error', errorMessage, [{ text: 'OK' }]);
+          }
+        }
+      } catch (err) {
+        console.error('Delete account request error:', err);
+        const errorMessage = 'Failed to process deletion request. Please try again or contact support@chartsignl.com';
+        if (Platform.OS === 'web') {
+          window.alert(`Error\n\n${errorMessage}`);
+        } else {
+          Alert.alert('Error', errorMessage, [{ text: 'OK' }]);
+        }
+      } finally {
+        setIsDeleting(false);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(
+        'This will permanently delete your account and all data. Continue?'
+      );
+      if (!confirmed) return;
+      const reallyConfirmed = window.confirm(
+        'Are you sure? A confirmation email will be sent to complete the deletion.'
+      );
+      if (!reallyConfirmed) return;
+      await runApiAndShowResult();
+      return;
+    }
+
+    // Native: two-step Alert
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your ChartSignl account, including all your saved analyses, preferences, and subscription data. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          onPress: () => {
+            Alert.alert(
+              'Are you sure?',
+              `A confirmation email will be sent to ${email}. You'll need to click the link in that email to complete the deletion.`,
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete My Account',
+                  style: 'destructive',
+                  onPress: runApiAndShowResult,
+                },
+              ]
+            );
+          },
         },
       ]
     );
@@ -400,6 +498,18 @@ export default function ProfileScreen() {
             <Text style={styles.manageSubscriptionText}>Manage Subscription</Text>
           </TouchableOpacity>
         )}
+
+        {/* Delete Account */}
+        <TouchableOpacity
+          style={styles.deleteAccountButton}
+          onPress={handleDeleteAccount}
+          disabled={isDeleting}
+        >
+          <View style={styles.deleteAccountInner}>
+            <Ionicons name="trash-outline" size={18} color={colors.red[500]} />
+            <Text style={styles.deleteAccountText}>Delete Account</Text>
+          </View>
+        </TouchableOpacity>
 
         {/* Sign Out Button */}
         <Button
@@ -688,6 +798,20 @@ const styles = StyleSheet.create({
     ...typography.bodySm,
     color: colors.neutral[500],
     textDecorationLine: 'underline',
+  },
+  deleteAccountButton: {
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  deleteAccountInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  deleteAccountText: {
+    ...typography.bodySm,
+    color: colors.red[500],
   },
   signOutButton: {
     marginBottom: spacing.lg,

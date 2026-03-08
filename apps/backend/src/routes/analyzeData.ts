@@ -5,6 +5,7 @@ import { Hono } from 'hono';
 import OpenAI from 'openai';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
 import { FREE_ANALYSIS_LIMIT } from '@chartsignl/core';
+import { notifyFirstAnalysis, notifyPaywallHit } from '../lib/growthhub.js';
 
 // Import our technical analysis modules
 import {
@@ -172,10 +173,10 @@ analyzeDataRoute.post('/', async (c) => {
       return c.json({ success: false, error: 'Invalid authorization token' }, 401);
     }
 
-    // Get user profile
+    // Get user profile (include email for GrowthHub webhooks)
     const { data: profile } = await supabaseAdmin
       .from('profiles')
-      .select('is_pro')
+      .select('is_pro, email')
       .eq('id', userId)
       .single();
 
@@ -440,22 +441,60 @@ analyzeDataRoute.post('/', async (c) => {
     }
 
     // ========================================================================
-    // STEP 8: Update usage counter (upsert so missing row is created; weekly reset via effectiveUsed)
+    // STEP 8: Enforce 50-analysis limit — delete oldest beyond 50
+    // ========================================================================
+    if (!saveError) {
+      const { data: oldAnalyses } = await supabaseAdmin
+        .from('chart_analyses')
+        .select('id')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .range(50, 9999);
+
+      if (oldAnalyses && oldAnalyses.length > 0) {
+        const idsToDelete = oldAnalyses.map((a) => a.id);
+        await supabaseAdmin.from('chart_analyses').delete().in('id', idsToDelete);
+      }
+    }
+
+    // ========================================================================
+    // STEP 9: Update usage counter (upsert so missing row is created; weekly reset via effectiveUsed)
+    //         and fire GrowthHub webhooks for key milestones
     // ========================================================================
     if (!profile?.is_pro) {
-      const newUsed = effectiveUsed + 1;
+      const previousCount = effectiveUsed;
+      const newCount = previousCount + 1;
       const lastAnalysisAt = new Date().toISOString();
+
       await supabaseAdmin
         .from('usage_counters')
         .upsert(
           {
             user_id: userId,
-            free_analyses_used: newUsed,
+            free_analyses_used: newCount,
             last_analysis_at: lastAnalysisAt,
           },
           { onConflict: 'user_id' }
         )
         .select('user_id');
+
+      const email = profile?.email as string | null | undefined;
+
+      if (email) {
+        // First analysis for this user in the current rolling window
+        if (previousCount === 0) {
+          // Fire and forget — don't block the response
+          notifyFirstAnalysis(email, symbol).catch(() => {});
+          console.log('[Webhook] First analysis event fired for:', email);
+        }
+
+        // User has now reached or exceeded the free analysis limit
+        if (newCount >= FREE_ANALYSIS_LIMIT) {
+          // Fire and forget
+          notifyPaywallHit(email, newCount).catch(() => {});
+          console.log('[Webhook] Paywall hit event fired for:', email);
+        }
+      }
     }
 
     console.log(`[Analysis] Complete for ${symbol}:`, {

@@ -1,6 +1,7 @@
 // Simplified History Screen - Data Only (No Images)
 
-import { View, Text, StyleSheet, SafeAreaView, FlatList, TouchableOpacity, RefreshControl, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { getAnalysisHistory } from '../../lib/api';
