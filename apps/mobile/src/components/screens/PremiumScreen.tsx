@@ -631,7 +631,7 @@ export default function PremiumScreen() {
           <View style={styles.iconContainer}>
             <Ionicons name="star" size={48} color={colors.primary[500]} />
           </View>
-          <Text style={styles.title}>Upgrade to Premium</Text>
+          <Text style={styles.title}>Upgrade to Pro</Text>
           <Text style={styles.subtitle}>
             Unlock unlimited analysis for just $4.99/month
           </Text>

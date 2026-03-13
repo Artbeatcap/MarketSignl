@@ -73,6 +73,8 @@ Required env vars (in repo root `.env` or in `environment` in compose):
 - `OPENAI_API_KEY`
 - `CORS_ORIGINS` (includes `https://app.chartsignl.com`, `https://chartsignl.com`, `https://www.chartsignl.com`, plus local dev origins)
 
+Optional (social content pipeline: `POST /api/social/generate`): `ANTHROPIC_API_KEY`, `SOCIAL_API_SECRET`. The endpoint requires the `x-social-key` header to match `SOCIAL_API_SECRET`; both are already in the compose `environment` block.
+
 To rebuild/restart on the server:
 
 ```bash

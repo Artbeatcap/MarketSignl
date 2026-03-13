@@ -15,6 +15,8 @@ services:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - SOCIAL_API_SECRET=${SOCIAL_API_SECRET:-}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8081,http://localhost:19006,http://localhost:3000,https://app.chartsignl.com,https://chartsignl.com,https://www.chartsignl.com}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
@@ -33,6 +35,29 @@ services:
     networks:
       - chartsignl
 
+  n8n:
+    image: docker.n8n.io/n8nio/n8n
+    container_name: n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=n8n.chartsignl.com
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - WEBHOOK_URL=https://n8n.chartsignl.com/
+      - GENERIC_TIMEZONE=America/New_York
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - POLYGON_API_KEY=${POLYGON_API_KEY:-}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - chartsignl
+
 networks:
   chartsignl:
     driver: bridge
+
+volumes:
+  n8n_data:
