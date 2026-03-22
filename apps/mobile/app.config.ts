@@ -4,7 +4,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: "ChartSignl",
   slug: "chartsignl",
-  version: "1.1.0",
+  version: "1.1.1",
   orientation: "portrait",
   icon: "./assets/icon.png",
   scheme: "chartsignl",
@@ -61,7 +61,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     package: "com.optionsplungellc.chartsignl",
     permissions: ["com.android.vending.BILLING"],
-    versionCode: 30,
+    versionCode: 31,
 
     // App Links: replaces manual intent-filter in AndroidManifest.xml
     intentFilters: [

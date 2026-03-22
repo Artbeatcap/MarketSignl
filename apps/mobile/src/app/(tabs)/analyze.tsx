@@ -768,7 +768,7 @@ const styles = StyleSheet.create({
   // Chart
   chartCard: {
     marginBottom: spacing.md,
-    overflow: 'hidden',
+    overflow: 'visible', // Allow legend to render when it wraps.
   },
   loadingContainer: {
     height: 320,

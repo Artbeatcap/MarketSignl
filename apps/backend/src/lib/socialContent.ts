@@ -111,7 +111,7 @@ export async function analyzeMarketEvent(event: MarketEvent): Promise<MarketAnal
     throw new Error(`Claude API error (${response.status}): ${err}`);
   }
 
-  const data = await response.json();
+  const data: any = await response.json();
   const text = data.content
     .filter((block: { type: string }) => block.type === 'text')
     .map((block: { text: string }) => block.text)
@@ -198,7 +198,7 @@ export async function formatSocialContent(analysis: MarketAnalysis): Promise<Soc
     throw new Error(`OpenAI API error (${response.status}): ${err}`);
   }
 
-  const data = await response.json();
+  const data: any = await response.json();
   const text = data.choices[0]?.message?.content ?? '';
   const clean = text.replace(/```json\s*|```\s*/g, '').trim();
   return JSON.parse(clean) as SocialContent;
@@ -248,7 +248,7 @@ export async function formatSocialContentClaude(analysis: MarketAnalysis): Promi
     throw new Error(`Claude API error (${response.status}): ${err}`);
   }
 
-  const data = await response.json();
+  const data: any = await response.json();
   const text = data.content
     .filter((block: { type: string }) => block.type === 'text')
     .map((block: { text: string }) => block.text)

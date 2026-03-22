@@ -33,7 +33,7 @@ function withBuildGradleCustomizations(config) {
     // --- Fix Kotlin version for SDK 52 (RN 0.76) ---
     buildGradle = buildGradle.replace(
       /kotlinVersion\s*=\s*["'][\d.]+["']/,
-      'kotlinVersion = "1.9.25"'
+      'kotlinVersion = "2.0.21"'
     );
 
     config.modResults.contents = buildGradle;

@@ -362,14 +362,14 @@ export function StockChart({
           interval={interval}
           minPrice={minPrice}
           maxPrice={maxPrice}
-          height={height - 10}
+          height={height - 85}
           showEMA={showEMA}
           supportLevels={supportLevels}
           resistanceLevels={resistanceLevels}
         />
         <View style={styles.legend}>
-          <LegendItem color={CHART_COLORS.candleUp} label="Up" />
-          <LegendItem color={CHART_COLORS.candleDown} label="Down" />
+          <LegendItem color={CHART_COLORS.candleUp} label="Bullish" />
+          <LegendItem color={CHART_COLORS.candleDown} label="Bearish" />
           {showEMA && (
             <>
               <LegendItem color={CHART_COLORS.ema9} label="EMA 9" />
@@ -393,7 +393,7 @@ export function StockChart({
         interval={interval}
         minPrice={minPrice}
         maxPrice={maxPrice}
-        height={height - 70}
+        height={height - 85}
         showEMA={showEMA}
         supportLevels={supportLevels}
         resistanceLevels={resistanceLevels}
@@ -671,11 +671,9 @@ function SimpleCandlestickChart({
       </Svg>
 
       {/* X-axis outside and below SVG */}
-      <View style={styles.xAxis}>
+      <View style={[styles.xAxis, { paddingLeft: 0, paddingRight: 0, width }]}>
         {xAxisIndices.map((index, tickIdx) => {
-          const position = data.length > 1
-            ? (index / (data.length - 1)) * 100
-            : 50;
+          const pixelX = xForIndex(index);
           const label = interval === '5d'
             ? formatCompact5DLabel(
                 data[index]?.timestamp ?? 0,
@@ -691,7 +689,7 @@ function SimpleCandlestickChart({
                 styles.xAxisLabel,
                 {
                   position: 'absolute',
-                  left: `${position}%`,
+                  left: pixelX - 15,
                   transform: [{ rotate: '-45deg' }],
                 },
               ]}
@@ -720,7 +718,7 @@ interface SimpleLineChartProps {
 
 const X_AXIS_HEIGHT = 45;
 const CHART_LEFT_MARGIN = 50;
-const CHART_RIGHT_MARGIN = 70; // Space for Y-axis labels (min 60px) — used by SimpleCandlestickChart only
+const CHART_RIGHT_MARGIN = 15; // Space for Y-axis labels (min 60px) — used by SimpleCandlestickChart only
 
 function SimpleLineChart({
   data,
@@ -1011,9 +1009,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: spacing.md,
-    marginTop: 8,
-    paddingTop: spacing.sm,
+    gap: spacing.sm,
+    rowGap: 4,
+    marginTop: 4,
+    paddingTop: spacing.xs,
     borderTopWidth: 1,
     borderTopColor: colors.neutral[100],
   },
