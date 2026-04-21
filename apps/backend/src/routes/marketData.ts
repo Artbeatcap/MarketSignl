@@ -59,7 +59,7 @@ marketDataRoute.get('/:symbol', async (c) => {
   const symbol = c.req.param('symbol');
   
   try {
-    const MASSIVE_API_KEY = 'RcnenBuGTzPs3aaunhpWW6FpaAzs60Ug';
+    const MASSIVE_API_KEY = process.env.MASSIVE_API_KEY || '';
     console.log('[ROUTE] Market data route hit for symbol:', symbol, 'API key available:', !!MASSIVE_API_KEY);
     
     const symbolUpper = c.req.param('symbol').toUpperCase();
@@ -222,8 +222,7 @@ marketDataRoute.get('/:symbol/quote', async (c) => {
 // GET /api/market-data/search - Search for symbols
 marketDataRoute.get('/search/:query', async (c) => {
   try {
-    // Use same API key as other endpoint (hardcoded fallback if env var not set)
-    const MASSIVE_API_KEY = process.env.MASSIVE_API_KEY || 'RcnenBuGTzPs3aaunhpWW6FpaAzs60Ug';
+    const MASSIVE_API_KEY = process.env.MASSIVE_API_KEY || '';
     const query = c.req.param('query');
 
     if (!MASSIVE_API_KEY) {
