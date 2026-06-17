@@ -96,7 +96,16 @@ export default function HistoryScreen() {
           </View>
         </View>
         <Text style={styles.headline} numberOfLines={2}>{item.headline}</Text>
-        <Text style={styles.date}>{formatDate(item.createdAt)} · {item.confidence}% confidence</Text>
+        <Text style={styles.date}>
+          {formatDate(item.createdAt)} · {item.confidence}% confidence
+          {item.status === 'resolved' && item.directionHit != null
+            ? item.directionHit
+              ? ' · ✓ direction hit'
+              : ' · ✗ direction miss'
+            : item.status === 'pending'
+              ? ' · pending'
+              : ''}
+        </Text>
       </View>
     </TouchableOpacity>
   );

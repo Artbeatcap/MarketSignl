@@ -17,6 +17,7 @@ import type { AIPrediction, ChartInterval } from '@marketsignl/core';
 import { CHART_COLORS, FREE_PREDICTION_LIMIT } from '@marketsignl/core';
 import { apiFetch, publicFetch } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import PredictionStatsPanel from '../components/PredictionStatsPanel';
 import './Terminal.css';
 
 const INTERVALS: { value: ChartInterval; label: string }[] = [
@@ -108,6 +109,7 @@ export default function Terminal() {
       }
       setPrediction(result.prediction);
       queryClient.invalidateQueries({ queryKey: ['usage'] });
+      queryClient.invalidateQueries({ queryKey: ['predictionStats'] });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Prediction failed';
       if (msg.toLowerCase().includes('not authenticated')) {
@@ -157,6 +159,7 @@ export default function Terminal() {
             </button>
           ))}
         </nav>
+        <PredictionStatsPanel enabled={!!session} />
         <div className="sidebar-auth">
           {session && user ? (
             <>

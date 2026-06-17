@@ -57,6 +57,40 @@ export interface PredictionHistoryItem {
   confidence: number;
   direction: PredictionDirection;
   createdAt: string;
+  /** Resolution fields (populated after horizon elapses) */
+  horizonEndAt?: string;
+  resolvedAt?: string;
+  resolvedPrice?: number;
+  actualChangePct?: number;
+  directionHit?: boolean;
+  bandContained?: boolean;
+  magnitudeErrorPct?: number;
+  status?: 'pending' | 'resolved';
+}
+
+export interface CalibrationBucket {
+  label: string;
+  minConfidence: number;
+  maxConfidence: number;
+  count: number;
+  hitRate: number | null;
+}
+
+export interface PredictionStats {
+  resolvedCount: number;
+  pendingCount: number;
+  directionHitRate: number | null;
+  avgMagnitudeErrorPct: number | null;
+  bandContainmentRate: number | null;
+  calibration: CalibrationBucket[];
+  minSampleSize: number;
+  statsReady: boolean;
+}
+
+export interface GetPredictionStatsResponse {
+  success: boolean;
+  stats?: PredictionStats;
+  error?: string;
 }
 
 export interface GetPredictionsResponse {

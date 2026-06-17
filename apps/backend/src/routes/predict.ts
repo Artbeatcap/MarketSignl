@@ -187,6 +187,8 @@ predictRoute.post('/', async (c) => {
       projectedPath,
     };
 
+    const horizonEndMs = projectedPath[projectedPath.length - 1]?.timestamp;
+
     const { data: saved, error: saveError } = await supabaseAdmin
       .from('predictions')
       .insert({
@@ -198,6 +200,8 @@ predictRoute.post('/', async (c) => {
         confidence: prediction.confidence,
         direction: prediction.direction,
         prediction_json: prediction,
+        entry_close: indicators.currentPrice,
+        horizon_end_at: horizonEndMs ? new Date(horizonEndMs).toISOString() : null,
       })
       .select('id, created_at')
       .single();

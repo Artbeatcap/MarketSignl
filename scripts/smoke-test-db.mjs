@@ -32,3 +32,13 @@ if (ucError) {
   process.exit(1);
 }
 console.log('OK usage_counters has prediction columns');
+
+const { error: resError } = await supabase
+  .from('predictions')
+  .select('entry_close, horizon_end_at, resolved_at, direction_hit')
+  .limit(1);
+if (resError) {
+  console.error('FAIL predictions resolution columns:', resError.message);
+  process.exit(1);
+}
+console.log('OK predictions has resolution columns');

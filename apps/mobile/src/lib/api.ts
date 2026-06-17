@@ -7,6 +7,7 @@ import type {
   PredictResponse,
   GetPredictionsResponse,
   GetPredictionResponse,
+  GetPredictionStatsResponse,
 } from '@marketsignl/core';
 
 import { API_URL } from './apiConfig';
@@ -177,6 +178,10 @@ export async function getPredictionHistory(
   limit = 20
 ): Promise<GetPredictionsResponse> {
   return apiFetch(`/api/predictions?page=${page}&limit=${limit}`);
+}
+
+export async function getPredictionStats(): Promise<GetPredictionStatsResponse> {
+  return apiFetch('/api/predictions/stats');
 }
 
 export async function getPrediction(id: string): Promise<GetPredictionResponse> {
