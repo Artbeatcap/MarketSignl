@@ -10,6 +10,18 @@ import {
   type TechnicalIndicators,
 } from '../lib/technicalCalculator.js';
 import { scoreLevels, type ScoredAnalysis } from '../lib/confluenceScorer.js';
+import { buildVolatilityCone, deriveDriftBias } from '../lib/volatilityCone.js';
+
+interface AINarrative {
+  headline: string;
+  summary: string;
+  reasoning: string[];
+  riskFactors: string[];
+  direction: 'bullish' | 'bearish' | 'neutral';
+  confidence: number;
+}
+
+const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const predictRoute = new Hono();
@@ -44,13 +56,9 @@ function buildPredictionPrompt(
   symbol: string,
   interval: string,
   horizonBars: number,
-  data: MarketDataPoint[],
   indicators: TechnicalIndicators,
   scoredAnalysis: ScoredAnalysis
 ): string {
-  const lastTs = data[data.length - 1]?.timestamp ?? Date.now();
-  const stepMs = barDurationMs(interval);
-
   const { currentPrice, priceChangePercent, trend, ema, atr, bollinger, overextension } = indicators;
   const { supportLevels, resistanceLevels, confidence } = scoredAnalysis;
 
@@ -80,43 +88,7 @@ ${resistanceLevels.slice(0, 3).map((l, i) => `${i + 1}. $${l.price.toFixed(2)} (
 
 SETUP CONFIDENCE: ${confidence.overall}% (${confidence.label})
 
-PROJECTION REQUIREMENTS:
-- Generate exactly ${horizonBars} future points
-- First point timestamp: ${lastTs + stepMs}
-- Timestamp step between points: ${stepMs} ms
-- Start projected path near current price $${currentPrice.toFixed(2)}
-- Bands should reflect ATR-based uncertainty (~${atr.atr.toFixed(2)} per bar)
-
-Provide the projected price path and reasoning.`;
-}
-
-function normalizeProjectedPath(
-  rawPath: AIPrediction['projectedPath'],
-  lastTimestamp: number,
-  stepMs: number,
-  horizonBars: number,
-  startPrice: number,
-  atr: number
-): AIPrediction['projectedPath'] {
-  if (!Array.isArray(rawPath) || rawPath.length === 0) {
-    return Array.from({ length: horizonBars }, (_, i) => {
-      const price = startPrice;
-      const band = atr * (i + 1) * 0.5;
-      return {
-        timestamp: lastTimestamp + stepMs * (i + 1),
-        price,
-        lowerBand: price - band,
-        upperBand: price + band,
-      };
-    });
-  }
-
-  return rawPath.slice(0, horizonBars).map((point, i) => ({
-    timestamp: point.timestamp || lastTimestamp + stepMs * (i + 1),
-    price: point.price,
-    lowerBand: point.lowerBand ?? point.price - atr * 0.5,
-    upperBand: point.upperBand ?? point.price + atr * 0.5,
-  }));
+Give your directional read for roughly the next ${horizonBars} bars: direction, confidence, the key drivers, and the main risks. Reference specific indicator values. Do not output any prices or bands.`;
 }
 
 predictRoute.post('/', async (c) => {
@@ -169,7 +141,7 @@ predictRoute.post('/', async (c) => {
     }
 
     const scoredAnalysis = scoreLevels(indicators);
-    const userPrompt = buildPredictionPrompt(symbol, interval, horizonBars, data as MarketDataPoint[], indicators, scoredAnalysis);
+    const userPrompt = buildPredictionPrompt(symbol, interval, horizonBars, indicators, scoredAnalysis);
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -178,7 +150,7 @@ predictRoute.post('/', async (c) => {
         { role: 'user', content: userPrompt },
       ],
       max_completion_tokens: 1200,
-      temperature: 0.35,
+      temperature: 0.2,
       response_format: { type: 'json_object' },
     });
 
@@ -187,18 +159,20 @@ predictRoute.post('/', async (c) => {
       throw new Error('No response from AI');
     }
 
-    const aiResponse = JSON.parse(aiText) as Omit<AIPrediction, 'symbol' | 'interval'>;
+    const aiResponse = JSON.parse(aiText) as AINarrative;
     const lastPoint = data[data.length - 1];
     const stepMs = barDurationMs(interval);
 
-    const projectedPath = normalizeProjectedPath(
-      aiResponse.projectedPath,
-      lastPoint.timestamp,
-      stepMs,
+    const driftBias = deriveDriftBias(indicators);
+
+    const { projectedPath, expectedChangePct } = buildVolatilityCone({
+      lastClose: indicators.currentPrice,
+      atr: indicators.atr.atr,
+      driftBias,
       horizonBars,
-      indicators.currentPrice,
-      indicators.atr.atr
-    );
+      stepMs,
+      lastTimestamp: lastPoint.timestamp,
+    });
 
     const prediction: AIPrediction = {
       symbol: symbol.toUpperCase(),
@@ -208,8 +182,8 @@ predictRoute.post('/', async (c) => {
       reasoning: aiResponse.reasoning ?? [],
       riskFactors: aiResponse.riskFactors ?? [],
       direction: aiResponse.direction ?? 'neutral',
-      confidence: Math.min(100, Math.max(0, aiResponse.confidence ?? 50)),
-      expectedChangePct: aiResponse.expectedChangePct ?? 0,
+      confidence: clampN(aiResponse.confidence ?? 50, 0, 100),
+      expectedChangePct,
       projectedPath,
     };
 

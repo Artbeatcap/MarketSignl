@@ -70,6 +70,40 @@ async function main() {
     pathPoints: body.prediction?.projectedPath?.length,
     predictionId: body.predictionId,
   });
+
+  const p = body.prediction;
+  const path = p?.projectedPath ?? [];
+  const lastClose = md.data[md.data.length - 1].close;
+  const fail = (m) => {
+    console.error('FAIL', m);
+    process.exit(1);
+  };
+
+  if (!path.length) fail('empty path');
+  if (Math.abs(path[0].price - lastClose) > lastClose * 0.1) fail('path[0] not anchored to last close');
+
+  for (let i = 1; i < path.length; i++) {
+    const wPrev = path[i - 1].upperBand - path[i - 1].lowerBand;
+    const wCur = path[i].upperBand - path[i].lowerBand;
+    if (wCur < wPrev - 1e-9) fail(`bands not widening at ${i}`);
+  }
+
+  const recomputed = (path[path.length - 1].price / lastClose - 1) * 100;
+  if (Math.abs(recomputed - p.expectedChangePct) > 0.5) fail('expectedChangePct disagrees with path');
+  console.log('OK invariants: anchored, widening, consistent');
+
+  const r2 = await fetch(`${API_URL}/api/predict`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${auth.session.access_token}`,
+    },
+    body: JSON.stringify({ symbol: 'AAPL', interval: '3mo', data: md.data }),
+  });
+  const b2 = await r2.json();
+  const same = JSON.stringify(b2.prediction?.projectedPath) === JSON.stringify(path);
+  if (!same) fail('path differs across runs — expected deterministic cone');
+  console.log('OK deterministic path');
 }
 
 main().catch((e) => {
