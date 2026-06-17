@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { MarketDataPoint } from '@chartsignl/core';
+import type { MarketDataPoint } from '@marketsignl/core';
 
 const marketDataRoute = new Hono();
 
@@ -7,6 +7,11 @@ const marketDataRoute = new Hono();
 const MASSIVE_BASE_URL = 'https://api.massive.com';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+function getMassiveApiKey(): string | null {
+  const apiKey = process.env.MASSIVE_API_KEY?.trim();
+  return apiKey ? apiKey : null;
+}
 
 type MassiveTimespan = 'minute' | 'hour' | 'day' | 'week' | 'month' | 'quarter' | 'year';
 
@@ -59,18 +64,15 @@ marketDataRoute.get('/:symbol', async (c) => {
   const symbol = c.req.param('symbol');
   
   try {
-    const MASSIVE_API_KEY = process.env.MASSIVE_API_KEY || '';
-    console.log('[ROUTE] Market data route hit for symbol:', symbol, 'API key available:', !!MASSIVE_API_KEY);
+    const massiveApiKey = getMassiveApiKey();
+    console.log('[ROUTE] Market data route hit for symbol:', symbol, 'API key configured:', !!massiveApiKey);
     
     const symbolUpper = c.req.param('symbol').toUpperCase();
     const chartInterval = c.req.query('interval') || '3mo';
     
-    if (!MASSIVE_API_KEY || MASSIVE_API_KEY.trim() === '') {
+    if (!massiveApiKey) {
       console.error('[ROUTE ERROR] MASSIVE_API_KEY is not set or empty');
-      return c.json({ 
-        error: 'Massive API key not configured. Please set MASSIVE_API_KEY in apps/backend/.env file.',
-        details: 'Get your free API key at https://massive.com'
-      }, 500);
+      return c.json({ error: 'Massive API key not configured' }, 500);
     }
 
     const config = intervalConfig[chartInterval] || intervalConfig['3mo'];
@@ -91,7 +93,7 @@ marketDataRoute.get('/:symbol', async (c) => {
     // Build Massive URL
     // Format: /v2/aggs/ticker/{ticker}/range/{multiplier}/{timespan}/{from}/{to}
     // Massive supports Unix ms timestamps for {from}/{to} path parameters.
-    const url = `${MASSIVE_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbolUpper)}/range/${config.multiplier}/${config.timespan}/${fromParam}/${toParam}?adjusted=true&sort=asc&limit=5000&apiKey=${MASSIVE_API_KEY}`;
+    const url = `${MASSIVE_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbolUpper)}/range/${config.multiplier}/${config.timespan}/${fromParam}/${toParam}?adjusted=true&sort=asc&limit=5000&apiKey=${massiveApiKey}`;
 
     let response: Response;
     try {
@@ -176,15 +178,16 @@ marketDataRoute.get('/:symbol', async (c) => {
 // GET /api/market-data/:symbol/quote - Get current quote
 marketDataRoute.get('/:symbol/quote', async (c) => {
   try {
-    const MASSIVE_API_KEY = process.env.MASSIVE_API_KEY || '';
+    const massiveApiKey = getMassiveApiKey();
     const symbol = c.req.param('symbol').toUpperCase();
 
-    if (!MASSIVE_API_KEY) {
+    if (!massiveApiKey) {
+      console.error('[ROUTE ERROR] MASSIVE_API_KEY is not set or empty');
       return c.json({ error: 'Massive API key not configured' }, 500);
     }
 
     // Get previous day's close for reference
-    const url = `${MASSIVE_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbol)}/prev?adjusted=true&apiKey=${MASSIVE_API_KEY}`;
+    const url = `${MASSIVE_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbol)}/prev?adjusted=true&apiKey=${massiveApiKey}`;
 
     const response = await fetch(url);
 
@@ -222,15 +225,16 @@ marketDataRoute.get('/:symbol/quote', async (c) => {
 // GET /api/market-data/search - Search for symbols
 marketDataRoute.get('/search/:query', async (c) => {
   try {
-    const MASSIVE_API_KEY = process.env.MASSIVE_API_KEY || '';
+    const massiveApiKey = getMassiveApiKey();
     const query = c.req.param('query');
 
-    if (!MASSIVE_API_KEY) {
+    if (!massiveApiKey) {
+      console.error('[ROUTE ERROR] MASSIVE_API_KEY is not set or empty');
       return c.json({ error: 'Massive API key not configured' }, 500);
     }
 
     // Fetch up to 100 results (stocks and ETFs) for better filtering
-    const url = `${MASSIVE_BASE_URL}/v3/reference/tickers?search=${encodeURIComponent(query)}&active=true&limit=100&apiKey=${MASSIVE_API_KEY}`;
+    const url = `${MASSIVE_BASE_URL}/v3/reference/tickers?search=${encodeURIComponent(query)}&active=true&limit=100&apiKey=${massiveApiKey}`;
 
     const response = await fetch(url);
 

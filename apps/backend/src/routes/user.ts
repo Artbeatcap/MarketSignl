@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
-import type { UsageResponse, AuthResponse } from '@chartsignl/core';
-import { FREE_ANALYSIS_LIMIT } from '@chartsignl/core';
+import type { UsageResponse, AuthResponse } from '@marketsignl/core';
+import { FREE_ANALYSIS_LIMIT, FREE_PREDICTION_LIMIT } from '@marketsignl/core';
 
 const userRoute = new Hono();
 
@@ -14,6 +14,15 @@ function getEffectiveUsedThisWeek(
   if (!usage.last_analysis_at) return 0;
   const elapsed = Date.now() - new Date(usage.last_analysis_at).getTime();
   return elapsed < WEEK_MS ? usage.free_analyses_used : 0;
+}
+
+function getEffectivePredictionsThisWeek(
+  usage: { free_predictions_used: number; last_prediction_at: string | null } | null | undefined
+): number {
+  if (!usage) return 0;
+  if (!usage.last_prediction_at) return 0;
+  const elapsed = Date.now() - new Date(usage.last_prediction_at).getTime();
+  return elapsed < WEEK_MS ? usage.free_predictions_used : 0;
 }
 
 // GET /api/user/me - Get current user profile
@@ -71,6 +80,8 @@ userRoute.get('/me', async (c) => {
         stressReducer: profile.stress_reducer,
         isPro: profile.is_pro || false,
         freeAnalysesUsed: effectiveUsed,
+        pushNotificationsEnabled: profile.push_notifications_enabled ?? true,
+        alertSoundEnabled: profile.alert_sound_enabled ?? true,
       },
     });
 
@@ -169,16 +180,19 @@ userRoute.get('/usage', async (c) => {
 
     const { data: usage } = await supabaseAdmin
       .from('usage_counters')
-      .select('free_analyses_used, last_analysis_at')
+      .select('free_analyses_used, last_analysis_at, free_predictions_used, last_prediction_at')
       .eq('user_id', userId)
       .maybeSingle();
 
     const effectiveUsed = getEffectiveUsedThisWeek(usage ?? undefined);
+    const effectivePredictionsUsed = getEffectivePredictionsThisWeek(usage ?? undefined);
 
     return c.json<UsageResponse>({
       success: true,
       freeAnalysesUsed: effectiveUsed,
       freeAnalysesLimit: FREE_ANALYSIS_LIMIT,
+      freePredictionsUsed: effectivePredictionsUsed,
+      freePredictionsLimit: FREE_PREDICTION_LIMIT,
       isPro: profile?.is_pro || false,
     });
 

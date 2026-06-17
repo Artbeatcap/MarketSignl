@@ -32,6 +32,7 @@ console.log(`  MASSIVE_API_KEY: ${massiveKeyStatus}`);
 console.log(`  SUPABASE_URL: ${process.env.SUPABASE_URL ? '✓ Set' : '✗ Missing'}`);
 console.log(`  OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? '✓ Set' : '✗ Missing'}`);
 console.log(`  SMTP (deletion emails): ${process.env.SMTP_HOST && process.env.SMTP_USER ? '✓ Set' : '✗ Optional'}`);
+console.log(`  CRON_SECRET (push price checks): ${process.env.CRON_SECRET ? '✓ Set' : '✗ Missing (n8n /check-prices will fail)'}`);
 
 // Routes
 import analyzeDataRoute from './routes/analyzeData.js';
@@ -43,6 +44,9 @@ import authRoute from './routes/auth.js';
 import deleteAccountRoute from './routes/delete-account.js';
 import webhooksRoute from './routes/webhooks.js';
 import socialRoute from './routes/social.js';
+import predictRoute from './routes/predict.js';
+import predictionsRoute from './routes/predictions.js';
+import notificationRoutes from './routes/notifications.js';
 
 const app = new Hono();
 
@@ -64,6 +68,11 @@ const defaultOrigins = [
   'https://app.chartsignl.com',
   'https://chartsignl.com',
   'https://www.chartsignl.com',
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'https://app.marketsignl.com',
+  'https://marketsignl.com',
+  'https://www.marketsignl.com',
 ];
 
 // Merge env var origins with defaults, ensuring www.chartsignl.com is always included
@@ -83,7 +92,7 @@ app.use('*', cors({
 // Root - avoid 404 for GET /
 app.get('/', (c) => {
   return c.json({
-    name: 'ChartSignl API',
+    name: 'MarketSignl API',
     version: '1.0.0',
     docs: '/health (health check), /api/* (API routes)',
   });
@@ -99,16 +108,6 @@ app.get('/health', (c) => {
   });
 });
 
-// Debug endpoint - add this right after the /health endpoint
-app.get('/debug-env', (c) => {
-  const key = process.env.MASSIVE_API_KEY || '';
-  return c.json({
-    hasKey: !!key,
-    keyLength: key.length,
-    keyPreview: key ? key.substring(0, 4) + '...' : 'EMPTY'
-  });
-});
-
 // API Routes
 app.route('/api/analyze-data', analyzeDataRoute);
 app.route('/api/analyses', historyRoute);
@@ -119,6 +118,9 @@ app.route('/api/auth', authRoute);
 app.route('/api/auth', deleteAccountRoute);
 app.route('/webhooks', webhooksRoute);
 app.route('/api/social', socialRoute);
+app.route('/api/predict', predictRoute);
+app.route('/api/predictions', predictionsRoute);
+app.route('/api/notifications', notificationRoutes);
 
 // 404 handler
 app.notFound((c) => {
@@ -171,7 +173,7 @@ const port = parseInt(process.env.PORT || '4000');
 console.log(`
 ╔═══════════════════════════════════════════════════╗
 ║                                                   ║
-║   🚀 ChartSignl API Server                       ║
+║   🚀 MarketSignl API Server                       ║
 ║                                                   ║
 ║   Running on: http://localhost:${port}              ║
 ║   Environment: ${process.env.NODE_ENV || 'development'}                    ║

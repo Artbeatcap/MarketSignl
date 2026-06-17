@@ -7,7 +7,7 @@ import { Card, Button, EmailVerificationBanner } from '../../components';
 import { useAuthStore } from '../../store/authStore';
 import { getCurrentUser, getUsage } from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
-import { FREE_ANALYSIS_LIMIT, TRADING_STYLE_OPTIONS } from '@chartsignl/core';
+import { FREE_ANALYSIS_LIMIT, TRADING_STYLE_OPTIONS } from '@marketsignl/core';
 import { useEffect, useCallback, useState } from 'react';
 import { API_URL } from '../../lib/apiConfig';
 
@@ -159,7 +159,7 @@ export default function ProfileScreen() {
             ]);
           }
         } else {
-          const errorMessage = 'Failed to process deletion request. Please try again or contact support@chartsignl.com';
+          const errorMessage = 'Failed to process deletion request. Please try again or contact support@marketsignl.com';
           if (Platform.OS === 'web') {
             window.alert(`Error\n\n${errorMessage}`);
           } else {
@@ -168,7 +168,7 @@ export default function ProfileScreen() {
         }
       } catch (err) {
         console.error('Delete account request error:', err);
-        const errorMessage = 'Failed to process deletion request. Please try again or contact support@chartsignl.com';
+        const errorMessage = 'Failed to process deletion request. Please try again or contact support@marketsignl.com';
         if (Platform.OS === 'web') {
           window.alert(`Error\n\n${errorMessage}`);
         } else {
@@ -195,7 +195,7 @@ export default function ProfileScreen() {
     // Native: two-step Alert
     Alert.alert(
       'Delete Account',
-      'This will permanently delete your ChartSignl account, including all your saved analyses, preferences, and subscription data. This action cannot be undone.',
+      'This will permanently delete your MarketSignl account, including all your saved analyses, preferences, and subscription data. This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -262,7 +262,7 @@ export default function ProfileScreen() {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.location.href = '/privacy';
     } else {
-      Linking.openURL('https://chartsignl.com/privacy');
+      Linking.openURL('https://marketsignl.com/privacy');
     }
   };
 
@@ -522,7 +522,7 @@ export default function ProfileScreen() {
         />
 
         {/* Version */}
-        <Text style={styles.versionText}>ChartSignl v1.0.0</Text>
+        <Text style={styles.versionText}>MarketSignl v1.0.0</Text>
           </ScrollView>
         </View>
       </View>

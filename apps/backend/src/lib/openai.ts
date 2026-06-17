@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import type { ChartAnalysis } from '@chartsignl/core';
+import type { ChartAnalysis } from '@marketsignl/core';
 import { CHART_ANALYSIS_SYSTEM_PROMPT, CHART_ANALYSIS_USER_PROMPT } from '../prompts/chartAnalysis.js';
 
 const openai = new OpenAI({

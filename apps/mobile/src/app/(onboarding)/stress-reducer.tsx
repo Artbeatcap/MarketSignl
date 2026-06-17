@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { Button, ProgressIndicator } from '../../components';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
-import { STRESS_REDUCER_OPTIONS } from '@chartsignl/core';
+import { STRESS_REDUCER_OPTIONS } from '@marketsignl/core';
 
 export default function StressReducerScreen() {
   const router = useRouter();

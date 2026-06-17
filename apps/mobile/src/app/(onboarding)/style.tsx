@@ -4,8 +4,8 @@ import { useRouter } from 'expo-router';
 import { Button, ProgressIndicator } from '../../components';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
-import type { TradingStyle } from '@chartsignl/core';
-import { TRADING_STYLE_OPTIONS } from '@chartsignl/core';
+import type { TradingStyle } from '@marketsignl/core';
+import { TRADING_STYLE_OPTIONS } from '@marketsignl/core';
 
 export default function StyleScreen() {
   const router = useRouter();

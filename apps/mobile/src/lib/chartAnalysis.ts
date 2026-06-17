@@ -1,4 +1,4 @@
-import type { MarketDataPoint, EnhancedAIAnalysis, AILevel, EnhancedAnalysisResponse } from '@chartsignl/core';
+import type { MarketDataPoint, EnhancedAIAnalysis, AILevel, EnhancedAnalysisResponse } from '@marketsignl/core';
 import { getAccessToken } from './supabase';
 import { API_URL } from './apiConfig';
 

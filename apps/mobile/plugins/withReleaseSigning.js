@@ -8,6 +8,8 @@
  *
  * The keystore file itself lives at: apps/mobile/secrets/chartsignl-release.keystore
  * This path is OUTSIDE android/ and is never deleted by prebuild.
+ * Passwords are resolved at Gradle build time from environment variables or
+ * apps/mobile/secrets/.env.signing. They are never written to gradle.properties.
  */
 const { withAppBuildGradle, withDangerousMod } = require("expo/config-plugins");
 const fs = require("fs");
@@ -48,12 +50,32 @@ function withSigningConfig(config) {
     const buildGradle = config.modResults.contents;
 
     // Don't inject twice
-    if (buildGradle.includes("CHARTSIGNL_RELEASE_STORE_FILE")) {
+    if (buildGradle.includes("resolveReleaseSigning")) {
       return config;
     }
 
     // Insert signingConfigs block before buildTypes
     const signingConfigBlock = `
+    def releaseSigningProps = new Properties()
+    def releaseSigningFile = rootProject.file("../secrets/.env.signing")
+    if (releaseSigningFile.exists()) {
+        releaseSigningFile.withInputStream { releaseSigningProps.load(it) }
+    }
+
+    def resolveReleaseSigning = { key, defaultValue = null ->
+        def envValue = System.getenv(key)
+        if (envValue != null && envValue.length() > 0) {
+            return envValue
+        }
+
+        def fileValue = releaseSigningProps.getProperty(key)
+        if (fileValue != null && fileValue.length() > 0) {
+            return fileValue
+        }
+
+        return defaultValue
+    }
+
     signingConfigs {
         debug {
             storeFile file('debug.keystore')
@@ -62,14 +84,18 @@ function withSigningConfig(config) {
             keyPassword 'android'
         }
         release {
-            def hasReleaseConfig = project.hasProperty('CHARTSIGNL_RELEASE_STORE_FILE')
-            if (!hasReleaseConfig) {
-                throw new GradleException("Release keystore not configured! Check gradle.properties")
+            def releaseStoreFile = resolveReleaseSigning('CHARTSIGNL_RELEASE_STORE_FILE', 'chartsignl-release.keystore')
+            def releaseKeyAlias = resolveReleaseSigning('CHARTSIGNL_RELEASE_KEY_ALIAS', 'chartsignl')
+            def releaseStorePassword = resolveReleaseSigning('CHARTSIGNL_RELEASE_STORE_PASSWORD')
+            def releaseKeyPassword = resolveReleaseSigning('CHARTSIGNL_RELEASE_KEY_PASSWORD')
+
+            if (!releaseStorePassword || !releaseKeyPassword) {
+                throw new GradleException("Release signing credentials not configured. Set CHARTSIGNL_RELEASE_* environment variables or create apps/mobile/secrets/.env.signing")
             }
-            storeFile file(CHARTSIGNL_RELEASE_STORE_FILE)
-            storePassword CHARTSIGNL_RELEASE_STORE_PASSWORD
-            keyAlias CHARTSIGNL_RELEASE_KEY_ALIAS
-            keyPassword CHARTSIGNL_RELEASE_KEY_PASSWORD
+            storeFile file(releaseStoreFile)
+            storePassword releaseStorePassword
+            keyAlias releaseKeyAlias
+            keyPassword releaseKeyPassword
         }
     }`;
 

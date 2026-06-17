@@ -12,6 +12,28 @@ const isTestKey = stripeSecretKey?.startsWith('sk_test_');
 const stripePriceId = (isTestKey && process.env.STRIPE_PRICE_ID_TEST)
   ? process.env.STRIPE_PRICE_ID_TEST
   : process.env.STRIPE_PRICE_ID;
+const developmentFrontendUrl = 'http://localhost:8081';
+
+function getConfiguredFrontendBaseUrl(): string | null {
+  const configuredUrl = process.env.FRONTEND_URL?.trim();
+  const appUrl = configuredUrl || (process.env.NODE_ENV === 'production' ? undefined : developmentFrontendUrl);
+
+  if (!appUrl) {
+    return null;
+  }
+
+  try {
+    const url = new URL(appUrl);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return null;
+    }
+
+    const path = url.pathname === '/' ? '' : url.pathname.replace(/\/+$/, '');
+    return `${url.origin}${path}`;
+  } catch {
+    return null;
+  }
+}
 
 if (!stripeSecretKey) {
   console.warn('⚠️  STRIPE_SECRET_KEY not set. Stripe features will not work.');
@@ -279,9 +301,14 @@ subscriptionRoute.post('/create-checkout', async (c) => {
       }
     }
 
-    // Get the base URL for redirects
-    const origin = c.req.header('Origin') || c.req.header('Referer') || 'http://localhost:19006';
-    const baseUrl = origin.replace(/\/$/, ''); // Remove trailing slash
+    const baseUrl = getConfiguredFrontendBaseUrl();
+    if (!baseUrl) {
+      console.error('[SUBSCRIPTION] FRONTEND_URL must be set to an absolute http(s) URL for Stripe redirects.');
+      return c.json({
+        success: false,
+        error: 'Stripe redirect URL is not configured',
+      }, 500);
+    }
 
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
@@ -577,9 +604,15 @@ subscriptionRoute.post('/customer-portal', async (c) => {
       }, 404);
     }
 
-    // Get return URL from request or default
-    const origin = c.req.header('Origin') || c.req.header('Referer') || 'http://localhost:8081';
-    const baseUrl = origin.replace(/\/$/, '');
+    const baseUrl = getConfiguredFrontendBaseUrl();
+    if (!baseUrl) {
+      console.error('[SUBSCRIPTION] FRONTEND_URL must be set to an absolute http(s) URL for Stripe redirects.');
+      return c.json({
+        success: false,
+        error: 'Stripe redirect URL is not configured',
+      }, 500);
+    }
+
     const returnUrl = `${baseUrl}/premium`;
 
     // Create Customer Portal session

@@ -11,7 +11,7 @@ export default function HomeScreen() {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.location.href = '/privacy';
     } else {
-      Linking.openURL('https://chartsignl.com/privacy');
+      Linking.openURL('https://marketsignl.com/privacy');
     }
   };
 
@@ -27,7 +27,7 @@ export default function HomeScreen() {
               <View style={styles.content}>
                 {/* Hero section */}
                 <View style={styles.heroSection}>
-                  <Text style={styles.brandName}>ChartSignl</Text>
+                  <Text style={styles.brandName}>MarketSignl</Text>
                   <View style={styles.logoContainer}>
                     <Image
                       source={require('../../../assets/logo.png')}
@@ -35,9 +35,9 @@ export default function HomeScreen() {
                       resizeMode="contain"
                     />
                   </View>
-                  <Text style={styles.title}>Levels shouldn't{'\n'}feel like guesswork</Text>
+                  <Text style={styles.title}>Forecast the path{'\n'}clearly</Text>
                   <Text style={styles.subtitle}>
-                    Search any stock. Get the key levels instantly. 
+                    Search any stock. One-click AI prediction draws the projected path on your chart.
                     Trade with more clarity and less stress.
                   </Text>
                 </View>
@@ -45,8 +45,8 @@ export default function HomeScreen() {
                 {/* Features */}
                 <View style={styles.features}>
                   <FeatureItem
-                    emoji="🗺️"
-                    text="Atlas AI-powered level detection"
+                    emoji="✨"
+                    text="One-click AI price prediction"
                   />
                   <FeatureItem
                     emoji="🎯"
@@ -93,7 +93,7 @@ export default function HomeScreen() {
               <View style={styles.content}>
                 {/* Hero section */}
                 <View style={styles.heroSection}>
-                  <Text style={styles.brandName}>ChartSignl</Text>
+                  <Text style={styles.brandName}>MarketSignl</Text>
                   <View style={styles.logoContainer}>
                     <Image
                       source={require('../../../assets/logo.png')}
@@ -101,9 +101,9 @@ export default function HomeScreen() {
                       resizeMode="contain"
                     />
                   </View>
-                  <Text style={styles.title}>Levels shouldn't{'\n'}feel like guesswork</Text>
+                  <Text style={styles.title}>Forecast the path{'\n'}clearly</Text>
                   <Text style={styles.subtitle}>
-                    Search any stock. Get the key levels instantly. 
+                    Search any stock. One-click AI prediction draws the projected path on your chart.
                     Trade with more clarity and less stress.
                   </Text>
                 </View>
@@ -111,8 +111,8 @@ export default function HomeScreen() {
                 {/* Features */}
                 <View style={styles.features}>
                   <FeatureItem
-                    emoji="🗺️"
-                    text="Atlas AI-powered level detection"
+                    emoji="✨"
+                    text="One-click AI price prediction"
                   />
                   <FeatureItem
                     emoji="🎯"

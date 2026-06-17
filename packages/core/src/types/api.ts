@@ -49,6 +49,8 @@ export interface UsageResponse {
   success: boolean;
   freeAnalysesUsed?: number;
   freeAnalysesLimit?: number;
+  freePredictionsUsed?: number;
+  freePredictionsLimit?: number;
   isPro?: boolean;
   error?: string;
 }

@@ -4,9 +4,15 @@ export * from './types/user';
 export * from './types/api';
 export * from './types/marketData';
 export * from './types/enhancedAnalysis';
+export * from './types/prediction';
+
+// Theme tokens (shared web + mobile)
+export * from './theme/index';
+export * from './lib/predictionChart';
 
 // Constants
 export const FREE_ANALYSIS_LIMIT = 3;
+export const FREE_PREDICTION_LIMIT = 3;
 export const MAX_IMAGE_SIZE_MB = 10;
 export const SUPPORTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
@@ -49,4 +55,9 @@ export const CHART_COLORS = {
   
   // Background
   background: '#FAFAF9', // warm white
+
+  // AI Prediction overlay
+  prediction: '#3B82F6',
+  predictionBand: 'rgba(59, 130, 246, 0.18)',
+  predictionLabel: '#2563EB',
 };

@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { Button, ProgressIndicator } from '../../components';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
-import { EXPERIENCE_LEVEL_OPTIONS } from '@chartsignl/core';
+import { EXPERIENCE_LEVEL_OPTIONS } from '@marketsignl/core';
 
 export default function ExperienceScreen() {
   const router = useRouter();

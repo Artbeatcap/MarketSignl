@@ -47,44 +47,18 @@ async function main() {
   if (fs.existsSync(KEYSTORE_DEST)) {
     console.log("✅ Keystore already exists at secrets/chartsignl-release.keystore\n");
   } else {
-    // Check common locations
-    const possibleLocations = [
-      path.join(__dirname, "..", "android", "app", "chartsignl-release.keystore"),
-      path.join(__dirname, "..", "..", "android", "app", "chartsignl-release.keystore"), // monorepo: android at repo root
-      path.join(__dirname, "..", "chartsignl-release.keystore"),
-      path.join(__dirname, "..", "..", "..", "chartsignl-release.keystore"),
-    ];
+    console.log("⚠️  No keystore file found.");
+    console.log("   Copy a rotated keystore from outside the repository.");
+    console.log("   This script will place it in ignored secrets/ storage.\n");
 
-    let foundAt = null;
-    for (const loc of possibleLocations) {
-      if (fs.existsSync(loc)) {
-        foundAt = loc;
-        break;
-      }
-    }
-
-    if (foundAt) {
-      console.log(`📋 Found keystore at: ${path.relative(process.cwd(), foundAt)}`);
-      const copy = await ask("Copy it to secrets/? (y/n)", "y");
-      if (copy.toLowerCase() === "y") {
-        fs.copyFileSync(foundAt, KEYSTORE_DEST);
-        console.log("✅ Keystore copied to secrets/\n");
-      }
-    } else {
-      console.log("⚠️  No keystore file found.");
-      console.log("   You need to either:");
-      console.log("   1. Copy your existing keystore to: secrets/chartsignl-release.keystore");
-      console.log("   2. Generate a new one (see DEPLOY.md)\n");
-
-      const keystorePath = await ask(
-        "Enter path to your keystore file (or press Enter to skip)"
-      );
-      if (keystorePath && fs.existsSync(keystorePath)) {
-        fs.copyFileSync(keystorePath, KEYSTORE_DEST);
-        console.log("✅ Keystore copied to secrets/\n");
-      } else if (keystorePath) {
-        console.log(`❌ File not found: ${keystorePath}\n`);
-      }
+    const keystorePath = await ask(
+      "Enter path to your rotated keystore file (or press Enter to skip)"
+    );
+    if (keystorePath && fs.existsSync(keystorePath)) {
+      fs.copyFileSync(keystorePath, KEYSTORE_DEST);
+      console.log("✅ Keystore copied to secrets/\n");
+    } else if (keystorePath) {
+      console.log(`❌ File not found: ${keystorePath}\n`);
     }
   }
 

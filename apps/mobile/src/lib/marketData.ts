@@ -1,4 +1,4 @@
-import type { MarketDataPoint, ChartInterval } from '@chartsignl/core';
+import type { MarketDataPoint, ChartInterval } from '@marketsignl/core';
 import { API_URL } from './apiConfig';
 
 export interface MarketDataResponse {

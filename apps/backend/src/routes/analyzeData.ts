@@ -4,8 +4,9 @@
 import { Hono } from 'hono';
 import OpenAI from 'openai';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
-import { FREE_ANALYSIS_LIMIT } from '@chartsignl/core';
+import { FREE_ANALYSIS_LIMIT } from '@marketsignl/core';
 import { notifyFirstAnalysis, notifyPaywallHit } from '../lib/growthhub.js';
+import { createAlertsFromAnalysis } from '../services/pushNotificationService.js';
 
 // Import our technical analysis modules
 import {
@@ -24,7 +25,7 @@ import type {
   EnhancedAIAnalysis,
   TechnicalDetails,
   TradeIdea,
-} from '@chartsignl/core';
+} from '@marketsignl/core';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -438,6 +439,28 @@ analyzeDataRoute.post('/', async (c) => {
       // Don't fail the request - the analysis was successful
     } else {
       console.log('[Analysis] Saved to database with ID:', savedAnalysis?.id);
+
+      if (savedAnalysis?.id) {
+        void createAlertsFromAnalysis(
+          supabaseAdmin,
+          userId,
+          savedAnalysis.id,
+          symbol,
+          analysis.currentPrice,
+          analysis.supportLevels.map((l) => ({
+            price: l.price,
+            strength: l.strength,
+            description: l.description,
+          })),
+          analysis.resistanceLevels.map((l) => ({
+            price: l.price,
+            strength: l.strength,
+            description: l.description,
+          }))
+        ).catch((err) =>
+          console.error('[PUSH] createAlertsFromAnalysis failed:', err)
+        );
+      }
     }
 
     // ========================================================================

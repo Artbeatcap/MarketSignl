@@ -20,7 +20,7 @@ import {
   EXPERIENCE_LEVEL_OPTIONS,
   type TradingStyle,
   type ExperienceLevel,
-} from '@chartsignl/core';
+} from '@marketsignl/core';
 
 export default function EditProfileScreen() {
   const router = useRouter();

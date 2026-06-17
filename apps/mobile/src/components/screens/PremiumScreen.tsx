@@ -34,6 +34,11 @@ interface ComparisonItem {
 
 const PREMIUM_FEATURES: PremiumFeature[] = [
   {
+    icon: 'sparkles',
+    title: 'Unlimited AI Predictions',
+    description: 'One-click forecast overlay on any stock chart',
+  },
+  {
     icon: 'infinite',
     title: 'Unlimited Atlas Analyses',
     description: 'Get unlimited AI-powered level detection',
@@ -398,11 +403,11 @@ export default function PremiumScreen() {
             // Redirect to Stripe Customer Portal
             window.location.href = response.url;
           } else {
-            window.alert(`Unable to open subscription management. ${response.error || 'Please try again'}\n\nContact support@chartsignl.com if this continues.`);
+            window.alert(`Unable to open subscription management. ${response.error || 'Please try again'}\n\nContact support@marketsignl.com if this continues.`);
           }
         } catch (portalError) {
           console.error('Error creating portal session:', portalError);
-          window.alert(`Unable to open subscription management. ${(portalError as Error).message || 'Unknown error'}\n\nContact support@chartsignl.com if this continues.`);
+          window.alert(`Unable to open subscription management. ${(portalError as Error).message || 'Unknown error'}\n\nContact support@marketsignl.com if this continues.`);
         } finally {
           setIsCancelling(false);
         }
@@ -452,7 +457,7 @@ export default function PremiumScreen() {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.location.href = '/privacy';
     } else {
-      Linking.openURL('https://chartsignl.com/privacy');
+      Linking.openURL('https://marketsignl.com/privacy');
     }
   };
 

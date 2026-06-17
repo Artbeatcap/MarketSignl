@@ -13,15 +13,15 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, SymbolSearch, StockChart, EmailVerificationBanner } from '../../components';
+import { Button, Card, SymbolSearch, StockChart, EmailVerificationBanner, PredictionSummary } from '../../components';
 import { useAuthStore } from '../../store/authStore';
 import { fetchMarketDataWithIndicators, formatPrice, calculatePriceChange } from '../../lib/marketData';
 import { findLocalLevels, detectTrend, analyzeChartData } from '../../lib/chartAnalysis';
-import { getUsage, getAnalysis } from '../../lib/api';
+import { getUsage, getAnalysis, getPrediction, createPrediction } from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import { API_URL } from '../../lib/apiConfig';
-import { FREE_ANALYSIS_LIMIT, CHART_INTERVAL_OPTIONS, CHART_COLORS } from '@chartsignl/core';
-import type { ChartViewType, ChartInterval, AILevel, EnhancedAIAnalysis, ScoredLevel } from '@chartsignl/core';
+import { FREE_ANALYSIS_LIMIT, FREE_PREDICTION_LIMIT, CHART_INTERVAL_OPTIONS, CHART_COLORS } from '@marketsignl/core';
+import type { ChartViewType, ChartInterval, AILevel, EnhancedAIAnalysis, ScoredLevel, AIPrediction } from '@marketsignl/core';
 
 export default function AnalyzeScreen() {
   const router = useRouter();
@@ -46,7 +46,12 @@ export default function AnalyzeScreen() {
   const [showLevels, setShowLevels] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const { analysisId } = useLocalSearchParams<{ analysisId?: string }>();
+  // AI Prediction state
+  const [isPredicting, setIsPredicting] = useState(false);
+  const [prediction, setPrediction] = useState<AIPrediction | null>(null);
+  const [showPredictionOverlay, setShowPredictionOverlay] = useState(false);
+
+  const { analysisId, predictionId } = useLocalSearchParams<{ analysisId?: string; predictionId?: string }>();
 
   // Load saved analysis when navigated from history
   useEffect(() => {
@@ -61,6 +66,19 @@ export default function AnalyzeScreen() {
       }
     });
   }, [analysisId]);
+
+  // Load saved prediction when navigated from history
+  useEffect(() => {
+    if (!predictionId) return;
+    getPrediction(predictionId).then((res) => {
+      if (res.success && res.prediction) {
+        setPrediction(res.prediction);
+        setShowPredictionOverlay(true);
+        if (res.prediction.symbol) setSelectedSymbol(res.prediction.symbol);
+        if (res.prediction.interval) setSelectedInterval(res.prediction.interval as ChartInterval);
+      }
+    });
+  }, [predictionId]);
 
   // Fetch usage stats
   const { data: usage } = useQuery({
@@ -121,7 +139,42 @@ export default function AnalyzeScreen() {
     setSelectedSymbol(symbol);
     setSelectedName(name);
     setAiAnalysis(null);
+    setPrediction(null);
+    setShowPredictionOverlay(false);
     setShowLevels(false);
+  };
+
+  const handlePredict = async () => {
+    if (!usage) {
+      Alert.alert('Please Wait', 'Loading your account information...');
+      return;
+    }
+
+    if (!usage.isPro && (usage.freePredictionsUsed ?? 0) >= FREE_PREDICTION_LIMIT) {
+      router.push('/premium');
+      return;
+    }
+
+    setIsPredicting(true);
+    setErrorMessage(null);
+
+    try {
+      const result = await createPrediction(selectedSymbol, selectedInterval, safeChartData);
+      if (!result.success || !result.prediction) {
+        throw new Error(result.error || 'Prediction failed');
+      }
+      setPrediction(result.prediction);
+      setShowPredictionOverlay(true);
+      queryClient.invalidateQueries({ queryKey: ['usage'] });
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Please try again';
+      setErrorMessage(errorMsg);
+      if (Platform.OS !== 'web') {
+        Alert.alert('Prediction Failed', errorMsg);
+      }
+    } finally {
+      setIsPredicting(false);
+    }
   };
 
   // Handle Atlas analysis
@@ -218,7 +271,7 @@ export default function AnalyzeScreen() {
               style={styles.logo}
               resizeMode="contain"
             />
-            <Text style={styles.brandName}>ChartSignl</Text>
+            <Text style={styles.brandName}>MarketSignl</Text>
           </View>
           
           {/* Right side - Usage Badge */}
@@ -287,6 +340,8 @@ export default function AnalyzeScreen() {
               onPress={() => {
                 setSelectedInterval(opt.value);
                 setAiAnalysis(null);
+                setPrediction(null);
+                setShowPredictionOverlay(false);
               }}
             >
               <Text
@@ -357,6 +412,9 @@ export default function AnalyzeScreen() {
               supportLevels={showLevels ? (aiAnalysis ? convertToAILevels(aiAnalysis.supportLevels) : localLevels.support) : []}
               resistanceLevels={showLevels ? (aiAnalysis ? convertToAILevels(aiAnalysis.resistanceLevels) : localLevels.resistance) : []}
               height={320}
+              projectedPath={prediction?.projectedPath}
+              expectedChangePct={prediction?.expectedChangePct}
+              showPrediction={showPredictionOverlay && !!prediction}
             />
           )}
         </Card>
@@ -384,6 +442,36 @@ export default function AnalyzeScreen() {
             <Text style={styles.trendStrength}>({(trend.strength * 100).toFixed(0)}%)</Text>
           </View>
         </View>
+
+        {/* AI Prediction Button (primary) */}
+        <View style={styles.aiSection}>
+          <Button
+            title={
+              isPredicting
+                ? 'Generating forecast...'
+                : !usage?.isPro && usage && (usage.freePredictionsUsed ?? 0) >= FREE_PREDICTION_LIMIT
+                ? '🔒 Upgrade for More Predictions'
+                : '✨ AI Prediction'
+            }
+            onPress={handlePredict}
+            size="lg"
+            fullWidth
+            loading={isPredicting}
+            disabled={isLoadingData || safeChartData.length === 0 || !usage}
+            variant={
+              !usage?.isPro && usage && (usage.freePredictionsUsed ?? 0) >= FREE_PREDICTION_LIMIT
+                ? 'secondary'
+                : 'primary'
+            }
+          />
+          <Text style={styles.aiHint}>
+            {!usage?.isPro && usage
+              ? `${usage.freePredictionsUsed ?? 0}/${FREE_PREDICTION_LIMIT} free predictions this week`
+              : 'One-click forecast — projected path drawn on the chart'}
+          </Text>
+        </View>
+
+        {prediction && <PredictionSummary prediction={prediction} />}
 
         {/* Atlas Analysis Button */}
         <View style={styles.aiSection}>

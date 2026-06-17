@@ -17,6 +17,7 @@ build/
 .env-remote
 remote.env
 .env.server
+apps/mobile/secrets/
 
 # IDE
 .idea/
@@ -40,5 +41,12 @@ coverage/
 
 # Misc
 *.pem
+*.p8
+*.jks
+*.p12
+*.pfx
+*.keystore
+*-release.keystore
 .vercel
 deploy-deletion.sh
+TROUBLESHOOTING-PREMIUM-STATUS.md

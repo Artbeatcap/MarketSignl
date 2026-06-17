@@ -1,4 +1,4 @@
-// ChartSignl Theme - Calm, habit-app inspired design
+// MarketSignl Theme - Calm, habit-app inspired design
 // Inspired by Quittr's soft, supportive aesthetic
 
 export const colors = {

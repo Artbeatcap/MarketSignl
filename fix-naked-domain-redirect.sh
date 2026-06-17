@@ -116,9 +116,10 @@ echo "Test it:"
 echo "  http://chartsignl.com -> https://www.chartsignl.com"
 echo "  https://chartsignl.com -> https://www.chartsignl.com"
 echo ""
-echo "To expand SSL certificate to include chartsignl.com (optional):"
+echo "TLS: nginx uses Certbot lineage app.chartsignl.com (paths: /etc/letsencrypt/live/app.chartsignl.com/)."
+echo "Renew or re-issue if expired / renew fails:"
 echo "  ssh $SERVER"
-echo "  certbot certonly --nginx -d chartsignl.com -d www.chartsignl.com -d app.chartsignl.com --expand"
+echo "  certbot certonly --nginx --cert-name app.chartsignl.com -d chartsignl.com -d www.chartsignl.com -d app.chartsignl.com --force-renewal"
 
 # Cleanup
 rm /tmp/chartsignl-web.conf

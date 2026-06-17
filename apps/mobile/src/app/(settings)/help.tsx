@@ -48,7 +48,7 @@ const FAQ_ITEMS: FAQItem[] = [
     id: '5',
     question: 'What timeframes are available?',
     answer:
-      'ChartSignl supports multiple timeframes including 1-hour, 4-hour, daily, and weekly charts. Different timeframes are useful for different trading styles - day traders often use shorter timeframes, while swing traders prefer daily or weekly charts.',
+      'MarketSignl supports multiple timeframes including 1-hour, 4-hour, daily, and weekly charts. Different timeframes are useful for different trading styles - day traders often use shorter timeframes, while swing traders prefer daily or weekly charts.',
   },
   {
     id: '6',
@@ -79,7 +79,7 @@ export default function HelpScreen() {
   };
 
   const handleContactSupport = () => {
-    Linking.openURL('mailto:support@chartsignl.com?subject=ChartSignl Support Request');
+    Linking.openURL('mailto:support@marketsignl.com?subject=MarketSignl Support Request');
   };
 
   return (
@@ -135,7 +135,7 @@ export default function HelpScreen() {
           <Text style={styles.contactTitle}>Contact Support</Text>
           <Text style={styles.contactDescription}>
             Can't find what you're looking for? Our team is here to help with any questions
-            about ChartSignl.
+            about MarketSignl.
           </Text>
           <TouchableOpacity style={styles.contactButton} onPress={handleContactSupport}>
             <Text style={styles.contactButtonText}>Email Support</Text>

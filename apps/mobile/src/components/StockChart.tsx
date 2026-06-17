@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Platform, Dimensions } from 'react-native';
 import Svg, { Rect, Line as SvgLine, G, Path } from 'react-native-svg';
-import type { MarketDataPoint, AILevel, ChartViewType, ChartInterval } from '@chartsignl/core';
-import { CHART_COLORS } from '@chartsignl/core';
+import type { MarketDataPoint, AILevel, ChartViewType, ChartInterval, ProjectedPoint } from '@marketsignl/core';
+import { CHART_COLORS, getPredictionLayout, getPriceDomainWithPrediction, buildPredictionBandPath, buildPredictionLinePath } from '@marketsignl/core';
 import { formatPrice, formatVolume } from '../lib/marketData';
 import { colors, typography, spacing, borderRadius } from '../theme';
 
@@ -16,6 +16,9 @@ interface StockChartProps {
   supportLevels?: AILevel[];
   resistanceLevels?: AILevel[];
   height?: number;
+  projectedPath?: ProjectedPoint[];
+  expectedChangePct?: number;
+  showPrediction?: boolean;
 }
 
 // Improved date formatting functions
@@ -243,6 +246,9 @@ export function StockChart({
   supportLevels = [],
   resistanceLevels = [],
   height = 300,
+  projectedPath = [],
+  expectedChangePct,
+  showPrediction = false,
 }: StockChartProps) {
   // Calculate domain for Y axis
   const { minPrice, maxPrice } = useMemo(() => {
@@ -250,6 +256,14 @@ export function StockChart({
 
     const allPrices = data.flatMap((d) => [d.high, d.low]);
     const levelPrices = [...supportLevels, ...resistanceLevels].map((l) => l.price);
+
+    if (showPrediction && projectedPath.length > 0) {
+      return getPriceDomainWithPrediction(
+        [...allPrices, ...levelPrices],
+        projectedPath
+      );
+    }
+
     const allValues = [...allPrices, ...levelPrices];
 
     const min = Math.min(...allValues);
@@ -260,7 +274,7 @@ export function StockChart({
       minPrice: min - padding,
       maxPrice: max + padding,
     };
-  }, [data, supportLevels, resistanceLevels]);
+  }, [data, supportLevels, resistanceLevels, showPrediction, projectedPath]);
 
   // Determine axis type and ticks
   const useCategorical = shouldUseCategoricalAxis(interval);
@@ -366,6 +380,9 @@ export function StockChart({
           showEMA={showEMA}
           supportLevels={supportLevels}
           resistanceLevels={resistanceLevels}
+          projectedPath={projectedPath}
+          expectedChangePct={expectedChangePct}
+          showPrediction={showPrediction}
         />
         <View style={styles.legend}>
           <LegendItem color={CHART_COLORS.candleUp} label="Bullish" />
@@ -379,6 +396,9 @@ export function StockChart({
           {supportLevels.length > 0 && <LegendItem color={CHART_COLORS.support} label="Support" />}
           {resistanceLevels.length > 0 && (
             <LegendItem color={CHART_COLORS.resistance} label="Resistance" />
+          )}
+          {showPrediction && projectedPath.length > 0 && (
+            <LegendItem color={CHART_COLORS.prediction} label="AI Prediction" />
           )}
         </View>
       </View>
@@ -397,6 +417,9 @@ export function StockChart({
         showEMA={showEMA}
         supportLevels={supportLevels}
         resistanceLevels={resistanceLevels}
+        projectedPath={projectedPath}
+        expectedChangePct={expectedChangePct}
+        showPrediction={showPrediction}
       />
       <View style={styles.legend}>
         <LegendItem color={CHART_COLORS.lineStroke} label="Price" />
@@ -409,6 +432,9 @@ export function StockChart({
         {supportLevels.length > 0 && <LegendItem color={CHART_COLORS.support} label="Support" />}
         {resistanceLevels.length > 0 && (
           <LegendItem color={CHART_COLORS.resistance} label="Resistance" />
+        )}
+        {showPrediction && projectedPath.length > 0 && (
+          <LegendItem color={CHART_COLORS.prediction} label="AI Prediction" />
         )}
       </View>
     </View>
@@ -425,6 +451,9 @@ interface SimpleCandlestickChartProps {
   showEMA?: boolean;
   supportLevels?: AILevel[];
   resistanceLevels?: AILevel[];
+  projectedPath?: ProjectedPoint[];
+  expectedChangePct?: number;
+  showPrediction?: boolean;
 }
 
 function SimpleCandlestickChart({
@@ -436,6 +465,9 @@ function SimpleCandlestickChart({
   showEMA = true,
   supportLevels = [],
   resistanceLevels = [],
+  projectedPath = [],
+  expectedChangePct,
+  showPrediction = false,
 }: SimpleCandlestickChartProps) {
   const width = Dimensions.get('window').width - 40;
   const svgHeight = height - X_AXIS_HEIGHT;
@@ -668,6 +700,23 @@ function SimpleCandlestickChart({
             </G>
           );
         })}
+
+        {/* AI Prediction overlay (candle view) */}
+        {showPrediction && projectedPath.length > 0 && (() => {
+          const layout = getPredictionLayout(CHART_LEFT_MARGIN, chartDrawableWidth);
+          const lastIndex = data.length - 1;
+          const startX = xForIndex(lastIndex);
+          const startY = priceToY(data[lastIndex].close);
+          const bandPath = buildPredictionBandPath(projectedPath, layout.xForFutureIndex, priceToY, startX, startY);
+          const linePath = buildPredictionLinePath(projectedPath, layout.xForFutureIndex, priceToY, startX, startY);
+          return (
+            <G>
+              <SvgLine x1={layout.dividerX} y1={10} x2={layout.dividerX} y2={chartHeight + 10} stroke={CHART_COLORS.grid} strokeWidth="1" strokeDasharray="4,4" />
+              {bandPath ? <Path d={bandPath} fill={CHART_COLORS.predictionBand} stroke="none" /> : null}
+              {linePath ? <Path d={linePath} stroke={CHART_COLORS.prediction} strokeWidth="2.5" strokeDasharray="6,4" fill="none" /> : null}
+            </G>
+          );
+        })()}
       </Svg>
 
       {/* X-axis outside and below SVG */}
@@ -714,6 +763,9 @@ interface SimpleLineChartProps {
   showEMA?: boolean;
   supportLevels?: AILevel[];
   resistanceLevels?: AILevel[];
+  projectedPath?: ProjectedPoint[];
+  expectedChangePct?: number;
+  showPrediction?: boolean;
 }
 
 const X_AXIS_HEIGHT = 45;
@@ -729,11 +781,17 @@ function SimpleLineChart({
   showEMA = true,
   supportLevels = [],
   resistanceLevels = [],
+  projectedPath = [],
+  expectedChangePct,
+  showPrediction = false,
 }: SimpleLineChartProps) {
   const width = Dimensions.get('window').width - 40;
   const chartSvgHeight = height - X_AXIS_HEIGHT;
-  const rightEdge = width - 30; // 30px right margin so last data points are fully visible
+  const rightEdge = width - 30;
   const chartDrawableWidth = width - CHART_LEFT_MARGIN - 30;
+
+  const layout = getPredictionLayout(CHART_LEFT_MARGIN, chartDrawableWidth);
+  const hasPrediction = showPrediction && projectedPath.length > 0;
 
   const priceToY = (price: number) => {
     const range = maxPrice - minPrice;
@@ -741,8 +799,13 @@ function SimpleLineChart({
     return ratio * (chartSvgHeight - 10) + 10;
   };
 
-  const stepX = data.length > 1 ? chartDrawableWidth / (data.length - 1) : 0;
-  const xForIndex = (i: number) => CHART_LEFT_MARGIN + i * stepX;
+  const stepX = data.length > 1
+    ? (hasPrediction ? layout.historicalWidth : chartDrawableWidth) / (data.length - 1)
+    : 0;
+  const xForIndex = (i: number) =>
+    hasPrediction
+      ? layout.xForHistoricalIndex(i, data.length)
+      : CHART_LEFT_MARGIN + i * stepX;
 
   const tickCount = getTickCount(interval, data.length);
   const xAxisIndices = useMemo(() => {
@@ -897,6 +960,72 @@ function SimpleLineChart({
           strokeWidth="2.5"
           fill="none"
         />
+
+        {/* AI Prediction overlay */}
+        {hasPrediction && (() => {
+          const lastIndex = data.length - 1;
+          const startX = xForIndex(lastIndex);
+          const startY = priceToY(data[lastIndex].close);
+          const bandPath = buildPredictionBandPath(
+            projectedPath,
+            layout.xForFutureIndex,
+            priceToY,
+            startX,
+            startY
+          );
+          const linePath = buildPredictionLinePath(
+            projectedPath,
+            layout.xForFutureIndex,
+            priceToY,
+            startX,
+            startY
+          );
+          const lastProjected = projectedPath[projectedPath.length - 1];
+          const labelX = layout.xForFutureIndex(projectedPath.length - 1, projectedPath.length);
+          const labelY = priceToY(lastProjected.price) - 12;
+          const changeLabel =
+            expectedChangePct != null
+              ? `${expectedChangePct >= 0 ? '+' : ''}${expectedChangePct.toFixed(2)}%`
+              : '';
+
+          return (
+            <G>
+              <SvgLine
+                x1={layout.dividerX}
+                y1={10}
+                x2={layout.dividerX}
+                y2={chartSvgHeight - 10}
+                stroke={CHART_COLORS.grid}
+                strokeWidth="1"
+                strokeDasharray="4,4"
+              />
+              {bandPath ? (
+                <Path d={bandPath} fill={CHART_COLORS.predictionBand} stroke="none" />
+              ) : null}
+              {linePath ? (
+                <Path
+                  d={linePath}
+                  stroke={CHART_COLORS.prediction}
+                  strokeWidth="2.5"
+                  strokeDasharray="6,4"
+                  fill="none"
+                />
+              ) : null}
+              {changeLabel ? (
+                <G>
+                  <Rect
+                    x={labelX - 52}
+                    y={labelY - 10}
+                    width={104}
+                    height={20}
+                    rx={10}
+                    fill={CHART_COLORS.prediction}
+                  />
+                </G>
+              ) : null}
+            </G>
+          );
+        })()}
         </Svg>
       </View>
 

@@ -4,7 +4,7 @@ import type {
   TradingStyle,
   ExperienceLevel,
   StressReducer,
-} from '@chartsignl/core';
+} from '@marketsignl/core';
 
 interface OnboardingState {
   answers: OnboardingAnswers;

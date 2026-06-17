@@ -40,6 +40,22 @@ function check(label, filePath, searchString) {
   }
 }
 
+function checkNot(label, filePath, searchString) {
+  const fullPath = path.join(ANDROID_ROOT, filePath);
+  if (!fs.existsSync(fullPath)) {
+    console.log(`${FAIL} ${label} — file not found: ${filePath}`);
+    failures++;
+    return;
+  }
+  const contents = fs.readFileSync(fullPath, "utf-8");
+  if (!contents.includes(searchString)) {
+    console.log(`${PASS} ${label}`);
+  } else {
+    console.log(`${FAIL} ${label} — "${searchString}" found in ${filePath}`);
+    failures++;
+  }
+}
+
 function checkExists(label, absolutePath, hint) {
   if (fs.existsSync(absolutePath)) {
     console.log(`${PASS} ${label}`);
@@ -109,7 +125,7 @@ check(
 check(
   "Release signing config",
   "app/build.gradle",
-  "CHARTSIGNL_RELEASE_STORE_FILE"
+  "resolveReleaseSigning"
 );
 check(
   "Play Billing Library dependency",
@@ -127,21 +143,27 @@ check(
   "debuggable false"
 );
 
-// gradle.properties
-check(
-  "Keystore store file property",
+// gradle.properties must not contain signing secrets. Gradle resolves them
+// from environment variables or ignored local files at build time.
+checkNot(
+  "No keystore store file in gradle.properties",
   "gradle.properties",
   "CHARTSIGNL_RELEASE_STORE_FILE"
 );
-check(
-  "Keystore alias property",
+checkNot(
+  "No keystore alias in gradle.properties",
   "gradle.properties",
   "CHARTSIGNL_RELEASE_KEY_ALIAS"
 );
-check(
-  "Keystore store password set",
+checkNot(
+  "No keystore store password in gradle.properties",
   "gradle.properties",
   "CHARTSIGNL_RELEASE_STORE_PASSWORD"
+);
+checkNot(
+  "No keystore key password in gradle.properties",
+  "gradle.properties",
+  "CHARTSIGNL_RELEASE_KEY_PASSWORD"
 );
 check(
   "Architecture filter (64-bit only)",
@@ -184,19 +206,19 @@ checkExists(
   "The withReleaseSigning plugin should copy this automatically from secrets/"
 );
 
-// Verify password is not empty in gradle.properties
+// Verify passwords are not persisted in gradle.properties
 const gradlePropsPath = path.join(ANDROID_ROOT, "gradle.properties");
 if (fs.existsSync(gradlePropsPath)) {
   const gradleProps = fs.readFileSync(gradlePropsPath, "utf-8");
-  const passwordMatch = gradleProps.match(
-    /CHARTSIGNL_RELEASE_STORE_PASSWORD=(.+)/
-  );
-  if (passwordMatch && passwordMatch[1].trim().length > 0) {
-    console.log(`${PASS} Keystore password is non-empty in gradle.properties`);
+  if (
+    !gradleProps.includes("CHARTSIGNL_RELEASE_STORE_PASSWORD") &&
+    !gradleProps.includes("CHARTSIGNL_RELEASE_KEY_PASSWORD")
+  ) {
+    console.log(`${PASS} Keystore passwords are not persisted in gradle.properties`);
   } else {
-    console.log(`${FAIL} Keystore password appears empty in gradle.properties`);
+    console.log(`${FAIL} Keystore passwords must not be persisted in gradle.properties`);
     console.log(
-      "       → Check secrets/.env.signing or set CHARTSIGNL_RELEASE_STORE_PASSWORD env var"
+      "       → Use environment variables or secrets/.env.signing instead"
     );
     failures++;
   }

@@ -2,13 +2,12 @@
  * withGradleConfig
  *
  * Injects into android/:
- * - gradle.properties: keystore config, architecture filter, SDK versions
+ * - gradle.properties: architecture filter, SDK versions
  * - build.gradle (root): ext block so subprojects (expo-modules-core, etc.) see compileSdkVersion
  *
- * Password resolution order (most secure first):
- * 1. Environment variables (CI/CD)
- * 2. secrets/.env.signing file (local dev)
- * 3. Throws error if neither found
+ * Release signing secrets are intentionally not written to gradle.properties.
+ * withReleaseSigning resolves them at Gradle build time from environment
+ * variables or apps/mobile/secrets/.env.signing.
  */
 const { withGradleProperties, withDangerousMod } = require("expo/config-plugins");
 const fs = require("fs");
@@ -26,50 +25,9 @@ ext {
 }
 `;
 
-/**
- * Parse a simple KEY=VALUE .env file. Handles quotes and comments.
- */
-function parseEnvFile(filePath) {
-  const vars = {};
-  if (!fs.existsSync(filePath)) return vars;
-
-  const lines = fs.readFileSync(filePath, "utf-8").split("\n");
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-
-    const eqIndex = trimmed.indexOf("=");
-    if (eqIndex < 0) continue;
-
-    const key = trimmed.slice(0, eqIndex).trim();
-    let value = trimmed.slice(eqIndex + 1).trim();
-
-    // Strip surrounding quotes
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-
-    vars[key] = value;
-  }
-  return vars;
-}
-
 function withGradleConfig(config) {
   config = withGradleProperties(config, (config) => {
     const props = config.modResults;
-    const projectRoot = config.modRequest.projectRoot; // apps/mobile
-
-    // Load secrets from .env.signing if it exists
-    const envSigningPath = path.join(projectRoot, "secrets", ".env.signing");
-    const secretsEnv = parseEnvFile(envSigningPath);
-
-    // Resolve a value: env var → secrets file → fallback
-    function resolve(envKey, fallback) {
-      return process.env[envKey] || secretsEnv[envKey] || fallback || "";
-    }
 
     // Helper: set or update a gradle property
     function setProperty(key, value) {
@@ -83,27 +41,18 @@ function withGradleConfig(config) {
       }
     }
 
-    // --- Keystore file & alias ---
-    setProperty("CHARTSIGNL_RELEASE_STORE_FILE", "chartsignl-release.keystore");
-    setProperty(
+    // Remove any stale signing secrets that a previous prebuild may have written.
+    const releaseSigningKeys = new Set([
+      "CHARTSIGNL_RELEASE_STORE_FILE",
       "CHARTSIGNL_RELEASE_KEY_ALIAS",
-      resolve("CHARTSIGNL_RELEASE_KEY_ALIAS", "chartsignl")
-    );
-
-    // --- Passwords ---
-    const storePassword = resolve("CHARTSIGNL_RELEASE_STORE_PASSWORD");
-    const keyPassword = resolve("CHARTSIGNL_RELEASE_KEY_PASSWORD");
-
-    if (!storePassword || !keyPassword) {
-      console.warn(
-        "\n  ⚠️  Keystore passwords not found!\n" +
-        "     Set environment variables or create secrets/.env.signing\n" +
-        "     Run: node scripts/setup-signing.js\n"
-      );
+      "CHARTSIGNL_RELEASE_STORE_PASSWORD",
+      "CHARTSIGNL_RELEASE_KEY_PASSWORD",
+    ]);
+    for (let i = props.length - 1; i >= 0; i--) {
+      if (props[i].type === "property" && releaseSigningKeys.has(props[i].key)) {
+        props.splice(i, 1);
+      }
     }
-
-    setProperty("CHARTSIGNL_RELEASE_STORE_PASSWORD", storePassword);
-    setProperty("CHARTSIGNL_RELEASE_KEY_PASSWORD", keyPassword);
 
     // --- Architecture Filter ---
     // Drop 32-bit for 16KB page alignment compliance

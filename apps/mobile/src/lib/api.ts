@@ -4,7 +4,10 @@ import type {
   GetAnalysisResponse,
   UsageResponse,
   AuthResponse,
-} from '@chartsignl/core';
+  PredictResponse,
+  GetPredictionsResponse,
+  GetPredictionResponse,
+} from '@marketsignl/core';
 
 import { API_URL } from './apiConfig';
 import { getAccessToken } from './supabase';
@@ -154,4 +157,28 @@ export async function createCustomerPortalSession(accessToken?: string | null): 
     },
     accessToken
   );
+}
+
+// AI Prediction
+export async function createPrediction(
+  symbol: string,
+  interval: string,
+  data: unknown[]
+): Promise<PredictResponse> {
+  return apiFetch('/api/predict', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ symbol, interval, data }),
+  });
+}
+
+export async function getPredictionHistory(
+  page = 1,
+  limit = 20
+): Promise<GetPredictionsResponse> {
+  return apiFetch(`/api/predictions?page=${page}&limit=${limit}`);
+}
+
+export async function getPrediction(id: string): Promise<GetPredictionResponse> {
+  return apiFetch(`/api/predictions/${id}`);
 }

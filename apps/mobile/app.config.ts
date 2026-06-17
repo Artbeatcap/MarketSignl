@@ -2,12 +2,12 @@ import { ConfigContext, ExpoConfig } from "expo/config";
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: "ChartSignl",
-  slug: "chartsignl",
-  version: "1.1.1",
+  name: "MarketSignl",
+  slug: "marketsignl",
+  version: "1.1.2",
   orientation: "portrait",
   icon: "./assets/icon.png",
-  scheme: "chartsignl",
+  scheme: "marketsignl",
   userInterfaceStyle: "light",
   splash: {
     image: "./assets/splash.png",
@@ -21,10 +21,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   // =========================================================================
   ios: {
     supportsTablet: true,
-    bundleIdentifier: "com.optionsplungellc.chartsignl",
+    bundleIdentifier: "com.optionsplungellc.marketsignl",
     associatedDomains: [
-      "applinks:chartsignl.com",
-      "applinks:www.chartsignl.com",
+      "applinks:marketsignl.com",
+      "applinks:www.marketsignl.com",
     ],
     privacyManifests: {
       NSPrivacyAccessedAPITypes: [
@@ -59,9 +59,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       foregroundImage: "./assets/adaptive-icon.png",
       backgroundColor: "#F0F9F9",
     },
-    package: "com.optionsplungellc.chartsignl",
+    package: "com.optionsplungellc.marketsignl",
     permissions: ["com.android.vending.BILLING"],
-    versionCode: 31,
+    versionCode: 32,
+
+    // Required for the modern Expo Notifications API on Android
+    useNextNotificationsApi: true,
 
     // App Links: replaces manual intent-filter in AndroidManifest.xml
     intentFilters: [
@@ -75,7 +78,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         category: ["DEFAULT", "BROWSABLE"],
       },
     ],
-  },
+  } as any,
 
   // =========================================================================
   // Web
@@ -94,6 +97,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-secure-store",
     "expo-apple-authentication",
     "expo-web-browser",
+    ["expo-notifications", { color: "#14B8A6" }],
     "./plugins/withMonorepoConfig",
 
     // Android SDK versions for Expo modules (compileSdk/targetSdk/buildTools)
@@ -121,7 +125,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // Brand colors in colors.xml
     "./plugins/withCustomTheme",
 
-    // Gradle properties: keystore passwords (from secrets/.env.signing) + arch filter
+    // Gradle properties: SDK versions + arch filter (no signing secrets)
     "./plugins/withGradleConfig",
 
     ["react-native-edge-to-edge", { android: { parentTheme: "Light", enforceNavigationBarContrast: false } }],

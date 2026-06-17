@@ -1,30 +1,39 @@
-// Simplified History Screen - Data Only (No Images)
+// Simplified History Screen — analyses + predictions
 
+import { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { getAnalysisHistory } from '../../lib/api';
+import { getAnalysisHistory, getPredictionHistory } from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
-import type { AnalysisHistoryItem } from '@chartsignl/core';
+import type { AnalysisHistoryItem, PredictionHistoryItem } from '@marketsignl/core';
 import { Ionicons } from '@expo/vector-icons';
+
+type HistoryTab = 'analyses' | 'predictions';
 
 export default function HistoryScreen() {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<HistoryTab>('predictions');
 
-  const { data, isLoading, isRefetching, refetch } = useQuery({
+  const analysesQuery = useQuery({
     queryKey: ['analysisHistory'],
     queryFn: () => getAnalysisHistory(1, 50),
+    enabled: activeTab === 'analyses',
   });
 
-  const analyses = data?.analyses || [];
+  const predictionsQuery = useQuery({
+    queryKey: ['predictionHistory'],
+    queryFn: () => getPredictionHistory(1, 50),
+    enabled: activeTab === 'predictions',
+  });
 
-  const handleAnalysisPress = (item: AnalysisHistoryItem) => {
-    router.push({
-      pathname: '/(tabs)/analyze',
-      params: { analysisId: item.id },
-    });
-  };
+  const isLoading = activeTab === 'analyses' ? analysesQuery.isLoading : predictionsQuery.isLoading;
+  const isRefetching = activeTab === 'analyses' ? analysesQuery.isRefetching : predictionsQuery.isRefetching;
+  const refetch = activeTab === 'analyses' ? analysesQuery.refetch : predictionsQuery.refetch;
+
+  const analyses = analysesQuery.data?.analyses || [];
+  const predictions = predictionsQuery.data?.predictions || [];
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -38,17 +47,15 @@ export default function HistoryScreen() {
     return date.toLocaleDateString();
   };
 
-  const renderItem = ({ item }: { item: AnalysisHistoryItem }) => (
+  const renderAnalysisItem = ({ item }: { item: AnalysisHistoryItem }) => (
     <TouchableOpacity
       style={styles.analysisCard}
-      onPress={() => handleAnalysisPress(item)}
+      onPress={() => router.push({ pathname: '/(tabs)/analyze', params: { analysisId: item.id } })}
       activeOpacity={0.7}
     >
-      {/* Icon instead of image */}
       <View style={styles.iconContainer}>
         <Ionicons name="trending-up" size={32} color={colors.primary[500]} />
       </View>
-      
       <View style={styles.cardContent}>
         <View style={styles.cardHeader}>
           {item.symbol && (
@@ -62,20 +69,52 @@ export default function HistoryScreen() {
             </View>
           )}
         </View>
-        <Text style={styles.headline} numberOfLines={2}>
-          {item.headline}
-        </Text>
+        <Text style={styles.headline} numberOfLines={2}>{item.headline}</Text>
         <Text style={styles.date}>{formatDate(item.createdAt)}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderPredictionItem = ({ item }: { item: PredictionHistoryItem }) => (
+    <TouchableOpacity
+      style={styles.analysisCard}
+      onPress={() => router.push({ pathname: '/(tabs)/analyze', params: { predictionId: item.id } })}
+      activeOpacity={0.7}
+    >
+      <View style={[styles.iconContainer, styles.predictionIcon]}>
+        <Ionicons name="sparkles" size={32} color={colors.info} />
+      </View>
+      <View style={styles.cardContent}>
+        <View style={styles.cardHeader}>
+          <View style={styles.symbolBadge}>
+            <Text style={styles.symbolText}>{item.symbol}</Text>
+          </View>
+          <View style={styles.predictionBadge}>
+            <Text style={styles.predictionBadgeText}>
+              {item.expectedChangePct >= 0 ? '+' : ''}{item.expectedChangePct.toFixed(2)}%
+            </Text>
+          </View>
+        </View>
+        <Text style={styles.headline} numberOfLines={2}>{item.headline}</Text>
+        <Text style={styles.date}>{formatDate(item.createdAt)} · {item.confidence}% confidence</Text>
       </View>
     </TouchableOpacity>
   );
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Ionicons name="bar-chart-outline" size={80} color={colors.neutral[300]} />
-      <Text style={styles.emptyTitle}>No analyses yet</Text>
+      <Ionicons
+        name={activeTab === 'predictions' ? 'sparkles-outline' : 'bar-chart-outline'}
+        size={80}
+        color={colors.neutral[300]}
+      />
+      <Text style={styles.emptyTitle}>
+        {activeTab === 'predictions' ? 'No predictions yet' : 'No analyses yet'}
+      </Text>
       <Text style={styles.emptySubtitle}>
-        Your chart analyses will appear here after you analyze your first chart.
+        {activeTab === 'predictions'
+          ? 'Your AI forecasts will appear here after your first prediction.'
+          : 'Your chart analyses will appear here after you analyze your first chart.'}
       </Text>
     </View>
   );
@@ -84,26 +123,35 @@ export default function HistoryScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.webWrapper}>
         <View style={styles.webInner}>
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>History</Text>
-            <Text style={styles.headerSubtitle}>
-              {analyses.length} {analyses.length === 1 ? 'analysis' : 'analyses'}
-            </Text>
+          <Text style={styles.title}>History</Text>
+
+          <View style={styles.tabRow}>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'predictions' && styles.tabActive]}
+              onPress={() => setActiveTab('predictions')}
+            >
+              <Text style={[styles.tabText, activeTab === 'predictions' && styles.tabTextActive]}>
+                Predictions
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tab, activeTab === 'analyses' && styles.tabActive]}
+              onPress={() => setActiveTab('analyses')}
+            >
+              <Text style={[styles.tabText, activeTab === 'analyses' && styles.tabTextActive]}>
+                Analyses
+              </Text>
+            </TouchableOpacity>
           </View>
 
           <FlatList
-            data={analyses}
+            data={activeTab === 'predictions' ? predictions : analyses}
             keyExtractor={(item) => item.id}
-            renderItem={renderItem}
+            renderItem={activeTab === 'predictions' ? renderPredictionItem : renderAnalysisItem}
             contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
             ListEmptyComponent={!isLoading ? renderEmptyState : null}
             refreshControl={
-              <RefreshControl
-                refreshing={isRefetching}
-                onRefresh={refetch}
-                tintColor={colors.primary[500]}
-              />
+              <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary[500]} />
             }
           />
         </View>
@@ -112,125 +160,144 @@ export default function HistoryScreen() {
   );
 }
 
-const WEB_MAX_WIDTH = 1100;
-
 const styles = StyleSheet.create({
   container: {
-    ...(Platform.OS !== 'web' && { flex: 1 }),
-    ...(Platform.OS === 'web' && { height: '100vh', overflow: 'auto' }),
-    backgroundColor: colors.background,
+    flex: 1,
+    backgroundColor: colors.neutral[50],
   },
   webWrapper: {
-    ...(Platform.OS !== 'web' && { flex: 1 }),
-    ...(Platform.OS === 'web' && {
-      alignItems: 'center',
-      backgroundColor: colors.neutral[100],
-    }),
+    flex: 1,
+    alignItems: 'center',
   },
   webInner: {
-    ...(Platform.OS !== 'web' && { flex: 1 }),
+    flex: 1,
     width: '100%',
-    ...(Platform.OS === 'web' && {
-      maxWidth: WEB_MAX_WIDTH,
-      backgroundColor: colors.background,
-      borderLeftWidth: 1,
-      borderRightWidth: 1,
-      borderColor: colors.neutral[200],
-    }),
+    maxWidth: Platform.OS === 'web' ? 480 : undefined,
   },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.neutral[200],
+  title: {
+    ...typography.headingLg,
+    color: colors.neutral[800],
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
   },
-  headerTitle: {
-    ...typography.displaySm,
-    color: colors.neutral[900],
+  tabRow: {
+    flexDirection: 'row',
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    backgroundColor: colors.neutral[100],
+    borderRadius: borderRadius.md,
+    padding: 4,
   },
-  headerSubtitle: {
-    ...typography.bodyMd,
+  tab: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    borderRadius: borderRadius.sm,
+  },
+  tabActive: {
+    backgroundColor: colors.white,
+    ...shadows.sm,
+  },
+  tabText: {
+    ...typography.labelMd,
     color: colors.neutral[500],
-    marginTop: spacing.xs,
+  },
+  tabTextActive: {
+    color: colors.primary[600],
+    fontWeight: '600',
   },
   listContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xxl,
+    padding: spacing.md,
+    paddingBottom: 100,
+    flexGrow: 1,
   },
   analysisCard: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.white,
     borderRadius: borderRadius.lg,
+    padding: spacing.md,
     marginBottom: spacing.md,
-    overflow: 'hidden',
     ...shadows.sm,
   },
   iconContainer: {
-    width: 80,
-    height: 80,
+    width: 56,
+    height: 56,
+    borderRadius: borderRadius.md,
     backgroundColor: colors.primary[50],
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  predictionIcon: {
+    backgroundColor: '#EFF6FF',
   },
   cardContent: {
     flex: 1,
-    padding: spacing.md,
-    justifyContent: 'center',
   },
   cardHeader: {
     flexDirection: 'row',
     gap: spacing.xs,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
+    flexWrap: 'wrap',
   },
   symbolBadge: {
-    backgroundColor: colors.primary[100],
+    backgroundColor: colors.primary[50],
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingVertical: 2,
     borderRadius: borderRadius.sm,
   },
   symbolText: {
-    ...typography.labelMd,
+    ...typography.labelSm,
     color: colors.primary[700],
     fontWeight: '600',
   },
   timeframeBadge: {
     backgroundColor: colors.neutral[100],
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingVertical: 2,
     borderRadius: borderRadius.sm,
   },
   timeframeText: {
-    ...typography.labelMd,
+    ...typography.labelSm,
     color: colors.neutral[600],
+  },
+  predictionBadge: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  predictionBadgeText: {
+    ...typography.labelSm,
+    color: '#1D4ED8',
+    fontWeight: '600',
   },
   headline: {
     ...typography.bodyMd,
-    color: colors.neutral[900],
-    marginBottom: spacing.xs,
-    fontWeight: '500',
+    color: colors.neutral[800],
+    marginBottom: 4,
   },
   date: {
     ...typography.labelSm,
     color: colors.neutral[400],
   },
-  // Empty state
   emptyState: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.xxl * 3,
+    paddingTop: 80,
+    paddingHorizontal: spacing.xl,
   },
   emptyTitle: {
-    ...typography.headingLg,
-    color: colors.neutral[900],
-    marginTop: spacing.lg,
+    ...typography.headingMd,
+    color: colors.neutral[700],
+    marginTop: spacing.md,
     marginBottom: spacing.sm,
   },
   emptySubtitle: {
     ...typography.bodyMd,
     color: colors.neutral[500],
     textAlign: 'center',
-    paddingHorizontal: spacing.xl,
-    lineHeight: 22,
   },
 });
