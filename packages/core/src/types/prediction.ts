@@ -22,6 +22,15 @@ export interface AIPrediction {
   expectedChangePct: number;
   projectedPath: ProjectedPoint[];
   createdAt?: string;
+  /** Resolution metadata (populated when fetched from history/replay) */
+  horizonEndAt?: string;
+  resolvedAt?: string;
+  resolvedPrice?: number;
+  actualChangePct?: number;
+  directionHit?: boolean;
+  bandContained?: boolean;
+  magnitudeErrorPct?: number;
+  status?: 'pending' | 'resolved';
 }
 
 export interface PredictRequest {

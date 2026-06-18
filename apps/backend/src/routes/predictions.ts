@@ -141,6 +141,16 @@ predictionsRoute.get('/:id', async (c) => {
         ...prediction,
         id: row.id,
         createdAt: row.created_at,
+        horizonEndAt: row.horizon_end_at ?? undefined,
+        resolvedAt: row.resolved_at ?? undefined,
+        resolvedPrice: row.resolved_price != null ? Number(row.resolved_price) : undefined,
+        actualChangePct:
+          row.actual_change_pct != null ? Number(row.actual_change_pct) : undefined,
+        directionHit: row.direction_hit ?? undefined,
+        bandContained: row.band_contained ?? undefined,
+        magnitudeErrorPct:
+          row.magnitude_error_pct != null ? Number(row.magnitude_error_pct) : undefined,
+        status: row.resolved_at ? 'resolved' : 'pending',
       },
       createdAt: row.created_at,
     });

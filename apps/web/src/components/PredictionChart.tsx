@@ -45,6 +45,10 @@ interface PredictionChartProps {
   interval: ChartInterval;
   prediction?: AIPrediction | null;
   height?: number;
+  actualPath?: ProjectedPoint[];
+  priceDomainOverride?: { minPrice: number; maxPrice: number };
+  replayOutcome?: boolean | null;
+  isReplay?: boolean;
 }
 
 // Matches the mobile chart's geometry intent, tuned for desktop readability.
@@ -104,6 +108,10 @@ export default function PredictionChart({
   interval,
   prediction,
   height = 420,
+  actualPath = [],
+  priceDomainOverride,
+  replayOutcome = null,
+  isReplay = false,
 }: PredictionChartProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
@@ -133,6 +141,7 @@ export default function PredictionChart({
 
   // Shared y-domain — history + forecast band live on ONE scale.
   const { minPrice, maxPrice } = useMemo(() => {
+    if (priceDomainOverride) return priceDomainOverride;
     if (data.length === 0) return { minPrice: 0, maxPrice: 100 };
     const prices: number[] = [];
     for (const d of data) {
@@ -148,7 +157,7 @@ export default function PredictionChart({
     const max = Math.max(...prices);
     const padding = (max - min) * 0.05 || 1;
     return { minPrice: min - padding, maxPrice: max + padding };
-  }, [data, hasPrediction, projected]);
+  }, [data, hasPrediction, projected, priceDomainOverride]);
 
   const priceToY = useMemo(() => {
     const usable = svgHeight - TOP_PAD - BOTTOM_PAD;
@@ -196,12 +205,19 @@ export default function PredictionChart({
     const lastIndex = data.length - 1;
     const startX = xForIndex(lastIndex); // === layout.dividerX
     const startY = priceToY(getNum(data[lastIndex], 'close') ?? 0);
+    const actualLinePath =
+      actualPath.length > 0
+        ? buildPredictionLinePath(actualPath, layout.xForFutureIndex, priceToY, startX, startY)
+        : '';
     return {
       bandPath: buildPredictionBandPath(projected, layout.xForFutureIndex, priceToY, startX, startY),
       linePath: buildPredictionLinePath(projected, layout.xForFutureIndex, priceToY, startX, startY),
+      actualLinePath,
+      startX,
+      startY,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasPrediction, data, projected, layout, priceToY]);
+  }, [hasPrediction, data, projected, layout, priceToY, actualPath]);
 
   const yTicks = useMemo(() => {
     const ticks: number[] = [];
@@ -343,6 +359,27 @@ export default function PredictionChart({
                     strokeLinejoin="round"
                   />
                 )}
+                {overlay.actualLinePath && (
+                  <>
+                    <path
+                      d={overlay.actualLinePath}
+                      stroke={CHART_COLORS.lineStroke}
+                      strokeWidth={2.5}
+                      fill="none"
+                      strokeLinejoin="round"
+                    />
+                    {actualPath.length > 0 && replayOutcome != null && (
+                      <circle
+                        cx={layout.xForFutureIndex(actualPath.length - 1, actualPath.length)}
+                        cy={priceToY(actualPath[actualPath.length - 1].price)}
+                        r={4}
+                        fill={replayOutcome ? '#10B981' : '#EF4444'}
+                        stroke="#fff"
+                        strokeWidth={1.5}
+                      />
+                    )}
+                  </>
+                )}
                 {/* Anchor dot at "now" */}
                 <circle
                   cx={layout.dividerX}
@@ -413,8 +450,19 @@ export default function PredictionChart({
           {/* Forecast chip (top-right overlay) */}
           {hasPrediction && (
             <div className="pc-chip">
-              ✨ AI Prediction {expectedPct >= 0 ? '+' : ''}
-              {expectedPct.toFixed(2)}%
+              {isReplay ? (
+                <>
+                  Replay
+                  {replayOutcome != null && (
+                    <span> · {replayOutcome ? '✓ Hit' : '✗ Miss'}</span>
+                  )}
+                </>
+              ) : (
+                <>
+                  ✨ AI Prediction {expectedPct >= 0 ? '+' : ''}
+                  {expectedPct.toFixed(2)}%
+                </>
+              )}
             </div>
           )}
 

@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { MarketDataPoint } from '@marketsignl/core';
+import { fetchAggregatesInRange } from '../lib/marketDataFetcher.js';
 
 const marketDataRoute = new Hono();
 
@@ -69,10 +70,36 @@ marketDataRoute.get('/:symbol', async (c) => {
     
     const symbolUpper = c.req.param('symbol').toUpperCase();
     const chartInterval = c.req.query('interval') || '3mo';
-    
+    const fromQuery = c.req.query('from');
+    const toQuery = c.req.query('to');
+
     if (!massiveApiKey) {
       console.error('[ROUTE ERROR] MASSIVE_API_KEY is not set or empty');
       return c.json({ error: 'Massive API key not configured' }, 500);
+    }
+
+    // Replay / anchored fetch: explicit from/to (Unix ms) bypasses rolling window.
+    if (fromQuery && toQuery) {
+      const fromMs = Number(fromQuery);
+      const toMs = Number(toQuery);
+      if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || fromMs >= toMs) {
+        return c.json({ error: 'Invalid from/to range' }, 400);
+      }
+
+      const data = await fetchAggregatesInRange(symbolUpper, fromMs, toMs, chartInterval);
+      if (data.length === 0) {
+        return c.json({ error: 'No data available for this symbol and range' }, 404);
+      }
+
+      return c.json({
+        symbol: symbolUpper,
+        interval: chartInterval,
+        resultsCount: data.length,
+        data,
+        visibleStartIndex: 0,
+        emaWarmupBars: 0,
+        totalBars: data.length,
+      });
     }
 
     const config = intervalConfig[chartInterval] || intervalConfig['3mo'];

@@ -1,0 +1,71 @@
+.replay-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #eff6ff;
+  border: 1px solid rgba(37, 99, 235, 0.15);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--neutral-600);
+}
+
+.replay-banner__info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.replay-banner__label {
+  font-weight: 600;
+  color: #2563eb;
+}
+
+.replay-banner__symbol {
+  font-weight: 600;
+  color: var(--neutral-900);
+}
+
+.replay-banner__sep {
+  color: var(--neutral-400);
+}
+
+.replay-banner__outcome {
+  font-weight: 600;
+}
+
+.replay-banner__outcome--hit {
+  color: #10b981;
+}
+
+.replay-banner__outcome--miss {
+  color: #ef4444;
+}
+
+.replay-banner__outcome--pending {
+  color: #2563eb;
+}
+
+.replay-banner__pending {
+  color: #2563eb;
+}
+
+.replay-banner__clear {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--neutral-600);
+  background: #fff;
+  border: 1px solid var(--neutral-200);
+  border-radius: 8px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+.replay-banner__clear:hover {
+  background: var(--neutral-50);
+}

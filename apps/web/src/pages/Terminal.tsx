@@ -3,10 +3,16 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AIPrediction, ChartInterval, MarketDataPoint } from '@marketsignl/core';
 import { FREE_PREDICTION_LIMIT } from '@marketsignl/core';
-import { apiFetch, publicFetch } from '../lib/api';
+import { apiFetch, getToken, publicFetch } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import PredictionStatsPanel from '../components/PredictionStatsPanel';
+import PredictionHistory from '../components/PredictionHistory';
 import PredictionChart from '../components/PredictionChart';
+import ReplayBanner from '../components/ReplayBanner';
+import {
+  PredictionReplayProvider,
+  usePredictionReplay,
+} from '../state/PredictionReplayContext';
 import './Terminal.css';
 
 const INTERVALS: { value: ChartInterval; label: string }[] = [
@@ -42,15 +48,26 @@ async function fetchUsage() {
 }
 
 export default function Terminal() {
+  return (
+    <PredictionReplayProvider getToken={getToken}>
+      <TerminalContent />
+    </PredictionReplayProvider>
+  );
+}
+
+function TerminalContent() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { session, user, signOut } = useAuth();
+  const { active, loading: replayLoading, error: replayError, replay, clear } =
+    usePredictionReplay();
   const [symbol, setSymbol] = useState('AAPL');
   const [symbolInput, setSymbolInput] = useState('AAPL');
   const [interval, setInterval] = useState<ChartInterval>('3mo');
   const [prediction, setPrediction] = useState<AIPrediction | null>(null);
   const [isPredicting, setIsPredicting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingReplayId, setPendingReplayId] = useState<string | null>(null);
 
   const { data: chartData = [], isLoading } = useQuery({
     queryKey: ['marketData', symbol, interval],
@@ -64,14 +81,31 @@ export default function Terminal() {
     retry: false,
   });
 
+  const insight = active?.prediction ?? prediction;
+  const displayData = active?.historical ?? chartData;
+  const displayPrediction = active?.prediction ?? prediction;
+  const displaySymbol = active?.prediction.symbol ?? symbol;
+  const displayInterval = active?.prediction.interval ?? interval;
+  const displayError = error ?? replayError;
+
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    clear();
     setSymbol(symbolInput.toUpperCase().trim());
     setPrediction(null);
     setError(null);
   };
 
+  const handleReplay = async (id: string) => {
+    setPendingReplayId(id);
+    setError(null);
+    await replay(id);
+    setPendingReplayId(null);
+  };
+
   const handlePredict = async () => {
+    if (active) return;
+
     if (!session) {
       navigate('/login?redirect=/terminal');
       return;
@@ -99,6 +133,7 @@ export default function Terminal() {
       setPrediction(result.prediction);
       queryClient.invalidateQueries({ queryKey: ['usage'] });
       queryClient.invalidateQueries({ queryKey: ['predictionStats'] });
+      queryClient.invalidateQueries({ queryKey: ['predictionHistory'] });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Prediction failed';
       if (msg.toLowerCase().includes('not authenticated')) {
@@ -129,6 +164,12 @@ export default function Terminal() {
           ))}
         </nav>
         <PredictionStatsPanel enabled={!!session} />
+        <PredictionHistory
+          enabled={!!session}
+          onSelect={handleReplay}
+          activeId={active?.prediction.id}
+          loadingId={replayLoading ? pendingReplayId : null}
+        />
         <div className="sidebar-auth">
           {session && user ? (
             <>
@@ -146,6 +187,7 @@ export default function Terminal() {
                 type="button"
                 className="sign-out-btn"
                 onClick={async () => {
+                  clear();
                   await signOut();
                   queryClient.removeQueries({ queryKey: ['usage'] });
                   setPrediction(null);
@@ -179,6 +221,7 @@ export default function Terminal() {
                 key={opt.value}
                 className={`interval-btn ${interval === opt.value ? 'active' : ''}`}
                 onClick={() => {
+                  clear();
                   setInterval(opt.value);
                   setPrediction(null);
                 }}
@@ -191,7 +234,14 @@ export default function Terminal() {
           <button
             className="predict-btn"
             onClick={handlePredict}
-            disabled={isLoading || chartData.length === 0 || isPredicting}
+            disabled={
+              !!active ||
+              isLoading ||
+              chartData.length === 0 ||
+              isPredicting ||
+              replayLoading
+            }
+            title={active ? 'Exit replay to run a new prediction' : undefined}
           >
             {isPredicting ? 'Generating...' : '✨ AI Prediction'}
           </button>
@@ -203,61 +253,78 @@ export default function Terminal() {
           )}
         </header>
 
-        {error && <div className="terminal-error">{error}</div>}
+        {displayError && <div className="terminal-error">{displayError}</div>}
 
         <div className="terminal-content">
           <section className="chart-panel">
-            {isLoading ? (
+            <ReplayBanner />
+            {isLoading && !active ? (
               <div className="chart-loading">Loading chart...</div>
+            ) : replayLoading ? (
+              <div className="chart-loading">Loading replay...</div>
             ) : (
               <PredictionChart
-                data={chartData}
-                symbol={symbol}
-                interval={interval}
-                prediction={prediction}
+                data={displayData}
+                symbol={displaySymbol}
+                interval={displayInterval}
+                prediction={displayPrediction}
                 height={420}
+                actualPath={active?.actual}
+                priceDomainOverride={active?.priceDomain}
+                replayOutcome={active?.prediction.directionHit ?? null}
+                isReplay={!!active}
               />
             )}
           </section>
 
           <aside className="insight-panel">
             <h2>Insight</h2>
-            {prediction ? (
+            {insight ? (
               <div className="insight-content">
-                <h3>{prediction.headline}</h3>
-                <p>{prediction.summary}</p>
+                <h3>{insight.headline}</h3>
+                <p>{insight.summary}</p>
                 <div className="insight-meta">
                   <div>
                     <span>Confidence</span>
-                    <strong>{prediction.confidence}%</strong>
+                    <strong>{insight.confidence}%</strong>
                   </div>
                   <div>
                     <span>Direction</span>
-                    <strong>{prediction.direction}</strong>
+                    <strong>{insight.direction}</strong>
                   </div>
                   <div>
                     <span>Forecast</span>
                     <strong>
-                      {prediction.expectedChangePct >= 0 ? '+' : ''}
-                      {prediction.expectedChangePct.toFixed(2)}%
+                      {insight.expectedChangePct >= 0 ? '+' : ''}
+                      {insight.expectedChangePct.toFixed(2)}%
                     </strong>
                   </div>
+                  {active?.prediction.status === 'resolved' &&
+                    active.prediction.actualChangePct != null && (
+                      <div>
+                        <span>Actual</span>
+                        <strong>
+                          {active.prediction.actualChangePct >= 0 ? '+' : ''}
+                          {active.prediction.actualChangePct.toFixed(2)}%
+                        </strong>
+                      </div>
+                    )}
                 </div>
-                {prediction.reasoning.length > 0 && (
+                {insight.reasoning.length > 0 && (
                   <div className="insight-section">
                     <h4>Reasoning</h4>
                     <ul>
-                      {prediction.reasoning.map((r, i) => (
+                      {insight.reasoning.map((r, i) => (
                         <li key={i}>{r}</li>
                       ))}
                     </ul>
                   </div>
                 )}
-                {prediction.riskFactors.length > 0 && (
+                {insight.riskFactors.length > 0 && (
                   <div className="insight-section">
                     <h4>Risk Factors</h4>
                     <ul className="risk-list">
-                      {prediction.riskFactors.map((r, i) => (
+                      {insight.riskFactors.map((r, i) => (
                         <li key={i}>{r}</li>
                       ))}
                     </ul>
@@ -269,7 +336,10 @@ export default function Terminal() {
               </div>
             ) : (
               <div className="insight-empty">
-                <p>Search a symbol and click <strong>AI Prediction</strong> to see the forecast and reasoning here.</p>
+                <p>
+                  Search a symbol and click <strong>AI Prediction</strong> to see the forecast
+                  and reasoning here. Click a history row to replay a past call.
+                </p>
               </div>
             )}
           </aside>
