@@ -109,7 +109,7 @@ function buildUserPrompt(
 
 CURRENT STATE:
 - Price: $${currentPrice.toFixed(2)} (${priceChangePercent > 0 ? '+' : ''}${priceChangePercent.toFixed(2)}%)
-- Trend: ${trend.direction} (${(trend.strength * 100).toFixed(0)}% strength)
+- Trend: ${trend.direction} (${trend.strength.toFixed(0)}% strength)
 - Trading Bias: ${trend.tradingBias} - ${trend.biasReason}
 
 MOVING AVERAGES:
@@ -331,7 +331,7 @@ analyzeDataRoute.post('/', async (c) => {
       summary: [
         {
           indicator: 'Trend',
-          value: `${indicators.trend.direction} (${(indicators.trend.strength * 100).toFixed(0)}%)`,
+          value: `${indicators.trend.direction} (${indicators.trend.strength.toFixed(0)}%)`,
           status: indicators.trend.tradingBias === 'long' ? 'bullish' : indicators.trend.tradingBias === 'short' ? 'bearish' : 'neutral',
           statusLabel: indicators.trend.biasReason,
         },

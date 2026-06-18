@@ -66,7 +66,7 @@ function buildPredictionPrompt(
 
 CURRENT STATE:
 - Price: $${currentPrice.toFixed(2)} (${priceChangePercent > 0 ? '+' : ''}${priceChangePercent.toFixed(2)}%)
-- Trend: ${trend.direction} (${(trend.strength * 100).toFixed(0)}% strength)
+- Trend: ${trend.direction} (${trend.strength.toFixed(0)}% strength)
 - Trading Bias: ${trend.tradingBias}
 
 MOVING AVERAGES:

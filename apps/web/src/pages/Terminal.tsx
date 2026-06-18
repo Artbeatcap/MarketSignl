@@ -1,23 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
-  Area,
-  ComposedChart,
-} from 'recharts';
-import type { AIPrediction, ChartInterval } from '@marketsignl/core';
-import { CHART_COLORS, FREE_PREDICTION_LIMIT } from '@marketsignl/core';
+import type { AIPrediction, ChartInterval, MarketDataPoint } from '@marketsignl/core';
+import { FREE_PREDICTION_LIMIT } from '@marketsignl/core';
 import { apiFetch, publicFetch } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import PredictionStatsPanel from '../components/PredictionStatsPanel';
+import PredictionChart from '../components/PredictionChart';
 import './Terminal.css';
 
 const INTERVALS: { value: ChartInterval; label: string }[] = [
@@ -38,7 +27,7 @@ const NAV_ITEMS = [
 ];
 
 async function fetchMarketData(symbol: string, interval: string) {
-  const res = await publicFetch<{ data: Array<Record<string, number>> }>(
+  const res = await publicFetch<{ data: MarketDataPoint[] }>(
     `/api/market-data/${symbol}?interval=${interval}`
   );
   return res.data ?? [];
@@ -121,26 +110,6 @@ export default function Terminal() {
       setIsPredicting(false);
     }
   };
-
-  const historicalChart = chartData.map((d, i) => ({
-    ...d,
-    index: i,
-    type: 'historical' as const,
-  }));
-
-  const predictionChart = prediction
-    ? prediction.projectedPath.map((p, i) => ({
-        index: chartData.length + i,
-        timestamp: p.timestamp,
-        close: p.price,
-        upperBand: p.upperBand ?? p.price,
-        lowerBand: p.lowerBand ?? p.price,
-        type: 'prediction' as const,
-      }))
-    : [];
-
-  const combinedChart = [...historicalChart, ...predictionChart];
-  const dividerIndex = chartData.length > 0 ? chartData.length - 1 : 0;
 
   return (
     <div className="terminal-layout">
@@ -241,58 +210,13 @@ export default function Terminal() {
             {isLoading ? (
               <div className="chart-loading">Loading chart...</div>
             ) : (
-              <ResponsiveContainer width="100%" height={420}>
-                <ComposedChart data={combinedChart} margin={{ top: 10, right: 20, left: 10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
-                  <XAxis dataKey="index" tick={false} />
-                  <YAxis
-                    domain={['auto', 'auto']}
-                    tickFormatter={(v) => `$${Number(v).toFixed(0)}`}
-                    width={60}
-                  />
-                  <Tooltip
-                    formatter={(value: number) => [`$${value.toFixed(2)}`, 'Price']}
-                    labelFormatter={() => symbol}
-                  />
-                  {prediction && (
-                    <ReferenceLine x={dividerIndex} stroke={CHART_COLORS.grid} strokeDasharray="4 4" />
-                  )}
-                  <Line
-                    type="monotone"
-                    dataKey="close"
-                    stroke={CHART_COLORS.lineStroke}
-                    strokeWidth={2.5}
-                    dot={false}
-                    data={historicalChart}
-                  />
-                  {prediction && (
-                    <>
-                      <Area
-                        dataKey="upperBand"
-                        stroke="none"
-                        fill={CHART_COLORS.predictionBand}
-                        data={predictionChart}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="close"
-                        stroke={CHART_COLORS.prediction}
-                        strokeWidth={2.5}
-                        strokeDasharray="6 4"
-                        dot={false}
-                        data={predictionChart}
-                      />
-                    </>
-                  )}
-                </ComposedChart>
-              </ResponsiveContainer>
-            )}
-
-            {prediction && (
-              <div className="prediction-chip">
-                ✨ AI Prediction {prediction.expectedChangePct >= 0 ? '+' : ''}
-                {prediction.expectedChangePct.toFixed(2)}%
-              </div>
+              <PredictionChart
+                data={chartData}
+                symbol={symbol}
+                interval={interval}
+                prediction={prediction}
+                height={420}
+              />
             )}
           </section>
 

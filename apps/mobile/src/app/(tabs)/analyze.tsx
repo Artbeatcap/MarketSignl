@@ -439,7 +439,7 @@ export default function AnalyzeScreen() {
             <Text style={styles.trendText}>
               {trend.trend.charAt(0).toUpperCase() + trend.trend.slice(1)}
             </Text>
-            <Text style={styles.trendStrength}>({(trend.strength * 100).toFixed(0)}%)</Text>
+            <Text style={styles.trendStrength}>({trend.strength.toFixed(0)}%)</Text>
           </View>
         </View>
 

@@ -1,0 +1,116 @@
+.pc-wrap {
+  position: relative;
+  width: 100%;
+  background: #fafaf9;
+  border-radius: 12px;
+  overflow: visible;
+}
+
+.pc-svg {
+  display: block;
+}
+
+.pc-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #a8a29e;
+  font-size: 0.9rem;
+}
+
+/* Axis text inside the SVG */
+.pc-axis-text {
+  fill: #78716c;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pc-zone-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* X-axis labels positioned absolutely under the plot */
+.pc-xaxis {
+  position: relative;
+  width: 100%;
+}
+
+.pc-xaxis-label {
+  position: absolute;
+  top: 6px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 11px;
+  color: #78716c;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.pc-xaxis-future {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+/* Forecast chip */
+.pc-chip {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #2563eb;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  pointer-events: none;
+}
+
+/* Hover tooltip */
+.pc-tooltip {
+  position: absolute;
+  min-width: 132px;
+  padding: 8px 10px;
+  background: #ffffff;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.pc-tt-date {
+  font-size: 0.7rem;
+  color: #78716c;
+  margin-bottom: 4px;
+}
+
+.pc-tt-forecast {
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.pc-tt-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.8rem;
+  color: #57534e;
+}
+
+.pc-tt-row strong {
+  color: #1c1917;
+  font-variant-numeric: tabular-nums;
+}
+
+.pc-tt-band {
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: #a8a29e;
+}

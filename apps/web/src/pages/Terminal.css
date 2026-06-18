@@ -237,18 +237,6 @@
   color: var(--neutral-500);
 }
 
-.prediction-chip {
-  position: absolute;
-  top: 36px;
-  right: 36px;
-  background: var(--info);
-  color: white;
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
 .insight-panel {
   width: 320px;
   background: white;
