@@ -18,7 +18,11 @@ COPY packages/core ./packages/core
 COPY apps/backend ./apps/backend
 COPY tsconfig.base.json ./
 
-# Build
+# Build shared core libs (runtime imports resolve to dist/lib/*.js)
+WORKDIR /app/packages/core
+RUN npm run build
+
+# Build backend
 WORKDIR /app/apps/backend
 RUN npm run build
 

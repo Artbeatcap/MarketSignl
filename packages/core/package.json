@@ -6,10 +6,26 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.js",
-    "./lib/*": "./src/lib/*.ts",
+    "./lib/trackRecord": {
+      "types": "./src/lib/trackRecord.ts",
+      "default": "./dist/lib/trackRecord.js"
+    },
+    "./lib/predictionCard": {
+      "types": "./src/lib/predictionCard.ts",
+      "default": "./dist/lib/predictionCard.js"
+    },
+    "./lib/dailyHighlight": {
+      "types": "./src/lib/dailyHighlight.ts",
+      "default": "./dist/lib/dailyHighlight.js"
+    },
+    "./lib/predictionChart": {
+      "types": "./src/lib/predictionChart.ts",
+      "default": "./dist/lib/predictionChart.js"
+    },
     "./types/*": "./src/types/*.ts"
   },
   "scripts": {
+    "build": "tsc",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
