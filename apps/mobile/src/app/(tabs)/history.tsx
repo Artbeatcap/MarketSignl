@@ -1,4 +1,4 @@
-// Simplified History Screen — analyses + predictions
+// Simplified History Screen - Data Only (No Images)
 
 import { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform } from 'react-native';
@@ -7,33 +7,46 @@ import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { getAnalysisHistory, getPredictionHistory } from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
-import type { AnalysisHistoryItem, PredictionHistoryItem } from '@marketsignl/core';
+import type { AnalysisHistoryItem, PredictionHistoryItem } from '@chartsignl/core';
 import { Ionicons } from '@expo/vector-icons';
 
 type HistoryTab = 'analyses' | 'predictions';
 
 export default function HistoryScreen() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<HistoryTab>('predictions');
+  const [activeTab, setActiveTab] = useState<HistoryTab>('analyses');
 
-  const analysesQuery = useQuery({
+  const { data, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['analysisHistory'],
     queryFn: () => getAnalysisHistory(1, 50),
-    enabled: activeTab === 'analyses',
   });
 
-  const predictionsQuery = useQuery({
+  const {
+    data: predictionData,
+    isLoading: isLoadingPredictions,
+    isRefetching: isRefetchingPredictions,
+    refetch: refetchPredictions,
+  } = useQuery({
     queryKey: ['predictionHistory'],
     queryFn: () => getPredictionHistory(1, 50),
-    enabled: activeTab === 'predictions',
   });
 
-  const isLoading = activeTab === 'analyses' ? analysesQuery.isLoading : predictionsQuery.isLoading;
-  const isRefetching = activeTab === 'analyses' ? analysesQuery.isRefetching : predictionsQuery.isRefetching;
-  const refetch = activeTab === 'analyses' ? analysesQuery.refetch : predictionsQuery.refetch;
+  const analyses = data?.analyses || [];
+  const predictions = predictionData?.predictions || [];
 
-  const analyses = analysesQuery.data?.analyses || [];
-  const predictions = predictionsQuery.data?.predictions || [];
+  const handleAnalysisPress = (item: AnalysisHistoryItem) => {
+    router.push({
+      pathname: '/(tabs)/analyze',
+      params: { analysisId: item.id },
+    });
+  };
+
+  const handlePredictionPress = (item: PredictionHistoryItem) => {
+    router.push({
+      pathname: '/(tabs)/analyze',
+      params: { predictionId: item.id },
+    });
+  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -47,15 +60,17 @@ export default function HistoryScreen() {
     return date.toLocaleDateString();
   };
 
-  const renderAnalysisItem = ({ item }: { item: AnalysisHistoryItem }) => (
+  const renderItem = ({ item }: { item: AnalysisHistoryItem }) => (
     <TouchableOpacity
       style={styles.analysisCard}
-      onPress={() => router.push({ pathname: '/(tabs)/analyze', params: { analysisId: item.id } })}
+      onPress={() => handleAnalysisPress(item)}
       activeOpacity={0.7}
     >
+      {/* Icon instead of image */}
       <View style={styles.iconContainer}>
         <Ionicons name="trending-up" size={32} color={colors.primary[500]} />
       </View>
+      
       <View style={styles.cardContent}>
         <View style={styles.cardHeader}>
           {item.symbol && (
@@ -69,61 +84,93 @@ export default function HistoryScreen() {
             </View>
           )}
         </View>
-        <Text style={styles.headline} numberOfLines={2}>{item.headline}</Text>
+        <Text style={styles.headline} numberOfLines={2}>
+          {item.headline}
+        </Text>
         <Text style={styles.date}>{formatDate(item.createdAt)}</Text>
       </View>
     </TouchableOpacity>
   );
 
-  const renderPredictionItem = ({ item }: { item: PredictionHistoryItem }) => (
-    <TouchableOpacity
-      style={styles.analysisCard}
-      onPress={() => router.push({ pathname: '/(tabs)/analyze', params: { predictionId: item.id } })}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.iconContainer, styles.predictionIcon]}>
-        <Ionicons name="sparkles" size={32} color={colors.info} />
-      </View>
-      <View style={styles.cardContent}>
-        <View style={styles.cardHeader}>
-          <View style={styles.symbolBadge}>
-            <Text style={styles.symbolText}>{item.symbol}</Text>
-          </View>
-          <View style={styles.predictionBadge}>
-            <Text style={styles.predictionBadgeText}>
-              {item.expectedChangePct >= 0 ? '+' : ''}{item.expectedChangePct.toFixed(2)}%
+  const renderPredictionItem = ({ item }: { item: PredictionHistoryItem }) => {
+    const isPositive = item.expectedChangePct >= 0;
+    const changeColor = isPositive ? colors.support.strong : colors.resistance.strong;
+    const resolved = item.status === 'resolved';
+
+    return (
+      <TouchableOpacity
+        style={styles.analysisCard}
+        onPress={() => handlePredictionPress(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.iconContainer}>
+          <Ionicons name="sparkles" size={30} color={colors.primary[500]} />
+        </View>
+
+        <View style={styles.cardContent}>
+          <View style={styles.cardHeader}>
+            <View style={styles.symbolBadge}>
+              <Text style={styles.symbolText}>{item.symbol}</Text>
+            </View>
+            <View style={styles.timeframeBadge}>
+              <Text style={styles.timeframeText}>{item.interval}</Text>
+            </View>
+            <Text style={[styles.changeText, { color: changeColor }]}>
+              {isPositive ? '+' : ''}
+              {item.expectedChangePct.toFixed(2)}%
             </Text>
           </View>
+          <Text style={styles.headline} numberOfLines={2}>
+            {item.headline}
+          </Text>
+          <View style={styles.predictionFooter}>
+            <Text style={styles.date}>{formatDate(item.createdAt)}</Text>
+            <View
+              style={[
+                styles.statusBadge,
+                resolved
+                  ? item.directionHit
+                    ? styles.statusHit
+                    : styles.statusMiss
+                  : styles.statusPending,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  resolved
+                    ? item.directionHit
+                      ? styles.statusTextHit
+                      : styles.statusTextMiss
+                    : styles.statusTextPending,
+                ]}
+              >
+                {resolved ? (item.directionHit ? 'Hit' : 'Miss') : 'Pending'}
+              </Text>
+            </View>
+          </View>
         </View>
-        <Text style={styles.headline} numberOfLines={2}>{item.headline}</Text>
-        <Text style={styles.date}>
-          {formatDate(item.createdAt)} · {item.confidence}% confidence
-          {item.status === 'resolved' && item.directionHit != null
-            ? item.directionHit
-              ? ' · ✓ direction hit'
-              : ' · ✗ direction miss'
-            : item.status === 'pending'
-              ? ' · pending'
-              : ''}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Ionicons
-        name={activeTab === 'predictions' ? 'sparkles-outline' : 'bar-chart-outline'}
-        size={80}
-        color={colors.neutral[300]}
-      />
-      <Text style={styles.emptyTitle}>
-        {activeTab === 'predictions' ? 'No predictions yet' : 'No analyses yet'}
-      </Text>
+      <Ionicons name="bar-chart-outline" size={80} color={colors.neutral[300]} />
+      <Text style={styles.emptyTitle}>No analyses yet</Text>
       <Text style={styles.emptySubtitle}>
-        {activeTab === 'predictions'
-          ? 'Your AI forecasts will appear here after your first prediction.'
-          : 'Your chart analyses will appear here after you analyze your first chart.'}
+        Your chart analyses will appear here after you analyze your first chart.
+      </Text>
+    </View>
+  );
+
+  const renderPredictionEmptyState = () => (
+    <View style={styles.emptyState}>
+      <Ionicons name="sparkles-outline" size={80} color={colors.neutral[300]} />
+      <Text style={styles.emptyTitle}>No predictions yet</Text>
+      <Text style={styles.emptySubtitle}>
+        Tap “AI Prediction” on a chart to generate your first forecast. It will appear here with its
+        outcome once the horizon elapses.
       </Text>
     </View>
   );
@@ -132,181 +179,257 @@ export default function HistoryScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.webWrapper}>
         <View style={styles.webInner}>
-          <Text style={styles.title}>History</Text>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>History</Text>
+            <Text style={styles.headerSubtitle}>
+              {activeTab === 'analyses'
+                ? `${analyses.length} ${analyses.length === 1 ? 'analysis' : 'analyses'}`
+                : `${predictions.length} ${predictions.length === 1 ? 'prediction' : 'predictions'}`}
+            </Text>
+          </View>
 
-          <View style={styles.tabRow}>
+          {/* Tab toggle */}
+          <View style={styles.tabBar}>
             <TouchableOpacity
-              style={[styles.tab, activeTab === 'predictions' && styles.tabActive]}
-              onPress={() => setActiveTab('predictions')}
-            >
-              <Text style={[styles.tabText, activeTab === 'predictions' && styles.tabTextActive]}>
-                Predictions
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'analyses' && styles.tabActive]}
+              style={[styles.tabButton, activeTab === 'analyses' && styles.tabButtonActive]}
               onPress={() => setActiveTab('analyses')}
+              activeOpacity={0.7}
             >
               <Text style={[styles.tabText, activeTab === 'analyses' && styles.tabTextActive]}>
                 Analyses
               </Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'predictions' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('predictions')}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.tabText, activeTab === 'predictions' && styles.tabTextActive]}>
+                Predictions
+              </Text>
+            </TouchableOpacity>
           </View>
 
-          <FlatList
-            data={activeTab === 'predictions' ? predictions : analyses}
-            keyExtractor={(item) => item.id}
-            renderItem={activeTab === 'predictions' ? renderPredictionItem : renderAnalysisItem}
-            contentContainerStyle={styles.listContent}
-            ListEmptyComponent={!isLoading ? renderEmptyState : null}
-            refreshControl={
-              <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.primary[500]} />
-            }
-          />
+          {activeTab === 'analyses' ? (
+            <FlatList
+              data={analyses}
+              keyExtractor={(item) => item.id}
+              renderItem={renderItem}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={!isLoading ? renderEmptyState : null}
+              refreshControl={
+                <RefreshControl
+                  refreshing={isRefetching}
+                  onRefresh={refetch}
+                  tintColor={colors.primary[500]}
+                />
+              }
+            />
+          ) : (
+            <FlatList
+              data={predictions}
+              keyExtractor={(item) => item.id}
+              renderItem={renderPredictionItem}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={!isLoadingPredictions ? renderPredictionEmptyState : null}
+              refreshControl={
+                <RefreshControl
+                  refreshing={isRefetchingPredictions}
+                  onRefresh={refetchPredictions}
+                  tintColor={colors.primary[500]}
+                />
+              }
+            />
+          )}
         </View>
       </View>
     </SafeAreaView>
   );
 }
 
+const WEB_MAX_WIDTH = 1100;
+
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: colors.neutral[50],
+    ...(Platform.OS !== 'web' && { flex: 1 }),
+    ...(Platform.OS === 'web' && { height: '100vh', overflow: 'auto' }),
+    backgroundColor: colors.background,
   },
   webWrapper: {
-    flex: 1,
-    alignItems: 'center',
+    ...(Platform.OS !== 'web' && { flex: 1 }),
+    ...(Platform.OS === 'web' && {
+      alignItems: 'center',
+      backgroundColor: colors.neutral[100],
+    }),
   },
   webInner: {
-    flex: 1,
+    ...(Platform.OS !== 'web' && { flex: 1 }),
     width: '100%',
-    maxWidth: Platform.OS === 'web' ? 480 : undefined,
+    ...(Platform.OS === 'web' && {
+      maxWidth: WEB_MAX_WIDTH,
+      backgroundColor: colors.background,
+      borderLeftWidth: 1,
+      borderRightWidth: 1,
+      borderColor: colors.neutral[200],
+    }),
   },
-  title: {
-    ...typography.headingLg,
-    color: colors.neutral[800],
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
+  header: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[200],
   },
-  tabRow: {
+  headerTitle: {
+    ...typography.displaySm,
+    color: colors.neutral[900],
+  },
+  headerSubtitle: {
+    ...typography.bodyMd,
+    color: colors.neutral[500],
+    marginTop: spacing.xs,
+  },
+  tabBar: {
     flexDirection: 'row',
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
-    backgroundColor: colors.neutral[100],
-    borderRadius: borderRadius.md,
-    padding: 4,
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
   },
-  tab: {
+  tabButton: {
     flex: 1,
     paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
     alignItems: 'center',
-    borderRadius: borderRadius.sm,
+    backgroundColor: colors.neutral[100],
   },
-  tabActive: {
-    backgroundColor: colors.white,
-    ...shadows.sm,
+  tabButtonActive: {
+    backgroundColor: colors.primary[500],
   },
   tabText: {
     ...typography.labelMd,
-    color: colors.neutral[500],
-  },
-  tabTextActive: {
-    color: colors.primary[600],
+    color: colors.neutral[600],
     fontWeight: '600',
   },
+  tabTextActive: {
+    color: colors.white,
+  },
   listContent: {
-    padding: spacing.md,
-    paddingBottom: 100,
-    flexGrow: 1,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxl,
   },
-  analysisCard: {
+  changeText: {
+    ...typography.labelMd,
+    fontWeight: '700',
+    marginLeft: 'auto',
+  },
+  predictionFooter: {
     flexDirection: 'row',
-    backgroundColor: colors.white,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    ...shadows.sm,
-  },
-  iconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.primary[50],
     alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
+    justifyContent: 'space-between',
+    marginTop: spacing.xs,
   },
-  predictionIcon: {
-    backgroundColor: '#EFF6FF',
-  },
-  cardContent: {
-    flex: 1,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
-    flexWrap: 'wrap',
-  },
-  symbolBadge: {
-    backgroundColor: colors.primary[50],
+  statusBadge: {
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: borderRadius.sm,
   },
-  symbolText: {
+  statusPending: {
+    backgroundColor: colors.neutral[100],
+  },
+  statusHit: {
+    backgroundColor: colors.green[100],
+  },
+  statusMiss: {
+    backgroundColor: colors.red[100],
+  },
+  statusText: {
     ...typography.labelSm,
+    fontWeight: '600',
+  },
+  statusTextPending: {
+    color: colors.neutral[500],
+  },
+  statusTextHit: {
+    color: colors.green[700],
+  },
+  statusTextMiss: {
+    color: colors.red[700],
+  },
+  analysisCard: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.md,
+    overflow: 'hidden',
+    ...shadows.sm,
+  },
+  iconContainer: {
+    width: 80,
+    height: 80,
+    backgroundColor: colors.primary[50],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardContent: {
+    flex: 1,
+    padding: spacing.md,
+    justifyContent: 'center',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  symbolBadge: {
+    backgroundColor: colors.primary[100],
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+  },
+  symbolText: {
+    ...typography.labelMd,
     color: colors.primary[700],
     fontWeight: '600',
   },
   timeframeBadge: {
     backgroundColor: colors.neutral[100],
     paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: spacing.xs,
     borderRadius: borderRadius.sm,
   },
   timeframeText: {
-    ...typography.labelSm,
+    ...typography.labelMd,
     color: colors.neutral[600],
-  },
-  predictionBadge: {
-    backgroundColor: '#DBEAFE',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-  },
-  predictionBadgeText: {
-    ...typography.labelSm,
-    color: '#1D4ED8',
-    fontWeight: '600',
   },
   headline: {
     ...typography.bodyMd,
-    color: colors.neutral[800],
-    marginBottom: 4,
+    color: colors.neutral[900],
+    marginBottom: spacing.xs,
+    fontWeight: '500',
   },
   date: {
     ...typography.labelSm,
     color: colors.neutral[400],
   },
+  // Empty state
   emptyState: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 80,
-    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xxl * 3,
   },
   emptyTitle: {
-    ...typography.headingMd,
-    color: colors.neutral[700],
-    marginTop: spacing.md,
+    ...typography.headingLg,
+    color: colors.neutral[900],
+    marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },
   emptySubtitle: {
     ...typography.bodyMd,
     color: colors.neutral[500],
     textAlign: 'center',
+    paddingHorizontal: spacing.xl,
+    lineHeight: 22,
   },
 });

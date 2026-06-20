@@ -23,6 +23,8 @@ export interface UserProfile {
   stressReducer: StressReducer | null;
   isPro: boolean;
   freeAnalysesUsed: number;
+  pushNotificationsEnabled?: boolean | null;
+  alertSoundEnabled?: boolean | null;
 }
 
 // Onboarding Types

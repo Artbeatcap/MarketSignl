@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import type { AIPrediction } from '@marketsignl/core';
-import { CHART_COLORS } from '@marketsignl/core';
+import type { AIPrediction } from '@chartsignl/core';
+import { CHART_COLORS } from '@chartsignl/core';
 import { colors, typography, spacing, borderRadius } from '../theme';
 import { Card } from './Card';
 

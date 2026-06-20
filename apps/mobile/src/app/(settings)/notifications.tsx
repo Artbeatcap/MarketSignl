@@ -120,11 +120,11 @@ export default function NotificationsScreen() {
         <View style={styles.additionalInfo}>
           <Text style={styles.additionalTitle}>About Notifications</Text>
           <Text style={styles.additionalText}>
-            MarketSignl notifications help you stay on top of your trading analysis without
+            ChartSignl notifications help you stay on top of your trading analysis without
             constantly checking the app. You can change these settings at any time.
           </Text>
           <Text style={styles.additionalText}>
-            Note: To receive notifications, make sure notifications are enabled for MarketSignl
+            Note: To receive notifications, make sure notifications are enabled for ChartSignl
             in your device settings.
           </Text>
         </View>

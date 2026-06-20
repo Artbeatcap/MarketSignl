@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import Svg, { Line, Rect, G } from 'react-native-svg';
-import type { ChartAnalysis, MarkupLine, MarkupHighlight, MarkupLabel } from '@marketsignl/core';
-import { MARKUP_COLORS } from '@marketsignl/core';
+import type { ChartAnalysis, MarkupLine, MarkupHighlight, MarkupLabel } from '@chartsignl/core';
+import { MARKUP_COLORS } from '@chartsignl/core';
 import { colors, typography, borderRadius } from '../theme';
 
 interface ChartOverlayProps {

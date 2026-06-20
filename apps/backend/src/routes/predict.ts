@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
 import OpenAI from 'openai';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
-import { FREE_PREDICTION_LIMIT } from '@marketsignl/core';
-import type { AIPrediction, PredictRequest } from '@marketsignl/core';
+import { FREE_PREDICTION_LIMIT } from '@chartsignl/core';
+import type { AIPrediction, PredictRequest } from '@chartsignl/core';
 import { PREDICTION_SYSTEM_PROMPT } from '../prompts/prediction.js';
 import {
   calculateAllIndicators,

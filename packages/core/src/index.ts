@@ -6,8 +6,7 @@ export * from './types/marketData';
 export * from './types/enhancedAnalysis';
 export * from './types/prediction';
 
-// Theme tokens (shared web + mobile)
-export * from './theme/index';
+// Prediction chart helpers (used by mobile/web prediction overlays)
 export * from './lib/predictionChart';
 
 // Constants

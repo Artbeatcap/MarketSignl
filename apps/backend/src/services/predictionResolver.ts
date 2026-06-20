@@ -1,4 +1,4 @@
-import type { AIPrediction, PredictionDirection } from '@marketsignl/core';
+import type { AIPrediction, PredictionDirection } from '@chartsignl/core';
 import { supabaseAdmin } from '../lib/supabase.js';
 import { closeAtTimestamp, fetchAggregatesInRange, getBarDurationMs } from '../lib/marketDataFetcher.js';
 
@@ -270,4 +270,73 @@ export function rowToHistoryItem(row: PredictionRow) {
       row.magnitude_error_pct != null ? Number(row.magnitude_error_pct) : undefined,
     status: row.resolved_at ? ('resolved' as const) : ('pending' as const),
   };
+}
+
+export interface ResolveDueSummary {
+  scanned: number;
+  resolved: number;
+  voided: number;
+  skipped: number;
+  errors: number;
+}
+
+const RESOLVER_LIST_SELECT =
+  'id, user_id, symbol, interval, headline, expected_change_pct, confidence, direction, prediction_json, created_at, entry_close, horizon_end_at, resolved_price, actual_change_pct, direction_hit, band_contained, magnitude_error_pct, resolved_at';
+
+/**
+ * Batch-resolve all predictions past their horizon. Called by cron / POST /resolve.
+ * Logs each run to resolver_runs for observability.
+ */
+export async function resolveDuePredictions(): Promise<ResolveDueSummary> {
+  const startedAt = Date.now();
+  const summary: ResolveDueSummary = {
+    scanned: 0,
+    resolved: 0,
+    voided: 0,
+    skipped: 0,
+    errors: 0,
+  };
+
+  const { data: rows, error } = await supabaseAdmin
+    .from('predictions')
+    .select(RESOLVER_LIST_SELECT)
+    .is('resolved_at', null)
+    .order('created_at', { ascending: true })
+    .limit(500);
+
+  if (error) {
+    console.error('[resolver] failed to fetch pending predictions:', error);
+    summary.errors += 1;
+  } else {
+    for (const row of (rows ?? []) as PredictionRow[]) {
+      summary.scanned += 1;
+      try {
+        const before = row.resolved_at;
+        const updated = await resolvePredictionIfDue(row);
+        if (updated?.resolved_at && !before) {
+          summary.resolved += 1;
+        } else {
+          summary.skipped += 1;
+        }
+      } catch (e) {
+        console.error('[resolver] error resolving', row.id, e);
+        summary.errors += 1;
+      }
+    }
+  }
+
+  try {
+    await supabaseAdmin.from('resolver_runs').insert({
+      scanned: summary.scanned,
+      resolved: summary.resolved,
+      voided: summary.voided,
+      skipped: summary.skipped,
+      errors: summary.errors,
+      duration_ms: Date.now() - startedAt,
+    });
+  } catch (e) {
+    console.error('[resolver] failed to log run:', e);
+  }
+
+  return summary;
 }

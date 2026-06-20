@@ -1,4 +1,4 @@
-// Enhanced Analysis Types for @marketsignl/core
+// Enhanced Analysis Types for @chartsignl/core
 // These types define the structure of the enhanced technical analysis system
 
 // ============================================================================

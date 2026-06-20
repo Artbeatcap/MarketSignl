@@ -116,3 +116,39 @@ export interface GetPredictionResponse {
   createdAt?: string;
   error?: string;
 }
+
+export interface GetGlobalTrackRecordResponse {
+  success: boolean;
+  trackRecord?: {
+    resolvedCount: number;
+    pendingCount: number;
+    directionHitRate: number | null;
+    minSampleSize: number;
+    statsReady: boolean;
+  };
+  error?: string;
+}
+
+export interface DailyHighlightPayload {
+  id: string;
+  symbol: string;
+  interval: string;
+  headline: string;
+  direction: string;
+  confidence: number;
+  expectedChangePct: number;
+  actualChangePct: number;
+  directionHit: boolean;
+  createdAt: string;
+  resolvedAt: string;
+  cardPngUrl: string;
+  cardSvgUrl: string;
+}
+
+export interface GetDailyHighlightResponse {
+  success: boolean;
+  highlight?: DailyHighlightPayload | null;
+  windowHours?: number;
+  candidatesScanned?: number;
+  error?: string;
+}

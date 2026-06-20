@@ -1,8 +1,14 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Platform, Dimensions } from 'react-native';
 import Svg, { Rect, Line as SvgLine, G, Path } from 'react-native-svg';
-import type { MarketDataPoint, AILevel, ChartViewType, ChartInterval, ProjectedPoint } from '@marketsignl/core';
-import { CHART_COLORS, getPredictionLayout, getPriceDomainWithPrediction, buildPredictionBandPath, buildPredictionLinePath } from '@marketsignl/core';
+import type { MarketDataPoint, AILevel, ChartViewType, ChartInterval, ProjectedPoint } from '@chartsignl/core';
+import { CHART_COLORS } from '@chartsignl/core';
+import {
+  getPredictionLayout,
+  getPriceDomainWithPrediction,
+  buildPredictionBandPath,
+  buildPredictionLinePath,
+} from '@chartsignl/core/lib/predictionChart';
 import { formatPrice, formatVolume } from '../lib/marketData';
 import { colors, typography, spacing, borderRadius } from '../theme';
 
@@ -476,7 +482,12 @@ function SimpleCandlestickChart({
   // Right edge of drawn content (leave CHART_RIGHT_MARGIN for Y-axis labels)
   const rightEdge = width - CHART_RIGHT_MARGIN;
   const chartDrawableWidth = width - CHART_LEFT_MARGIN - CHART_RIGHT_MARGIN;
-  const targetWidth = chartDrawableWidth * 0.95; // Use 95% of available space
+  // When a forecast is shown, candles only occupy the historical zone so the
+  // prediction cone has dedicated room on the right (mirrors the line chart).
+  const hasPrediction = showPrediction && projectedPath.length > 0;
+  const predictionLayout = getPredictionLayout(CHART_LEFT_MARGIN, chartDrawableWidth);
+  const candleZoneWidth = hasPrediction ? predictionLayout.historicalWidth : chartDrawableWidth;
+  const targetWidth = candleZoneWidth * 0.95; // Use 95% of available space
   const candleAndSpacingWidth = targetWidth / Math.max(1, data.length);
   const candleWidth = Math.max(2, Math.min(12, candleAndSpacingWidth * 0.75)); // 75% bar, 25% space
   const candleSpacing = candleAndSpacingWidth - candleWidth;
@@ -702,8 +713,8 @@ function SimpleCandlestickChart({
         })}
 
         {/* AI Prediction overlay (candle view) */}
-        {showPrediction && projectedPath.length > 0 && (() => {
-          const layout = getPredictionLayout(CHART_LEFT_MARGIN, chartDrawableWidth);
+        {hasPrediction && (() => {
+          const layout = predictionLayout;
           const lastIndex = data.length - 1;
           const startX = xForIndex(lastIndex);
           const startY = priceToY(data[lastIndex].close);
@@ -980,13 +991,6 @@ function SimpleLineChart({
             startX,
             startY
           );
-          const lastProjected = projectedPath[projectedPath.length - 1];
-          const labelX = layout.xForFutureIndex(projectedPath.length - 1, projectedPath.length);
-          const labelY = priceToY(lastProjected.price) - 12;
-          const changeLabel =
-            expectedChangePct != null
-              ? `${expectedChangePct >= 0 ? '+' : ''}${expectedChangePct.toFixed(2)}%`
-              : '';
 
           return (
             <G>
@@ -1010,18 +1014,6 @@ function SimpleLineChart({
                   strokeDasharray="6,4"
                   fill="none"
                 />
-              ) : null}
-              {changeLabel ? (
-                <G>
-                  <Rect
-                    x={labelX - 52}
-                    y={labelY - 10}
-                    width={104}
-                    height={20}
-                    rx={10}
-                    fill={CHART_COLORS.prediction}
-                  />
-                </G>
               ) : null}
             </G>
           );

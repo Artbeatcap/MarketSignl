@@ -21,7 +21,7 @@ export default function IndexScreen() {
                 resizeMode="contain"
               />
             </View>
-            <Text style={styles.logo}>MarketSignl</Text>
+            <Text style={styles.logo}>ChartSignl</Text>
             <Text style={styles.tagline}>See the levels clearly</Text>
           </View>
 

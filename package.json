@@ -1,5 +1,5 @@
 {
-  "name": "marketsignl",
+  "name": "chartsignl",
   "version": "1.0.0",
   "private": true,
   "workspaces": [
@@ -10,8 +10,7 @@
     "postinstall": "patch-package",
     "gen-deploy-deletion": "node scripts/gen-deploy-deletion.js",
     "dev": "npm run dev -w backend",
-    "dev:web": "npm run dev -w web",
-    "dev:all": "concurrently -k -n backend,mobile,web -c blue,green,magenta \"npm run dev -w backend\" \"npm run dev -w mobile\" \"npm run dev -w web\"",
+    "dev:all": "concurrently -k -n backend,mobile -c blue,green \"npm run dev -w backend\" \"npm run dev -w mobile\"",
     "dev:mobile": "npm run dev -w mobile",
     "dev:backend": "npm run dev -w backend",
     "build": "turbo run build",

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
-import type { UsageResponse, AuthResponse } from '@marketsignl/core';
-import { FREE_ANALYSIS_LIMIT, FREE_PREDICTION_LIMIT } from '@marketsignl/core';
+import type { UsageResponse, AuthResponse } from '@chartsignl/core';
+import { FREE_ANALYSIS_LIMIT, FREE_PREDICTION_LIMIT } from '@chartsignl/core';
 
 const userRoute = new Hono();
 
@@ -17,12 +17,12 @@ function getEffectiveUsedThisWeek(
 }
 
 function getEffectivePredictionsThisWeek(
-  usage: { free_predictions_used: number; last_prediction_at: string | null } | null | undefined
+  usage: { free_predictions_used?: number | null; last_prediction_at?: string | null } | null | undefined
 ): number {
   if (!usage) return 0;
   if (!usage.last_prediction_at) return 0;
   const elapsed = Date.now() - new Date(usage.last_prediction_at).getTime();
-  return elapsed < WEEK_MS ? usage.free_predictions_used : 0;
+  return elapsed < WEEK_MS ? (usage.free_predictions_used ?? 0) : 0;
 }
 
 // GET /api/user/me - Get current user profile

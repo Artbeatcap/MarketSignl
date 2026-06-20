@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
+  Animated,
   View,
   Text,
   StyleSheet,
@@ -20,13 +21,31 @@ import { findLocalLevels, detectTrend, analyzeChartData } from '../../lib/chartA
 import { getUsage, getAnalysis, getPrediction, createPrediction } from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import { API_URL } from '../../lib/apiConfig';
-import { FREE_ANALYSIS_LIMIT, FREE_PREDICTION_LIMIT, CHART_INTERVAL_OPTIONS, CHART_COLORS } from '@marketsignl/core';
-import type { ChartViewType, ChartInterval, AILevel, EnhancedAIAnalysis, ScoredLevel, AIPrediction } from '@marketsignl/core';
+import { Ionicons } from '@expo/vector-icons';
+import { FREE_ANALYSIS_LIMIT, FREE_PREDICTION_LIMIT, CHART_INTERVAL_OPTIONS, CHART_COLORS } from '@chartsignl/core';
+import type { ChartViewType, ChartInterval, AILevel, EnhancedAIAnalysis, ScoredLevel, AIPrediction } from '@chartsignl/core';
+import * as SecureStore from 'expo-secure-store';
+import * as Haptics from 'expo-haptics';
+
+import { useActiveAlerts, useCreateAlert, useDeleteAlert } from '../../hooks/useAlerts';
 
 export default function AnalyzeScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user, isEmailVerified, showEmailVerificationModal, setShowEmailVerificationModal, pendingEmailVerification, setPendingEmailVerification } = useAuthStore();
+
+  const activeAlertsQuery = useActiveAlerts();
+  const createAlertMutation = useCreateAlert();
+  const deleteAlertMutation = useDeleteAlert();
+
+  const activeAlerts = activeAlertsQuery.data ?? [];
+  const isNative = Platform.OS !== 'web';
+
+  const [alertFeedback, setAlertFeedback] = useState<{
+    message: string;
+    tone: 'success' | 'neutral';
+  } | null>(null);
+  const [showAlertBellHint, setShowAlertBellHint] = useState(false);
 
   // Chart state
   const [selectedSymbol, setSelectedSymbol] = useState('AAPL');
@@ -47,11 +66,14 @@ export default function AnalyzeScreen() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // AI Prediction state
-  const [isPredicting, setIsPredicting] = useState(false);
   const [prediction, setPrediction] = useState<AIPrediction | null>(null);
   const [showPredictionOverlay, setShowPredictionOverlay] = useState(false);
 
-  const { analysisId, predictionId } = useLocalSearchParams<{ analysisId?: string; predictionId?: string }>();
+  const { analysisId, predictionId, symbol } = useLocalSearchParams<{
+    analysisId?: string;
+    predictionId?: string;
+    symbol?: string;
+  }>();
 
   // Load saved analysis when navigated from history
   useEffect(() => {
@@ -79,6 +101,106 @@ export default function AnalyzeScreen() {
       }
     });
   }, [predictionId]);
+
+  // When navigated from a push notification, preselect the symbol.
+  useEffect(() => {
+    if (!symbol) return;
+    if (analysisId) return; // analysisId navigation should win
+
+    setAiAnalysis(null);
+    setShowLevels(false);
+    setErrorMessage(null);
+
+    // Keep the name simple; we can enhance with a search later if needed.
+    setSelectedSymbol(String(symbol));
+    setSelectedName(String(symbol));
+  }, [symbol, analysisId]);
+
+  // Clear push-alert feedback after a short delay.
+  useEffect(() => {
+    if (!alertFeedback) return;
+    const t = setTimeout(() => setAlertFeedback(null), 3200);
+    return () => clearTimeout(t);
+  }, [alertFeedback]);
+
+  useEffect(() => {
+    if (!isNative) return;
+    let isMounted = true;
+
+    SecureStore.getItemAsync('alert_bell_hint_shown')
+      .then((value) => {
+        if (isMounted && value !== 'true') {
+          setShowAlertBellHint(true);
+        }
+      })
+      .catch(() => {
+        // Ignore storage issues and keep default hint visibility.
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isNative]);
+
+  const isPriceWithinTolerance = (priceA: number, priceB: number) => {
+    const denom = Math.max(Math.abs(priceA), Math.abs(priceB));
+    if (denom === 0) return true;
+    const diffRatio = Math.abs(priceA - priceB) / denom;
+    return diffRatio <= 0.005; // 0.5%
+  };
+
+  const handleToggleLevelAlert = async (
+    level: ScoredLevel,
+    levelType: 'support' | 'resistance'
+  ) => {
+    if (!isNative) return;
+    if (createAlertMutation.isPending || deleteAlertMutation.isPending) return;
+    if (!aiAnalysis) return;
+
+    if (showAlertBellHint) {
+      setShowAlertBellHint(false);
+      SecureStore.setItemAsync('alert_bell_hint_shown', 'true').catch(() => {
+        // Ignore storage failures; hint is still hidden for this session.
+      });
+    }
+
+    const symbol = aiAnalysis.symbol ?? selectedSymbol;
+
+    const existing = activeAlerts.find(
+      (a) =>
+        a.symbol === symbol &&
+        a.level_type === levelType &&
+        isPriceWithinTolerance(level.price, a.level_price)
+    );
+
+    try {
+      if (existing) {
+        await deleteAlertMutation.mutateAsync(existing.id);
+        setAlertFeedback({
+          message: `Alert removed for ${symbol} at $${formatPrice(level.price)}`,
+          tone: 'neutral',
+        });
+      } else {
+        await createAlertMutation.mutateAsync({
+          symbol,
+          levelPrice: level.price,
+          levelType,
+          direction: levelType === 'support' ? 'crosses_below' : 'crosses_above',
+          levelDescription: level.description,
+        });
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
+          // Ignore haptics failures.
+        });
+        setAlertFeedback({
+          message: `Alert set for ${symbol} at $${formatPrice(level.price)}`,
+          tone: 'success',
+        });
+      }
+    } catch (e) {
+      console.error('[ALERTS] Toggle failed:', e);
+      setAlertFeedback(null);
+    }
+  };
 
   // Fetch usage stats
   const { data: usage } = useQuery({
@@ -134,6 +256,14 @@ export default function AnalyzeScreen() {
     ? '∞'
     : Math.max(0, FREE_ANALYSIS_LIMIT - (usage?.freeAnalysesUsed || 0));
 
+  // The unified analysis consumes one prediction + one analysis per tap, so it
+  // is locked once either weekly free counter is exhausted (they move in lockstep).
+  const analyzeLocked =
+    !usage?.isPro && !!usage
+      ? (usage.freePredictionsUsed ?? 0) >= FREE_PREDICTION_LIMIT ||
+        (usage.freeAnalysesUsed ?? 0) >= FREE_ANALYSIS_LIMIT
+      : false;
+
   // Handle symbol selection
   const handleSelectSymbol = (symbol: string, name: string) => {
     setSelectedSymbol(symbol);
@@ -144,90 +274,53 @@ export default function AnalyzeScreen() {
     setShowLevels(false);
   };
 
-  const handlePredict = async () => {
+  // Unified analysis: forecast first, then levels/setups conditioned on the
+  // forecast lean so the two outputs stay consistent and never contradict.
+  const handleAnalyze = async () => {
     if (!usage) {
       Alert.alert('Please Wait', 'Loading your account information...');
       return;
     }
 
-    if (!usage.isPro && (usage.freePredictionsUsed ?? 0) >= FREE_PREDICTION_LIMIT) {
-      router.push('/premium');
-      return;
-    }
-
-    setIsPredicting(true);
-    setErrorMessage(null);
-
-    try {
-      const result = await createPrediction(selectedSymbol, selectedInterval, safeChartData);
-      if (!result.success || !result.prediction) {
-        throw new Error(result.error || 'Prediction failed');
-      }
-      setPrediction(result.prediction);
-      setShowPredictionOverlay(true);
-      queryClient.invalidateQueries({ queryKey: ['usage'] });
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Please try again';
-      setErrorMessage(errorMsg);
-      if (Platform.OS !== 'web') {
-        Alert.alert('Prediction Failed', errorMsg);
-      }
-    } finally {
-      setIsPredicting(false);
-    }
-  };
-
-  // Handle Atlas analysis
-  const handleAskAI = async () => {
-    // If usage data isn't loaded yet, show a message
-    if (!usage) {
-      Alert.alert('Please Wait', 'Loading your account information...');
-      return;
-    }
-
-    // Check usage limits - navigate directly to premium screen
-    if (!usage.isPro && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT) {
+    if (analyzeLocked) {
       router.push('/premium');
       return;
     }
 
     setIsAnalyzing(true);
-    setErrorMessage(null); // Clear previous errors
+    setErrorMessage(null);
 
     try {
-      const analysis = await analyzeChartData(selectedSymbol, selectedInterval, safeChartData);
+      const result = await createPrediction(selectedSymbol, selectedInterval, safeChartData);
+      if (!result.success || !result.prediction) {
+        throw new Error(result.error || 'Analysis failed');
+      }
+      const pred = result.prediction;
+      setPrediction(pred);
+      setShowPredictionOverlay(true);
+
+      const analysis = await analyzeChartData(selectedSymbol, selectedInterval, safeChartData, {
+        direction: pred.direction,
+        confidence: pred.confidence,
+      });
       setAiAnalysis(analysis);
       setShowLevels(true);
-      setErrorMessage(null); // Clear any previous errors on success
 
-      // Refresh usage
       queryClient.invalidateQueries({ queryKey: ['usage'] });
     } catch (err) {
-      console.error('Atlas analysis error:', err);
+      console.error('Analyze error:', err);
       const errorMsg = err instanceof Error ? err.message : 'Please try again';
-      
-      // Check if error is related to limit reached
-      const isLimitError = errorMsg.toLowerCase().includes('limit') || 
-                           errorMsg.toLowerCase().includes('upgrade') ||
-                           errorMsg.toLowerCase().includes('free tier');
-      
-      setErrorMessage(errorMsg); // Set error message for web display
-      
-      // Show alert on native platforms only
+      const isLimitError =
+        errorMsg.toLowerCase().includes('limit') ||
+        errorMsg.toLowerCase().includes('upgrade') ||
+        errorMsg.toLowerCase().includes('free tier');
+      setErrorMessage(errorMsg);
       if (Platform.OS !== 'web') {
         if (isLimitError) {
-          Alert.alert(
-            '🔒 Free Limit Reached',
-            errorMsg,
-            [
-              { text: 'Maybe Later', style: 'cancel' },
-              {
-                text: '✨ Upgrade to Pro',
-                onPress: () => router.push('/premium'),
-                style: 'default',
-              },
-            ]
-          );
+          Alert.alert('🔒 Free Limit Reached', errorMsg, [
+            { text: 'Maybe Later', style: 'cancel' },
+            { text: '✨ Upgrade to Pro', onPress: () => router.push('/premium'), style: 'default' },
+          ]);
         } else {
           Alert.alert('Analysis Failed', errorMsg);
         }
@@ -271,7 +364,7 @@ export default function AnalyzeScreen() {
               style={styles.logo}
               resizeMode="contain"
             />
-            <Text style={styles.brandName}>MarketSignl</Text>
+            <Text style={styles.brandName}>ChartSignl</Text>
           </View>
           
           {/* Right side - Usage Badge */}
@@ -439,65 +532,33 @@ export default function AnalyzeScreen() {
             <Text style={styles.trendText}>
               {trend.trend.charAt(0).toUpperCase() + trend.trend.slice(1)}
             </Text>
-            <Text style={styles.trendStrength}>({trend.strength.toFixed(0)}%)</Text>
+            <Text style={styles.trendStrength}>({(trend.strength * 100).toFixed(0)}%)</Text>
           </View>
         </View>
 
-        {/* AI Prediction Button (primary) */}
+        {/* Unified AI Analysis CTA */}
         <View style={styles.aiSection}>
-          <Button
-            title={
-              isPredicting
-                ? 'Generating forecast...'
-                : !usage?.isPro && usage && (usage.freePredictionsUsed ?? 0) >= FREE_PREDICTION_LIMIT
-                ? '🔒 Upgrade for More Predictions'
-                : '✨ AI Prediction'
-            }
-            onPress={handlePredict}
-            size="lg"
-            fullWidth
-            loading={isPredicting}
-            disabled={isLoadingData || safeChartData.length === 0 || !usage}
-            variant={
-              !usage?.isPro && usage && (usage.freePredictionsUsed ?? 0) >= FREE_PREDICTION_LIMIT
-                ? 'secondary'
-                : 'primary'
-            }
-          />
-          <Text style={styles.aiHint}>
-            {!usage?.isPro && usage
-              ? `${usage.freePredictionsUsed ?? 0}/${FREE_PREDICTION_LIMIT} free predictions this week`
-              : 'One-click forecast — projected path drawn on the chart'}
-          </Text>
-        </View>
-
-        {prediction && <PredictionSummary prediction={prediction} />}
-
-        {/* Atlas Analysis Button */}
-        <View style={styles.aiSection}>
-          <Button
-            title={
-              isAnalyzing 
-                ? 'Atlas is analyzing...' 
-                : !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT
-                ? '🔒 Upgrade for More'
-                : '🗺️ Ask Atlas AI for Levels'
-            }
-            onPress={handleAskAI}
-            size="lg"
-            fullWidth
-            loading={isAnalyzing}
-            disabled={isLoadingData || safeChartData.length === 0 || !usage}
-            variant={
-              !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT
-                ? 'secondary'
-                : 'primary'
-            }
-          />
+          <View style={styles.ctaWrap}>
+            <Button
+              title={
+                isAnalyzing
+                  ? 'Analyzing…'
+                  : analyzeLocked
+                  ? '🔒 Upgrade for More'
+                  : `✨ Analyze ${selectedSymbol}`
+              }
+              onPress={handleAnalyze}
+              size="lg"
+              fullWidth
+              loading={isAnalyzing}
+              disabled={isLoadingData || safeChartData.length === 0 || !usage}
+              variant={analyzeLocked ? 'secondary' : 'primary'}
+            />
+          </View>
           {errorMessage && (
             <View style={styles.errorBanner}>
               <Text style={styles.errorText}>⚠️ {errorMessage}</Text>
-              {(errorMessage.toLowerCase().includes('limit') || 
+              {(errorMessage.toLowerCase().includes('limit') ||
                 errorMessage.toLowerCase().includes('upgrade') ||
                 errorMessage.toLowerCase().includes('free tier')) && (
                 <Button
@@ -511,49 +572,137 @@ export default function AnalyzeScreen() {
               )}
             </View>
           )}
-          <Text style={[
-            styles.aiHint,
-            !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT && styles.aiHintWarning
-          ]}>
-            {!usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT
-              ? `🔓 You've used all ${FREE_ANALYSIS_LIMIT} free Atlas analyses. Tap to upgrade for unlimited!`
-              : 'Atlas identifies key support & resistance levels for you'}
+          <Text style={[styles.aiHint, analyzeLocked && styles.aiHintWarning]}>
+            {!usage?.isPro && usage
+              ? analyzeLocked
+                ? `🔓 You've used all ${FREE_ANALYSIS_LIMIT} free analyses this week. Tap to upgrade!`
+                : `${Math.min(usage.freeAnalysesUsed ?? 0, usage.freePredictionsUsed ?? 0)}/${FREE_ANALYSIS_LIMIT} free analyses this week`
+              : 'AI forecast + key levels & setups — in one tap'}
           </Text>
         </View>
 
-        {/* Atlas Analysis Results */}
+        {/* Unified verdict */}
+        {prediction && (
+          <View style={styles.verdictCard}>
+            <View
+              style={[
+                styles.verdictDot,
+                {
+                  backgroundColor:
+                    prediction.direction === 'bullish'
+                      ? CHART_COLORS.support
+                      : prediction.direction === 'bearish'
+                      ? CHART_COLORS.resistance
+                      : colors.neutral[400],
+                },
+              ]}
+            />
+            <View style={styles.verdictBody}>
+              <Text style={styles.verdictLabel}>AI Outlook</Text>
+              <Text style={styles.verdictValue}>
+                {prediction.direction.charAt(0).toUpperCase() + prediction.direction.slice(1)}
+                {'  ·  '}
+                {prediction.expectedChangePct >= 0 ? '+' : ''}
+                {prediction.expectedChangePct.toFixed(2)}% expected
+                {'  ·  '}
+                {prediction.confidence}% confidence
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {prediction && <PredictionSummary prediction={prediction} />}
+
+        {/* Levels & setups — consistent with the forecast above */}
         {aiAnalysis && (
           <Card style={styles.analysisCard}>
             <View style={styles.analysisHeader}>
-              <Text style={styles.analysisTitle}>🗺️ Atlas Analysis</Text>
+              <Text style={styles.analysisTitle}>📐 Key Levels & Setups</Text>
               <View style={styles.confidenceBadge}>
-                <Text style={styles.confidenceText}>{aiAnalysis.overallConfidence}% confidence</Text>
+                <Text style={styles.confidenceText}>{aiAnalysis.overallConfidence}% confluence</Text>
               </View>
             </View>
 
-            {/* Headline */}
-            {aiAnalysis.headline && (
-              <Text style={styles.analysisHeadline}>{aiAnalysis.headline}</Text>
-            )}
-
-            {/* Summary */}
-            {aiAnalysis.summary && (
-              <Text style={styles.analysisSummary}>{aiAnalysis.summary}</Text>
+            {/* Lightweight confirmation after setting/removing alerts */}
+            {alertFeedback && isNative && (
+              <View
+                style={[
+                  styles.alertFeedback,
+                  alertFeedback.tone === 'neutral' && styles.alertFeedbackNeutral,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.alertFeedbackText,
+                    alertFeedback.tone === 'neutral' && styles.alertFeedbackTextNeutral,
+                  ]}
+                >
+                  {alertFeedback.message}
+                </Text>
+              </View>
             )}
 
             {/* Key Levels */}
             <View style={styles.levelsSection}>
               <Text style={styles.levelsSectionTitle}>Support Levels</Text>
-              {aiAnalysis.supportLevels.map((level) => (
-                <EnhancedLevelRow key={level.id} level={level} type="support" />
-              ))}
+              {aiAnalysis.supportLevels.map((level, index) => {
+                const symbol = aiAnalysis.symbol ?? selectedSymbol;
+                const isAlertActive = activeAlerts.some(
+                  (a) =>
+                    a.symbol === symbol &&
+                    a.level_type === 'support' &&
+                    isPriceWithinTolerance(level.price, a.level_price)
+                );
+
+                return (
+                  <EnhancedLevelRow
+                    key={level.id}
+                    level={level}
+                    type="support"
+                    showBell={isNative}
+                    isAlertActive={isAlertActive}
+                    isAlertBusy={
+                      createAlertMutation.isPending ||
+                      deleteAlertMutation.isPending
+                    }
+                    showBellHint={showAlertBellHint && index === 0}
+                    onToggleAlert={() => handleToggleLevelAlert(level, 'support')}
+                  />
+                );
+              })}
             </View>
 
             <View style={styles.levelsSection}>
               <Text style={styles.levelsSectionTitle}>Resistance Levels</Text>
-              {aiAnalysis.resistanceLevels.map((level) => (
-                <EnhancedLevelRow key={level.id} level={level} type="resistance" />
-              ))}
+              {aiAnalysis.resistanceLevels.map((level, index) => {
+                const symbol = aiAnalysis.symbol ?? selectedSymbol;
+                const isAlertActive = activeAlerts.some(
+                  (a) =>
+                    a.symbol === symbol &&
+                    a.level_type === 'resistance' &&
+                    isPriceWithinTolerance(level.price, a.level_price)
+                );
+
+                return (
+                  <EnhancedLevelRow
+                    key={level.id}
+                    level={level}
+                    type="resistance"
+                    showBell={isNative}
+                    isAlertActive={isAlertActive}
+                    isAlertBusy={
+                      createAlertMutation.isPending ||
+                      deleteAlertMutation.isPending
+                    }
+                    showBellHint={
+                      showAlertBellHint &&
+                      aiAnalysis.supportLevels.length === 0 &&
+                      index === 0
+                    }
+                    onToggleAlert={() => handleToggleLevelAlert(level, 'resistance')}
+                  />
+                );
+              })}
             </View>
 
             {/* Key Observations */}
@@ -654,8 +803,44 @@ function LevelRow({ level, type }: { level: AILevel; type: 'support' | 'resistan
   );
 }
 
-function EnhancedLevelRow({ level, type }: { level: ScoredLevel; type: 'support' | 'resistance' }) {
+function EnhancedLevelRow({
+  level,
+  type,
+  showBell,
+  showBellHint,
+  isAlertActive,
+  isAlertBusy,
+  onToggleAlert,
+}: {
+  level: ScoredLevel;
+  type: 'support' | 'resistance';
+  showBell: boolean;
+  showBellHint: boolean;
+  isAlertActive: boolean;
+  isAlertBusy: boolean;
+  onToggleAlert: () => void;
+}) {
   const color = type === 'support' ? CHART_COLORS.support : CHART_COLORS.resistance;
+  const pulseScale = useRef(new Animated.Value(1)).current;
+  const hasPulsed = useRef(false);
+
+  useEffect(() => {
+    if (!showBell || isAlertActive || hasPulsed.current) return;
+    hasPulsed.current = true;
+
+    Animated.sequence([
+      Animated.timing(pulseScale, {
+        toValue: 1.15,
+        duration: 750,
+        useNativeDriver: true,
+      }),
+      Animated.timing(pulseScale, {
+        toValue: 1,
+        duration: 750,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [showBell, isAlertActive, pulseScale]);
 
   return (
     <View style={styles.levelRow}>
@@ -666,8 +851,35 @@ function EnhancedLevelRow({ level, type }: { level: ScoredLevel; type: 'support'
         <Text style={styles.levelZone}>Zone: ${level.zone.low.toFixed(2)} - ${level.zone.high.toFixed(2)}</Text>
       </View>
       <View>
-        <View style={[styles.strengthBadge, { borderColor: color }]}>
-          <Text style={[styles.strengthText, { color }]}>{level.strength}</Text>
+        <View style={styles.strengthAndBellRow}>
+          {showBell && (
+            <View style={styles.bellHintGroup}>
+              <Animated.View style={{ transform: [{ scale: pulseScale }] }}>
+                <TouchableOpacity
+                  style={styles.bellButton}
+                  onPress={onToggleAlert}
+                  disabled={isAlertBusy}
+                  activeOpacity={0.7}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons
+                    name={isAlertActive ? 'notifications' : 'notifications-outline'}
+                    size={18}
+                    color={
+                      isAlertActive ? colors.primary[500] : colors.neutral[400]
+                    }
+                  />
+                </TouchableOpacity>
+              </Animated.View>
+              {showBellHint && !isAlertActive && (
+                <Text style={styles.bellHintText}>Tap to set alert</Text>
+              )}
+            </View>
+          )}
+
+          <View style={[styles.strengthBadge, { borderColor: color }]}>
+            <Text style={[styles.strengthText, { color }]}>{level.strength}</Text>
+          </View>
         </View>
         <Text style={styles.confluenceScore}>{level.confluenceScore}/100</Text>
       </View>
@@ -919,6 +1131,40 @@ const styles = StyleSheet.create({
   aiSection: {
     marginBottom: spacing.lg,
   },
+  ctaWrap: {
+    width: '100%',
+    maxWidth: 480,
+    alignSelf: 'center',
+  },
+  verdictCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    ...shadows.sm,
+  },
+  verdictDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  verdictBody: {
+    flex: 1,
+  },
+  verdictLabel: {
+    ...typography.labelSm,
+    color: colors.neutral[500],
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  verdictValue: {
+    ...typography.headingSm,
+    color: colors.neutral[900],
+    marginTop: 2,
+  },
   aiHint: {
     ...typography.bodySm,
     color: colors.neutral[500],
@@ -976,6 +1222,27 @@ const styles = StyleSheet.create({
     color: colors.neutral[900],
     fontWeight: '600',
     marginBottom: spacing.sm,
+  },
+  alertFeedback: {
+    backgroundColor: colors.primary[50],
+    borderColor: colors.primary[200],
+    borderWidth: 1,
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  alertFeedbackNeutral: {
+    backgroundColor: colors.neutral[100],
+    borderColor: colors.neutral[200],
+  },
+  alertFeedbackText: {
+    ...typography.bodySm,
+    color: colors.primary[700],
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  alertFeedbackTextNeutral: {
+    color: colors.neutral[600],
   },
   analysisSummary: {
     ...typography.bodyMd,
@@ -1035,6 +1302,29 @@ const styles = StyleSheet.create({
     color: colors.neutral[500],
     textAlign: 'center',
     marginTop: 2,
+  },
+  strengthAndBellRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+  },
+  bellHintGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  bellButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary[50],
+  },
+  bellHintText: {
+    color: colors.neutral[400],
+    fontSize: 11,
   },
   observationsSection: {
     marginTop: spacing.md,

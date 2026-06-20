@@ -2,7 +2,7 @@
 
 import { Hono } from 'hono';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
-import type { GetHistoryResponse, GetAnalysisResponse, AnalysisHistoryItem } from '@marketsignl/core';
+import type { GetHistoryResponse, GetAnalysisResponse, AnalysisHistoryItem } from '@chartsignl/core';
 
 const historyRoute = new Hono();
 

@@ -29,21 +29,21 @@ export default function TermsScreen() {
         <Text style={styles.lastUpdated}>Last updated: {LAST_UPDATED}</Text>
 
         <Text style={styles.intro}>
-          Welcome to MarketSignl. By accessing or using our mobile application and services,
+          Welcome to ChartSignl. By accessing or using our mobile application and services,
           you agree to be bound by these Terms of Service. Please read them carefully.
         </Text>
 
         {/* Section 1 */}
         <Text style={styles.sectionTitle}>1. Acceptance of Terms</Text>
         <Text style={styles.paragraph}>
-          By creating an account or using MarketSignl, you agree to these Terms of Service and
+          By creating an account or using ChartSignl, you agree to these Terms of Service and
           our Privacy Policy. If you do not agree, please do not use our services.
         </Text>
 
         {/* Section 2 */}
         <Text style={styles.sectionTitle}>2. Description of Service</Text>
         <Text style={styles.paragraph}>
-          MarketSignl provides Atlas AI-powered stock chart analysis tools to help identify support
+          ChartSignl provides Atlas AI-powered stock chart analysis tools to help identify support
           and resistance levels. Our service includes:
         </Text>
         <Text style={styles.bulletItem}>
@@ -65,7 +65,7 @@ export default function TermsScreen() {
         {/* Section 3 */}
         <Text style={styles.sectionTitle}>3. User Accounts</Text>
         <Text style={styles.paragraph}>
-          You must create an account to use MarketSignl. You are responsible for:
+          You must create an account to use ChartSignl. You are responsible for:
         </Text>
         <Text style={styles.bulletItem}>
           • Maintaining the confidentiality of your account credentials
@@ -77,13 +77,13 @@ export default function TermsScreen() {
           • Notifying us immediately of any unauthorized use
         </Text>
         <Text style={styles.paragraph}>
-          You must be at least 18 years old to use MarketSignl.
+          You must be at least 18 years old to use ChartSignl.
         </Text>
 
         {/* Section 4 */}
         <Text style={styles.sectionTitle}>4. Subscription and Billing</Text>
         <Text style={styles.paragraph}>
-          MarketSignl offers both free and premium subscription tiers:
+          ChartSignl offers both free and premium subscription tiers:
         </Text>
         <Text style={styles.bulletItem}>
           • Free tier: 3 analyses per week
@@ -125,7 +125,7 @@ export default function TermsScreen() {
         {/* Section 6 */}
         <Text style={styles.sectionTitle}>6. Intellectual Property</Text>
         <Text style={styles.paragraph}>
-          All content, features, and functionality of MarketSignl are owned by us and are
+          All content, features, and functionality of ChartSignl are owned by us and are
           protected by copyright, trademark, and other intellectual property laws. You may
           not use our branding, logos, or content without our written permission.
         </Text>
@@ -135,7 +135,7 @@ export default function TermsScreen() {
         <View style={styles.disclaimerBox}>
           <Text style={styles.disclaimerTitle}>IMPORTANT NOTICE</Text>
           <Text style={styles.disclaimerText}>
-            MarketSignl provides educational and informational analysis tools only. We do not
+            ChartSignl provides educational and informational analysis tools only. We do not
             provide investment advice, financial advice, or trading recommendations. The analysis
             provided by Atlas is for informational purposes and should not be construed as
             professional investment advice.
@@ -150,7 +150,7 @@ export default function TermsScreen() {
         {/* Section 8 */}
         <Text style={styles.sectionTitle}>8. Limitation of Liability</Text>
         <Text style={styles.paragraph}>
-          To the maximum extent permitted by law, MarketSignl and its affiliates shall not be
+          To the maximum extent permitted by law, ChartSignl and its affiliates shall not be
           liable for any indirect, incidental, special, consequential, or punitive damages,
           including but not limited to trading losses, lost profits, or lost data.
         </Text>
@@ -165,7 +165,7 @@ export default function TermsScreen() {
         <Text style={styles.paragraph}>
           While we strive to provide accurate market data and analysis, we do not guarantee
           the accuracy, completeness, or timeliness of any information provided through
-          MarketSignl. Market data is provided by third-party sources and may be delayed or
+          ChartSignl. Market data is provided by third-party sources and may be delayed or
           inaccurate.
         </Text>
 
@@ -181,7 +181,7 @@ export default function TermsScreen() {
         <Text style={styles.sectionTitle}>11. Changes to Terms</Text>
         <Text style={styles.paragraph}>
           We may modify these Terms at any time. We will notify you of material changes via
-          email or through the app. Your continued use of MarketSignl after such changes
+          email or through the app. Your continued use of ChartSignl after such changes
           constitutes acceptance of the new Terms.
         </Text>
 
@@ -198,7 +198,7 @@ export default function TermsScreen() {
           If you have any questions about these Terms of Service, please contact us:
         </Text>
         <View style={styles.contactBox}>
-          <Text style={styles.contactText}>support@marketsignl.com</Text>
+          <Text style={styles.contactText}>support@chartsignl.com</Text>
         </View>
 
         {/* Final Disclaimer */}

@@ -1,4 +1,4 @@
-import type { MarketDataPoint } from '@marketsignl/core';
+import type { MarketDataPoint } from '@chartsignl/core';
 
 const MASSIVE_BASE_URL = process.env.MASSIVE_BASE_URL?.trim() || 'https://api.massive.com';
 

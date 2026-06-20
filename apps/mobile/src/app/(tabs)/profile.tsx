@@ -7,14 +7,16 @@ import { Card, Button, EmailVerificationBanner } from '../../components';
 import { useAuthStore } from '../../store/authStore';
 import { getCurrentUser, getUsage } from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
-import { FREE_ANALYSIS_LIMIT, TRADING_STYLE_OPTIONS } from '@marketsignl/core';
+import { FREE_ANALYSIS_LIMIT, TRADING_STYLE_OPTIONS } from '@chartsignl/core';
 import { useEffect, useCallback, useState } from 'react';
 import { API_URL } from '../../lib/apiConfig';
+import { getExpoPushToken, unregisterPushToken } from '../../lib/usePushNotifications';
+import Constants from 'expo-constants';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user, signOut, isPremium, checkSubscriptionStatus, isEmailVerified, refreshSubscription, checkEmailVerification } = useAuthStore();
+  const { user, signOut, isPremium, checkSubscriptionStatus, isEmailVerified, refreshSubscription, checkEmailVerification, session } = useAuthStore();
 
   const { data: profileData } = useQuery({
     queryKey: ['profile'],
@@ -83,6 +85,16 @@ export default function ProfileScreen() {
 
   const performSignOut = async () => {
     try {
+      // Deactivate push token on logout so the user stops receiving notifications.
+      if (Platform.OS !== 'web') {
+        const token = getExpoPushToken();
+        const accessToken = session?.access_token;
+
+        if (token && accessToken) {
+          await unregisterPushToken(token, accessToken);
+        }
+      }
+
       const success = await signOut();
 
       if (success) {
@@ -159,7 +171,7 @@ export default function ProfileScreen() {
             ]);
           }
         } else {
-          const errorMessage = 'Failed to process deletion request. Please try again or contact support@marketsignl.com';
+          const errorMessage = 'Failed to process deletion request. Please try again or contact support@chartsignl.com';
           if (Platform.OS === 'web') {
             window.alert(`Error\n\n${errorMessage}`);
           } else {
@@ -168,7 +180,7 @@ export default function ProfileScreen() {
         }
       } catch (err) {
         console.error('Delete account request error:', err);
-        const errorMessage = 'Failed to process deletion request. Please try again or contact support@marketsignl.com';
+        const errorMessage = 'Failed to process deletion request. Please try again or contact support@chartsignl.com';
         if (Platform.OS === 'web') {
           window.alert(`Error\n\n${errorMessage}`);
         } else {
@@ -195,7 +207,7 @@ export default function ProfileScreen() {
     // Native: two-step Alert
     Alert.alert(
       'Delete Account',
-      'This will permanently delete your MarketSignl account, including all your saved analyses, preferences, and subscription data. This action cannot be undone.',
+      'This will permanently delete your ChartSignl account, including all your saved analyses, preferences, and subscription data. This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -250,7 +262,7 @@ export default function ProfileScreen() {
   };
 
   const handleNotifications = () => {
-    requireVerification(() => router.push('/(settings)/notifications'), 'manage notifications');
+    requireVerification(() => router.push('/notification-settings'), 'manage notifications');
   };
 
   const handleHelp = () => {
@@ -262,7 +274,7 @@ export default function ProfileScreen() {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.location.href = '/privacy';
     } else {
-      Linking.openURL('https://marketsignl.com/privacy');
+      Linking.openURL('https://chartsignl.com/privacy');
     }
   };
 
@@ -522,7 +534,9 @@ export default function ProfileScreen() {
         />
 
         {/* Version */}
-        <Text style={styles.versionText}>MarketSignl v1.0.0</Text>
+        <Text style={styles.versionText}>
+          ChartSignl v{Constants.expoConfig?.version ?? '—'}
+        </Text>
           </ScrollView>
         </View>
       </View>

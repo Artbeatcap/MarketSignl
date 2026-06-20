@@ -33,6 +33,7 @@ console.log(`  SUPABASE_URL: ${process.env.SUPABASE_URL ? '✓ Set' : '✗ Missi
 console.log(`  OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? '✓ Set' : '✗ Missing'}`);
 console.log(`  SMTP (deletion emails): ${process.env.SMTP_HOST && process.env.SMTP_USER ? '✓ Set' : '✗ Optional'}`);
 console.log(`  CRON_SECRET (push price checks): ${process.env.CRON_SECRET ? '✓ Set' : '✗ Missing (n8n /check-prices will fail)'}`);
+console.log(`  ENABLE_RESOLVER_CRON: ${process.env.ENABLE_RESOLVER_CRON === 'true' ? '✓ On' : 'off'}`);
 
 // Routes
 import analyzeDataRoute from './routes/analyzeData.js';
@@ -47,6 +48,7 @@ import socialRoute from './routes/social.js';
 import predictRoute from './routes/predict.js';
 import predictionsRoute from './routes/predictions.js';
 import notificationRoutes from './routes/notifications.js';
+import { startResolverSchedule } from './lib/resolverSchedule.js';
 
 const app = new Hono();
 
@@ -68,11 +70,6 @@ const defaultOrigins = [
   'https://app.chartsignl.com',
   'https://chartsignl.com',
   'https://www.chartsignl.com',
-  'http://localhost:5173',
-  'http://localhost:5174',
-  'https://app.marketsignl.com',
-  'https://marketsignl.com',
-  'https://www.marketsignl.com',
 ];
 
 // Merge env var origins with defaults, ensuring www.chartsignl.com is always included
@@ -92,7 +89,7 @@ app.use('*', cors({
 // Root - avoid 404 for GET /
 app.get('/', (c) => {
   return c.json({
-    name: 'MarketSignl API',
+    name: 'ChartSignl API',
     version: '1.0.0',
     docs: '/health (health check), /api/* (API routes)',
   });
@@ -173,7 +170,7 @@ const port = parseInt(process.env.PORT || '4000');
 console.log(`
 ╔═══════════════════════════════════════════════════╗
 ║                                                   ║
-║   🚀 MarketSignl API Server                       ║
+║   🚀 ChartSignl API Server                       ║
 ║                                                   ║
 ║   Running on: http://localhost:${port}              ║
 ║   Environment: ${process.env.NODE_ENV || 'development'}                    ║
@@ -186,5 +183,7 @@ serve({
   fetch: app.fetch,
   port,
 });
+
+startResolverSchedule();
 
 export default app;

@@ -8,7 +8,7 @@ import type {
   GetPredictionsResponse,
   GetPredictionResponse,
   GetPredictionStatsResponse,
-} from '@marketsignl/core';
+} from '@chartsignl/core';
 
 import { API_URL } from './apiConfig';
 import { getAccessToken } from './supabase';
@@ -98,6 +98,23 @@ export async function getUsage(): Promise<UsageResponse> {
 // Update profile
 export async function updateProfile(data: Record<string, unknown>): Promise<{ success: boolean }> {
   return apiFetch('/api/user/profile', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+}
+
+export interface NotificationPreferencesUpdate {
+  pushEnabled?: boolean;
+  soundEnabled?: boolean;
+}
+
+export async function updateNotificationPreferences(
+  data: NotificationPreferencesUpdate
+): Promise<{ success: boolean }> {
+  return apiFetch('/api/notifications/preferences', {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',

@@ -2,7 +2,7 @@
 // Numbers are computed here — the LLM never produces prices.
 // Anchored to last close, drift is bounded in ATR units, bands widen with √t.
 
-import type { ProjectedPoint } from '@marketsignl/core';
+import type { ProjectedPoint } from '@chartsignl/core';
 import type { TechnicalIndicators } from './technicalCalculator.js';
 
 export interface VolatilityConeInput {

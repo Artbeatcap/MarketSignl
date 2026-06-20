@@ -1,4 +1,4 @@
-import type { ProjectedPoint } from '@marketsignl/core';
+import type { ProjectedPoint } from '../types/prediction';
 
 /** Fraction of chart width reserved for the AI prediction future zone */
 export const PREDICTION_ZONE_RATIO = 0.28;

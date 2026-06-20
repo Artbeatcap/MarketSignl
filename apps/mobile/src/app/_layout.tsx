@@ -1,6 +1,6 @@
 import React, { Component, useEffect, useRef } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
-import { View, ActivityIndicator, StyleSheet, Platform, Text, Linking } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Platform, Text } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { subscriptionService } from '../services/subscription.service';
 import { colors } from '../theme';
+import { usePushNotifications } from '../lib/usePushNotifications';
 
 type ErrorBoundaryState = { hasError: boolean; error: Error | null };
 
@@ -83,6 +84,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const hasSeenNonEmptySegments = useRef(false);
 
+  // Native push initialization (silent): runs effects only once auth session is ready.
+  usePushNotifications();
+
   useEffect(() => {
     const init = async () => {
       try {
@@ -98,23 +102,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     };
     init();
   }, [initialize]);
-
-  // ADD THIS — Diagnostic: log ALL deep links globally
-  useEffect(() => {
-    console.log('🔗 Setting up global Linking listener');
-
-    // Check if there's already a URL waiting (cold start)
-    Linking.getInitialURL().then((url) => {
-      console.log('🔗 getInitialURL:', url);
-    });
-
-    // Listen for ALL incoming deep links (warm start)
-    const sub = Linking.addEventListener('url', (event) => {
-      console.log('🔗 DEEP LINK RECEIVED:', event.url);
-    });
-
-    return () => sub.remove();
-  }, []);
 
   useEffect(() => {
     if (!isInitialized || isLoading) {

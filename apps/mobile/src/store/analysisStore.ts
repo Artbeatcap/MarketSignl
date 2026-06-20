@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ChartAnalysis } from '@marketsignl/core';
+import type { ChartAnalysis } from '@chartsignl/core';
 
 interface AnalysisState {
   // Current analysis being viewed

@@ -4,7 +4,7 @@
 import { Hono } from 'hono';
 import OpenAI from 'openai';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
-import { FREE_ANALYSIS_LIMIT } from '@marketsignl/core';
+import { FREE_ANALYSIS_LIMIT } from '@chartsignl/core';
 import { notifyFirstAnalysis, notifyPaywallHit } from '../lib/growthhub.js';
 import { createAlertsFromAnalysis } from '../services/pushNotificationService.js';
 
@@ -25,7 +25,7 @@ import type {
   EnhancedAIAnalysis,
   TechnicalDetails,
   TradeIdea,
-} from '@marketsignl/core';
+} from '@chartsignl/core';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -90,7 +90,8 @@ function buildUserPrompt(
   symbol: string,
   timeframe: string,
   indicators: TechnicalIndicators,
-  scoredAnalysis: ScoredAnalysis
+  scoredAnalysis: ScoredAnalysis,
+  forecast?: { direction: string; confidence: number } | null
 ): string {
   const { currentPrice, priceChangePercent, trend, ema, atr, bollinger, overextension, fibonacci } =
     indicators;
@@ -109,7 +110,7 @@ function buildUserPrompt(
 
 CURRENT STATE:
 - Price: $${currentPrice.toFixed(2)} (${priceChangePercent > 0 ? '+' : ''}${priceChangePercent.toFixed(2)}%)
-- Trend: ${trend.direction} (${trend.strength.toFixed(0)}% strength)
+- Trend: ${trend.direction} (${(trend.strength * 100).toFixed(0)}% strength)
 - Trading Bias: ${trend.tradingBias} - ${trend.biasReason}
 
 MOVING AVERAGES:
@@ -147,7 +148,13 @@ ${topResistance.map((l: any, i: number) => `${i + 1}. $${l.price.toFixed(2)} - $
 ANALYSIS CONFIDENCE: ${confidence.overall}% (${confidence.label})
 Factors affecting confidence:
 ${confidence.factors.map((f: any) => `- ${f.name}: ${f.impact > 0 ? '+' : ''}${f.impact}% - ${f.reason}`).join('\n')}
-
+${forecast ? `
+FORECAST ENGINE LEAN:
+The ChartSignl forecasting engine projects a ${forecast.direction.toUpperCase()} lean at ${forecast.confidence}% confidence over this horizon.
+- Make your trade ideas and overall bias CONSISTENT with this forecast lean unless the level data strongly contradicts it.
+- If you must diverge from the forecast, explicitly say so in keyObservations and lower the affected trade idea's confidence.
+- A "neutral" forecast favors range/mean-reversion setups over strong directional calls.
+` : ''}
 Based on this data, provide your analysis focusing on the most actionable insights for a trader.`;
 }
 
@@ -204,10 +211,11 @@ analyzeDataRoute.post('/', async (c) => {
     // STEP 2: Parse request data
     // ========================================================================
     const body = await c.req.json();
-    const { symbol, interval, data } = body as {
+    const { symbol, interval, data, forecast } = body as {
       symbol: string;
       interval: string;
       data: MarketDataPoint[];
+      forecast?: { direction: string; confidence: number } | null;
     };
 
     if (!symbol || !interval || !Array.isArray(data) || data.length === 0) {
@@ -246,7 +254,7 @@ analyzeDataRoute.post('/', async (c) => {
     // ========================================================================
     // STEP 5: Get AI interpretation
     // ========================================================================
-    const userPrompt = buildUserPrompt(symbol, interval, indicators, scoredAnalysis);
+    const userPrompt = buildUserPrompt(symbol, interval, indicators, scoredAnalysis, forecast);
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -331,7 +339,7 @@ analyzeDataRoute.post('/', async (c) => {
       summary: [
         {
           indicator: 'Trend',
-          value: `${indicators.trend.direction} (${indicators.trend.strength.toFixed(0)}%)`,
+          value: `${indicators.trend.direction} (${(indicators.trend.strength * 100).toFixed(0)}%)`,
           status: indicators.trend.tradingBias === 'long' ? 'bullish' : indicators.trend.tradingBias === 'short' ? 'bearish' : 'neutral',
           statusLabel: indicators.trend.biasReason,
         },

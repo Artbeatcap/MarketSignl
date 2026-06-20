@@ -12,7 +12,7 @@ const transporter = nodemailer.createTransport({
     : undefined,
 });
 
-const from = process.env.SMTP_FROM || process.env.SMTP_USER || 'MarketSignl <noreply@marketsignl.com>';
+const from = process.env.SMTP_FROM || process.env.SMTP_USER || 'ChartSignl <noreply@chartsignl.com>';
 const frontendUrl = process.env.FRONTEND_URL || 'https://chartsignl.com';
 
 /**
@@ -43,11 +43,11 @@ export async function sendDeletionCompletedEmail(to: string): Promise<void> {
     from,
     to,
     subject: 'Your ChartSignl account has been deleted',
-    text: 'Your MarketSignl account and associated data have been permanently deleted. Transaction records are retained for 7 years as required by law. If you have any questions, contact support@marketsignl.com.',
+    text: 'Your ChartSignl account and associated data have been permanently deleted. Transaction records are retained for 7 years as required by law. If you have any questions, contact support@chartsignl.com.',
     html: `
       <p>Your ChartSignl account and associated data have been permanently deleted.</p>
       <p>Transaction records are retained for 7 years as required by law. Anonymized analytics may be retained.</p>
-      <p>If you have any questions, contact <a href="mailto:support@marketsignl.com">support@marketsignl.com</a>.</p>
+      <p>If you have any questions, contact <a href="mailto:support@chartsignl.com">support@chartsignl.com</a>.</p>
     `.trim(),
   });
 }

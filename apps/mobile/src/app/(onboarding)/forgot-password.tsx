@@ -37,13 +37,13 @@ export default function ForgotPasswordScreen() {
         // If in production, use production URL
         redirectTo = window.location.origin.includes('localhost')
           ? `${window.location.origin}/auth/reset-password`
-          : 'https://marketsignl.com/auth/reset-password';
+          : 'https://chartsignl.com/auth/reset-password';
       } else {
-        redirectTo = 'https://marketsignl.com/auth/reset-password';
+        redirectTo = 'https://chartsignl.com/auth/reset-password';
       }
     } else {
       // For mobile (iOS/Android), use deep link
-      redirectTo = 'marketsignl://auth/reset-password';
+      redirectTo = 'chartsignl://auth/reset-password';
     }
 
     try {

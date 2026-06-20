@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "MarketSignl",
-    "slug": "marketsignl",
+    "name": "ChartSignl",
+    "slug": "chartsignl",
     "version": "1.1.2",
     "sdkVersion": "54.0.0",
-    "scheme": "marketsignl",
+    "scheme": "chartsignl",
     "platforms": [
       "ios",
       "android",
@@ -13,14 +13,14 @@
     "icon": "./apps/mobile/assets/icon.png",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.optionsplungellc.marketsignl",
+      "bundleIdentifier": "com.optionsplungellc.chartsignl",
       "associatedDomains": [
-        "applinks:marketsignl.com"
+        "applinks:chartsignl.com"
       ],
       "icon": "./apps/mobile/assets/icon.png"
     },
     "android": {
-      "package": "com.optionsplungellc.marketsignl",
+      "package": "com.optionsplungellc.chartsignl",
       "permissions": [
         "com.android.vending.BILLING"
       ],
@@ -33,7 +33,7 @@
           "action": "VIEW",
           "data": [
             {
-              "scheme": "marketsignl",
+              "scheme": "chartsignl",
               "host": "auth",
               "pathPrefix": "/reset-password"
             }

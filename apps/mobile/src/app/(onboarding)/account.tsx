@@ -282,8 +282,8 @@ export default function AccountScreen() {
         // Success notification: user sees confirmation before being taken to the app
         // Alert.alert does not work on web (RN/Expo); use window.alert then navigate
         const message = needsEmailVerification
-          ? 'Welcome to MarketSignl! Please check your email to verify your account.'
-          : 'Welcome to MarketSignl! Your account has been created successfully.';
+          ? 'Welcome to ChartSignl! Please check your email to verify your account.'
+          : 'Welcome to ChartSignl! Your account has been created successfully.';
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
           window.alert('Account Created! 🎉\n\n' + message);
           router.replace('/(tabs)/analyze');
@@ -396,7 +396,7 @@ export default function AccountScreen() {
 
       // --- WEB OAUTH REDIRECT (Google on all platforms, Apple on Android/Web) ---
       const redirectUrl = AuthSession.makeRedirectUri({
-        scheme: 'marketsignl',
+        scheme: 'chartsignl',
         path: 'auth/callback',
       });
 
@@ -525,7 +525,7 @@ export default function AccountScreen() {
   // Render email step
   const renderEmailStep = () => (
     <>
-      <Text style={styles.title}>Welcome to MarketSignl</Text>
+      <Text style={styles.title}>Welcome to ChartSignl</Text>
       <Text style={styles.subtitle}>
         Enter your email to sign in or create an account
       </Text>
@@ -813,7 +813,7 @@ export default function AccountScreen() {
             if (Platform.OS === 'web' && typeof window !== 'undefined') {
               window.location.href = '/privacy';
             } else {
-              Linking.openURL('https://marketsignl.com/privacy');
+              Linking.openURL('https://chartsignl.com/privacy');
             }
           }}
         >

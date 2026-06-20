@@ -2,12 +2,12 @@ import { ConfigContext, ExpoConfig } from "expo/config";
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: "MarketSignl",
-  slug: "marketsignl",
+  name: "ChartSignl",
+  slug: "chartsignl",
   version: "1.1.2",
   orientation: "portrait",
   icon: "./assets/icon.png",
-  scheme: "marketsignl",
+  scheme: "chartsignl",
   userInterfaceStyle: "light",
   splash: {
     image: "./assets/splash.png",
@@ -21,10 +21,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   // =========================================================================
   ios: {
     supportsTablet: true,
-    bundleIdentifier: "com.optionsplungellc.marketsignl",
+    bundleIdentifier: "com.optionsplungellc.chartsignl",
     associatedDomains: [
-      "applinks:marketsignl.com",
-      "applinks:www.marketsignl.com",
+      "applinks:chartsignl.com",
+      "applinks:www.chartsignl.com",
     ],
     privacyManifests: {
       NSPrivacyAccessedAPITypes: [
@@ -59,7 +59,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       foregroundImage: "./assets/adaptive-icon.png",
       backgroundColor: "#F0F9F9",
     },
-    package: "com.optionsplungellc.marketsignl",
+    package: "com.optionsplungellc.chartsignl",
     permissions: ["com.android.vending.BILLING"],
     versionCode: 32,
 

@@ -34,6 +34,14 @@ export default function TabsLayout() {
           tabBarIcon: ({ color }) => <TabIcon icon="👤" color={color} />,
         }}
       />
+      {/* "Alerts" route exists but is not shown as a tab item. */}
+      <Tabs.Screen
+        name="alerts"
+        options={{
+          title: 'Alerts',
+          href: null,
+        }}
+      />
     </Tabs>
   );
 }
