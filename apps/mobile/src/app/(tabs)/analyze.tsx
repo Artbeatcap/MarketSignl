@@ -19,6 +19,7 @@ import { useAuthStore } from '../../store/authStore';
 import { fetchMarketDataWithIndicators, formatPrice, calculatePriceChange } from '../../lib/marketData';
 import { findLocalLevels, detectTrend, analyzeChartData } from '../../lib/chartAnalysis';
 import { getUsage, getAnalysis, getPrediction, createPrediction } from '../../lib/api';
+import { getWeeklyAtlasUsed } from '../../lib/usage';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import { API_URL } from '../../lib/apiConfig';
 import { Ionicons } from '@expo/vector-icons';
@@ -75,37 +76,64 @@ export default function AnalyzeScreen() {
     symbol?: string;
   }>();
 
-  // Load saved analysis when navigated from history
+  // Load unified Atlas run when navigated from history
   useEffect(() => {
-    if (!analysisId) return;
-    getAnalysis(analysisId).then((res) => {
-      if (res.success && res.analysis) {
-        const saved = res.analysis as unknown as EnhancedAIAnalysis;
-        setAiAnalysis(saved);
-        if (saved.symbol) setSelectedSymbol(saved.symbol);
-        if (saved.timeframe) setSelectedInterval(saved.timeframe as ChartInterval);
-        setShowLevels(true);
-      }
-    });
-  }, [analysisId]);
+    if (!analysisId && !predictionId) return;
 
-  // Load saved prediction when navigated from history
-  useEffect(() => {
-    if (!predictionId) return;
-    getPrediction(predictionId).then((res) => {
-      if (res.success && res.prediction) {
-        setPrediction(res.prediction);
-        setShowPredictionOverlay(true);
-        if (res.prediction.symbol) setSelectedSymbol(res.prediction.symbol);
-        if (res.prediction.interval) setSelectedInterval(res.prediction.interval as ChartInterval);
+    let cancelled = false;
+
+    async function loadAtlasRun() {
+      try {
+        let analysisData = analysisId ? await getAnalysis(analysisId) : null;
+        let predictionData = predictionId ? await getPrediction(predictionId) : null;
+
+        if (cancelled) return;
+
+        const siblingPredictionId = predictionId ?? analysisData?.predictionId;
+        const siblingAnalysisId = analysisId ?? predictionData?.analysisId;
+
+        if (!predictionData && siblingPredictionId) {
+          predictionData = await getPrediction(siblingPredictionId);
+        }
+        if (!analysisData && siblingAnalysisId) {
+          analysisData = await getAnalysis(siblingAnalysisId);
+        }
+
+        if (cancelled) return;
+
+        if (analysisData?.success && analysisData.analysis) {
+          const saved = analysisData.analysis as unknown as EnhancedAIAnalysis;
+          setAiAnalysis(saved);
+          setShowLevels(true);
+          if (saved.symbol) setSelectedSymbol(saved.symbol);
+          if (saved.timeframe) setSelectedInterval(saved.timeframe as ChartInterval);
+        }
+
+        if (predictionData?.success && predictionData.prediction) {
+          setPrediction(predictionData.prediction);
+          setShowPredictionOverlay(true);
+          if (predictionData.prediction.symbol) {
+            setSelectedSymbol(predictionData.prediction.symbol);
+          }
+          if (predictionData.prediction.interval) {
+            setSelectedInterval(predictionData.prediction.interval as ChartInterval);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load Atlas run from history:', err);
       }
-    });
-  }, [predictionId]);
+    }
+
+    void loadAtlasRun();
+    return () => {
+      cancelled = true;
+    };
+  }, [analysisId, predictionId]);
 
   // When navigated from a push notification, preselect the symbol.
   useEffect(() => {
     if (!symbol) return;
-    if (analysisId) return; // analysisId navigation should win
+    if (analysisId || predictionId) return;
 
     setAiAnalysis(null);
     setShowLevels(false);
@@ -114,7 +142,7 @@ export default function AnalyzeScreen() {
     // Keep the name simple; we can enhance with a search later if needed.
     setSelectedSymbol(String(symbol));
     setSelectedName(String(symbol));
-  }, [symbol, analysisId]);
+  }, [symbol, analysisId, predictionId]);
 
   // Clear push-alert feedback after a short delay.
   useEffect(() => {
@@ -252,9 +280,7 @@ export default function AnalyzeScreen() {
     return detectTrend(safeChartData);
   }, [safeChartData]);
 
-  const remainingAnalyses = usage?.isPro
-    ? '∞'
-    : Math.max(0, FREE_ANALYSIS_LIMIT - (usage?.freeAnalysesUsed || 0));
+  const weeklyAtlasUsed = getWeeklyAtlasUsed(usage);
 
   // The unified analysis consumes one prediction + one analysis per tap, so it
   // is locked once either weekly free counter is exhausted (they move in lockstep).
@@ -302,6 +328,7 @@ export default function AnalyzeScreen() {
       const analysis = await analyzeChartData(selectedSymbol, selectedInterval, safeChartData, {
         direction: pred.direction,
         confidence: pred.confidence,
+        predictionId: pred.id ?? result.predictionId,
       });
       setAiAnalysis(analysis);
       setShowLevels(true);
@@ -371,13 +398,13 @@ export default function AnalyzeScreen() {
           <View style={styles.headerRight}>
             <View style={[
               styles.usageBadge,
-              !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT && styles.usageBadgeWarning
+              !usage?.isPro && usage && weeklyAtlasUsed >= FREE_ANALYSIS_LIMIT && styles.usageBadgeWarning
             ]}>
               <Text style={[
                 styles.usageText,
-                !usage?.isPro && usage && usage.freeAnalysesUsed >= FREE_ANALYSIS_LIMIT && styles.usageTextWarning
+                !usage?.isPro && usage && weeklyAtlasUsed >= FREE_ANALYSIS_LIMIT && styles.usageTextWarning
               ]}>
-                {usage?.isPro ? '✨ Pro' : usage ? `${usage.freeAnalysesUsed}/${FREE_ANALYSIS_LIMIT} free` : '—'}
+                {usage?.isPro ? '✨ Pro' : usage ? `${weeklyAtlasUsed}/${FREE_ANALYSIS_LIMIT} free` : '—'}
               </Text>
             </View>
             {!usage?.isPro && (
@@ -492,7 +519,7 @@ export default function AnalyzeScreen() {
           ) : dataError ? (
             <View style={styles.errorContainer}>
               <Text style={styles.errorEmoji}>📊</Text>
-              <Text style={styles.errorText}>Failed to load chart data</Text>
+              <Text style={styles.chartErrorText}>Failed to load chart data</Text>
               <Button title="Retry" onPress={() => refetch()} variant="outline" size="sm" />
             </View>
           ) : (
@@ -512,28 +539,60 @@ export default function AnalyzeScreen() {
           )}
         </Card>
 
-        {/* Trend Indicator */}
-        <View style={styles.trendCard}>
-          <Text style={styles.trendLabel}>Current Trend</Text>
-          <View style={styles.trendValue}>
-            <View
-              style={[
-                styles.trendDot,
-                {
-                  backgroundColor:
-                    trend.trend === 'bullish'
-                      ? CHART_COLORS.support
-                      : trend.trend === 'bearish'
-                      ? CHART_COLORS.resistance
-                      : colors.neutral[400],
-                },
-              ]}
-            />
-            <Text style={styles.trendText}>
-              {trend.trend.charAt(0).toUpperCase() + trend.trend.slice(1)}
-            </Text>
-            <Text style={styles.trendStrength}>({(trend.strength * 100).toFixed(0)}%)</Text>
-          </View>
+        {/* Trend / Atlas summary */}
+        <View style={[styles.trendCard, prediction ? styles.trendCardStacked : null]}>
+          {!prediction ? (
+            <>
+              <Text style={styles.trendLabel}>Recent EMA trend</Text>
+              <View style={styles.trendValue}>
+                <View
+                  style={[
+                    styles.trendDot,
+                    { backgroundColor: trendDirectionColor(trend.trend) },
+                  ]}
+                />
+                <Text style={styles.trendText}>
+                  {trend.trend.charAt(0).toUpperCase() + trend.trend.slice(1)}
+                </Text>
+                <Text style={styles.trendStrength}>({(trend.strength * 100).toFixed(0)}%)</Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.trendCombinedRow}>
+                <View style={styles.trendSegment}>
+                  <View
+                    style={[
+                      styles.trendDot,
+                      { backgroundColor: trendDirectionColor(trend.trend) },
+                    ]}
+                  />
+                  <Text style={styles.trendCombinedText}>
+                    EMA trend: {trend.trend.charAt(0).toUpperCase() + trend.trend.slice(1)} (
+                    {(trend.strength * 100).toFixed(0)}%)
+                  </Text>
+                </View>
+                <Text style={styles.trendSeparator}>·</Text>
+                <View style={styles.trendSegment}>
+                  <View
+                    style={[
+                      styles.trendDot,
+                      { backgroundColor: trendDirectionColor(prediction.direction) },
+                    ]}
+                  />
+                  <Text style={styles.trendCombinedText}>
+                    Atlas forecast:{' '}
+                    {prediction.direction.charAt(0).toUpperCase() + prediction.direction.slice(1)} (
+                    {prediction.expectedChangePct >= 0 ? '+' : ''}
+                    {prediction.expectedChangePct.toFixed(2)}%, {prediction.confidence}% conf)
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.trendFootnote}>
+                EMA reflects recent price action; Atlas forecast looks ahead over this timeframe.
+              </Text>
+            </>
+          )}
         </View>
 
         {/* Unified AI Analysis CTA */}
@@ -542,10 +601,10 @@ export default function AnalyzeScreen() {
             <Button
               title={
                 isAnalyzing
-                  ? 'Analyzing…'
+                  ? 'Atlas is analyzing…'
                   : analyzeLocked
                   ? '🔒 Upgrade for More'
-                  : `✨ Analyze ${selectedSymbol}`
+                  : `✨ Ask Atlas · ${selectedSymbol}`
               }
               onPress={handleAnalyze}
               size="lg"
@@ -575,41 +634,11 @@ export default function AnalyzeScreen() {
           <Text style={[styles.aiHint, analyzeLocked && styles.aiHintWarning]}>
             {!usage?.isPro && usage
               ? analyzeLocked
-                ? `🔓 You've used all ${FREE_ANALYSIS_LIMIT} free analyses this week. Tap to upgrade!`
-                : `${Math.min(usage.freeAnalysesUsed ?? 0, usage.freePredictionsUsed ?? 0)}/${FREE_ANALYSIS_LIMIT} free analyses this week`
-              : 'AI forecast + key levels & setups — in one tap'}
+                ? `🔓 You've used all ${FREE_ANALYSIS_LIMIT} free Atlas runs this week. Tap to upgrade!`
+                : `${weeklyAtlasUsed}/${FREE_ANALYSIS_LIMIT} free Atlas runs this week`
+              : 'Atlas forecast + key levels — in one tap'}
           </Text>
         </View>
-
-        {/* Unified verdict */}
-        {prediction && (
-          <View style={styles.verdictCard}>
-            <View
-              style={[
-                styles.verdictDot,
-                {
-                  backgroundColor:
-                    prediction.direction === 'bullish'
-                      ? CHART_COLORS.support
-                      : prediction.direction === 'bearish'
-                      ? CHART_COLORS.resistance
-                      : colors.neutral[400],
-                },
-              ]}
-            />
-            <View style={styles.verdictBody}>
-              <Text style={styles.verdictLabel}>AI Outlook</Text>
-              <Text style={styles.verdictValue}>
-                {prediction.direction.charAt(0).toUpperCase() + prediction.direction.slice(1)}
-                {'  ·  '}
-                {prediction.expectedChangePct >= 0 ? '+' : ''}
-                {prediction.expectedChangePct.toFixed(2)}% expected
-                {'  ·  '}
-                {prediction.confidence}% confidence
-              </Text>
-            </View>
-          </View>
-        )}
 
         {prediction && <PredictionSummary prediction={prediction} />}
 
@@ -617,7 +646,7 @@ export default function AnalyzeScreen() {
         {aiAnalysis && (
           <Card style={styles.analysisCard}>
             <View style={styles.analysisHeader}>
-              <Text style={styles.analysisTitle}>📐 Key Levels & Setups</Text>
+              <Text style={styles.analysisTitle}>Atlas levels & setups</Text>
               <View style={styles.confidenceBadge}>
                 <Text style={styles.confidenceText}>{aiAnalysis.overallConfidence}% confluence</Text>
               </View>
@@ -775,6 +804,12 @@ export default function AnalyzeScreen() {
 }
 
 // Helper function to convert ScoredLevel to AILevel for the chart component
+function trendDirectionColor(direction: 'bullish' | 'bearish' | 'neutral') {
+  if (direction === 'bullish') return CHART_COLORS.support;
+  if (direction === 'bearish') return CHART_COLORS.resistance;
+  return colors.neutral[400];
+}
+
 function convertToAILevels(scoredLevels: ScoredLevel[]): AILevel[] {
   return scoredLevels.map(level => ({
     id: level.id,
@@ -1090,7 +1125,7 @@ const styles = StyleSheet.create({
     fontSize: 48,
     marginBottom: spacing.md,
   },
-  errorText: {
+  chartErrorText: {
     ...typography.bodyMd,
     color: colors.neutral[500],
     marginBottom: spacing.md,
@@ -1105,6 +1140,11 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     marginBottom: spacing.lg,
   },
+  trendCardStacked: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+  },
   trendLabel: {
     ...typography.labelMd,
     color: colors.neutral[600],
@@ -1113,6 +1153,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  trendCombinedRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  trendSegment: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    flexShrink: 1,
+  },
+  trendSeparator: {
+    ...typography.bodySm,
+    color: colors.neutral[400],
+  },
+  trendCombinedText: {
+    ...typography.bodySm,
+    color: colors.neutral[800],
+    flexShrink: 1,
+  },
+  trendFootnote: {
+    ...typography.labelSm,
+    color: colors.neutral[500],
+    lineHeight: 18,
   },
   trendDot: {
     width: 10,
@@ -1135,35 +1201,6 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 480,
     alignSelf: 'center',
-  },
-  verdictCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    ...shadows.sm,
-  },
-  verdictDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-  },
-  verdictBody: {
-    flex: 1,
-  },
-  verdictLabel: {
-    ...typography.labelSm,
-    color: colors.neutral[500],
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  verdictValue: {
-    ...typography.headingSm,
-    color: colors.neutral[900],
-    marginTop: 2,
   },
   aiHint: {
     ...typography.bodySm,

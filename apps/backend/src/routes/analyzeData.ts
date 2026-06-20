@@ -211,11 +211,12 @@ analyzeDataRoute.post('/', async (c) => {
     // STEP 2: Parse request data
     // ========================================================================
     const body = await c.req.json();
-    const { symbol, interval, data, forecast } = body as {
+    const { symbol, interval, data, forecast, predictionId } = body as {
       symbol: string;
       interval: string;
       data: MarketDataPoint[];
       forecast?: { direction: string; confidence: number } | null;
+      predictionId?: string;
     };
 
     if (!symbol || !interval || !Array.isArray(data) || data.length === 0) {
@@ -428,6 +429,19 @@ analyzeDataRoute.post('/', async (c) => {
     // ========================================================================
     // STEP 7: SAVE TO DATABASE
     // ========================================================================
+    let linkedPredictionId: string | null = null;
+    if (predictionId) {
+      const { data: linkedPred } = await supabaseAdmin
+        .from('predictions')
+        .select('id')
+        .eq('id', predictionId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (linkedPred?.id) {
+        linkedPredictionId = linkedPred.id;
+      }
+    }
+
     const { data: savedAnalysis, error: saveError } = await supabaseAdmin
       .from('chart_analyses')
       .insert({
@@ -438,6 +452,7 @@ analyzeDataRoute.post('/', async (c) => {
         headline: analysis.headline,
         trend_type: analysis.trend.direction,
         level_count: analysis.supportLevels.length + analysis.resistanceLevels.length,
+        prediction_id: linkedPredictionId,
       })
       .select('id')
       .single();
@@ -447,6 +462,14 @@ analyzeDataRoute.post('/', async (c) => {
       // Don't fail the request - the analysis was successful
     } else {
       console.log('[Analysis] Saved to database with ID:', savedAnalysis?.id);
+
+      if (savedAnalysis?.id && linkedPredictionId) {
+        await supabaseAdmin
+          .from('predictions')
+          .update({ analysis_id: savedAnalysis.id })
+          .eq('id', linkedPredictionId)
+          .eq('user_id', userId);
+      }
 
       if (savedAnalysis?.id) {
         void createAlertsFromAnalysis(

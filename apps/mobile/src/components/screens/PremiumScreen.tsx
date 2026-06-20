@@ -36,7 +36,7 @@ const PREMIUM_FEATURES: PremiumFeature[] = [
   {
     icon: 'infinite',
     title: 'Unlimited Atlas Analyses',
-    description: 'Get unlimited AI-powered level detection',
+    description: 'Unlimited forecast + key level detection in one tap',
   },
   {
     icon: 'layers',
@@ -67,7 +67,7 @@ const PREMIUM_FEATURES: PremiumFeature[] = [
 
 const COMPARISON_DATA: ComparisonItem[] = [
   {
-    feature: 'Weekly Analyses',
+    feature: 'Weekly Atlas runs',
     free: '3 per week',
     premium: 'Unlimited',
   },

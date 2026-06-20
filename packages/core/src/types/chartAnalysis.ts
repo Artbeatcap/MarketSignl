@@ -168,4 +168,6 @@ export interface AnalysisHistoryItem {
   symbol: string | null;
   timeframe: TimeframeType;
   headline: string;
+  /** Linked forecast from the same Atlas run, when available */
+  predictionId?: string;
 }

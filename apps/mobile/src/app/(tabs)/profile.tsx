@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card, Button, EmailVerificationBanner } from '../../components';
 import { useAuthStore } from '../../store/authStore';
 import { getCurrentUser, getUsage } from '../../lib/api';
+import { getWeeklyAtlasUsed } from '../../lib/usage';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import { FREE_ANALYSIS_LIMIT, TRADING_STYLE_OPTIONS } from '@chartsignl/core';
 import { useEffect, useCallback, useState } from 'react';
@@ -32,10 +33,12 @@ export default function ProfileScreen() {
   const usage = usageData;
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Calculate remaining analyses for display
-  const remainingAnalyses = usage?.isPro 
-    ? Infinity 
-    : (usage?.freeAnalysesLimit || FREE_ANALYSIS_LIMIT) - (usage?.freeAnalysesUsed || 0);
+  // Unified Atlas runs (min of analysis + prediction counters)
+  const weeklyAtlasUsed = getWeeklyAtlasUsed(usage);
+  const weeklyAtlasLimit = usage?.freeAnalysesLimit || FREE_ANALYSIS_LIMIT;
+  const remainingAtlasRuns = usage?.isPro
+    ? Infinity
+    : weeklyAtlasLimit - weeklyAtlasUsed;
 
   useEffect(() => {
     // Check subscription status on mount
@@ -418,7 +421,7 @@ export default function ProfileScreen() {
               <Text style={styles.premiumBadgeText}>Premium</Text>
             </View>
             <Text style={styles.premiumDescription}>
-              You have unlimited chart analyses
+              You have unlimited Atlas runs
             </Text>
           </Card>
         )}
@@ -428,20 +431,20 @@ export default function ProfileScreen() {
           <Card style={styles.usageCard}>
             <Text style={styles.usageTitle}>Weekly Usage</Text>
             <Text style={styles.usageCount}>
-              {remainingAnalyses === Infinity ? '∞' : Math.max(0, remainingAnalyses)} analyses remaining
+              {remainingAtlasRuns === Infinity ? '∞' : Math.max(0, remainingAtlasRuns)} Atlas runs remaining
             </Text>
             <View style={styles.usageProgressBar}>
               <View 
                 style={[
                   styles.usageProgressFill, 
                   { 
-                    width: `${Math.min(100, ((usage?.freeAnalysesUsed || 0) / (usage?.freeAnalysesLimit || FREE_ANALYSIS_LIMIT)) * 100)}%` 
+                    width: `${Math.min(100, (weeklyAtlasUsed / weeklyAtlasLimit) * 100)}%` 
                   }
                 ]} 
               />
             </View>
             <Text style={styles.usageProgressText}>
-              {usage?.freeAnalysesUsed || 0} of {usage?.freeAnalysesLimit || FREE_ANALYSIS_LIMIT} used this week
+              {weeklyAtlasUsed} of {weeklyAtlasLimit} Atlas runs used this week
             </Text>
           </Card>
         )}

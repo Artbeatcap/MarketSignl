@@ -314,7 +314,7 @@ export default function AlertsScreen() {
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyTitle}>No active alerts yet</Text>
                   <Text style={styles.emptySubtitle}>
-                    Analyze a stock and Atlas will watch your key levels
+                    Run Atlas on a chart to set level alerts
                   </Text>
                 </View>
               ) : null

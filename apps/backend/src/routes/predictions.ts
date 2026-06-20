@@ -21,6 +21,7 @@ import {
   rowToHistoryItem,
   type PredictionRow,
 } from '../services/predictionResolver.js';
+import { findLinkedAnalysisId } from '../services/atlasLink.js';
 
 const predictionsRoute = new Hono();
 
@@ -28,7 +29,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const FONT_PATH = join(__dirname, '../../assets/Inter-SemiBold.ttf');
 
 const LIST_SELECT =
-  'id, user_id, symbol, interval, headline, expected_change_pct, confidence, direction, prediction_json, created_at, entry_close, horizon_end_at, resolved_price, actual_change_pct, direction_hit, band_contained, magnitude_error_pct, resolved_at';
+  'id, user_id, symbol, interval, headline, expected_change_pct, confidence, direction, prediction_json, created_at, entry_close, horizon_end_at, resolved_price, actual_change_pct, direction_hit, band_contained, magnitude_error_pct, resolved_at, analysis_id';
 
 async function authenticate(c: { req: { header: (name: string) => string | undefined } }) {
   const authHeader = c.req.header('Authorization');
@@ -257,7 +258,20 @@ predictionsRoute.get('/', async (c) => {
     }
 
     const rows = await resolveRows((data ?? []) as PredictionRow[]);
-    const predictions = rows.map(rowToHistoryItem);
+    const predictions = await Promise.all(
+      rows.map(async (row) => {
+        const analysisId =
+          row.analysis_id ??
+          (await findLinkedAnalysisId(auth.userId, {
+            id: row.id,
+            symbol: row.symbol,
+            interval: row.interval,
+            created_at: row.created_at,
+            analysis_id: row.analysis_id,
+          }));
+        return rowToHistoryItem(row, analysisId ?? undefined);
+      })
+    );
     const total = count ?? 0;
 
     return c.json<GetPredictionsResponse>({
@@ -336,6 +350,15 @@ predictionsRoute.get('/:id', async (c) => {
 
     const [row] = await resolveRows([data as PredictionRow]);
     const prediction = row.prediction_json as AIPrediction;
+    const analysisId =
+      row.analysis_id ??
+      (await findLinkedAnalysisId(auth.userId, {
+        id: row.id,
+        symbol: row.symbol,
+        interval: row.interval,
+        created_at: row.created_at,
+        analysis_id: row.analysis_id,
+      }));
 
     return c.json<GetPredictionResponse>({
       success: true,
@@ -355,6 +378,7 @@ predictionsRoute.get('/:id', async (c) => {
         status: row.resolved_at ? 'resolved' : 'pending',
       },
       createdAt: row.created_at,
+      ...(analysisId ? { analysisId } : {}),
     });
   } catch (error) {
     console.error('[Predictions] Get error:', error);

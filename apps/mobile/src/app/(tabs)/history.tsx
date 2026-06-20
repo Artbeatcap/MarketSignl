@@ -37,14 +37,20 @@ export default function HistoryScreen() {
   const handleAnalysisPress = (item: AnalysisHistoryItem) => {
     router.push({
       pathname: '/(tabs)/analyze',
-      params: { analysisId: item.id },
+      params: {
+        analysisId: item.id,
+        ...(item.predictionId ? { predictionId: item.predictionId } : {}),
+      },
     });
   };
 
   const handlePredictionPress = (item: PredictionHistoryItem) => {
     router.push({
       pathname: '/(tabs)/analyze',
-      params: { predictionId: item.id },
+      params: {
+        predictionId: item.id,
+        ...(item.analysisId ? { analysisId: item.analysisId } : {}),
+      },
     });
   };
 
@@ -169,8 +175,8 @@ export default function HistoryScreen() {
       <Ionicons name="sparkles-outline" size={80} color={colors.neutral[300]} />
       <Text style={styles.emptyTitle}>No predictions yet</Text>
       <Text style={styles.emptySubtitle}>
-        Tap “AI Prediction” on a chart to generate your first forecast. It will appear here with its
-        outcome once the horizon elapses.
+        Tap Analyze on a chart to run Atlas and generate your first forecast. It will appear here
+        with its outcome once the horizon elapses.
       </Text>
     </View>
   );
@@ -184,7 +190,7 @@ export default function HistoryScreen() {
             <Text style={styles.headerSubtitle}>
               {activeTab === 'analyses'
                 ? `${analyses.length} ${analyses.length === 1 ? 'analysis' : 'analyses'}`
-                : `${predictions.length} ${predictions.length === 1 ? 'prediction' : 'predictions'}`}
+                : `${predictions.length} ${predictions.length === 1 ? 'forecast' : 'forecasts'}`}
             </Text>
           </View>
 
@@ -205,7 +211,7 @@ export default function HistoryScreen() {
               activeOpacity={0.7}
             >
               <Text style={[styles.tabText, activeTab === 'predictions' && styles.tabTextActive]}>
-                Predictions
+                Forecasts
               </Text>
             </TouchableOpacity>
           </View>

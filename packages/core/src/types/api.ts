@@ -41,6 +41,7 @@ export interface GetAnalysisResponse {
   success: boolean;
   analysis?: ChartAnalysis;
   createdAt?: string;
+  predictionId?: string;
   error?: string;
 }
 

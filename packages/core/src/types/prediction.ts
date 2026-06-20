@@ -66,6 +66,8 @@ export interface PredictionHistoryItem {
   confidence: number;
   direction: PredictionDirection;
   createdAt: string;
+  /** Linked levels analysis from the same Atlas run, when available */
+  analysisId?: string;
   /** Resolution fields (populated after horizon elapses) */
   horizonEndAt?: string;
   resolvedAt?: string;
@@ -114,6 +116,7 @@ export interface GetPredictionResponse {
   success: boolean;
   prediction?: AIPrediction;
   createdAt?: string;
+  analysisId?: string;
   error?: string;
 }
 

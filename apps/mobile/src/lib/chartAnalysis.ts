@@ -7,7 +7,7 @@ export async function analyzeChartData(
   symbol: string,
   interval: string,
   data: MarketDataPoint[],
-  forecast?: { direction: string; confidence: number } | null
+  options?: { direction: string; confidence: number; predictionId?: string } | null
 ): Promise<EnhancedAIAnalysis> {
   const token = await getAccessToken();
 
@@ -25,7 +25,12 @@ export async function analyzeChartData(
       symbol,
       interval,
       data: data.slice(-100), // Send last 100 data points
-      ...(forecast ? { forecast } : {}),
+      ...(options
+        ? {
+            forecast: { direction: options.direction, confidence: options.confidence },
+            ...(options.predictionId ? { predictionId: options.predictionId } : {}),
+          }
+        : {}),
     }),
   });
 

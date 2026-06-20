@@ -28,42 +28,48 @@ const FAQ_ITEMS: FAQItem[] = [
   },
   {
     id: '2',
+    question: 'What does an Atlas run include?',
+    answer:
+      'Each Atlas run gives you a forecast path on the chart plus support and resistance levels in one tap — no separate tools to run.',
+  },
+  {
+    id: '3',
     question: 'How does Atlas analyze charts?',
     answer:
       'Atlas uses advanced technical analysis to identify confluence zones where multiple factors align - including EMAs, Fibonacci levels, volume profiles, and historical price action. This multi-factor approach helps Atlas find the most reliable trading levels.',
   },
   {
-    id: '3',
+    id: '4',
     question: 'What symbols can I search for?',
     answer:
       'You can search for US stocks, ETFs, and major indices. Simply enter a ticker symbol (like AAPL, SPY, or QQQ) in the search bar to view charts and get Atlas analysis.',
   },
   {
-    id: '4',
-    question: 'How many free analyses do I get?',
+    id: '5',
+    question: 'How many free Atlas runs do I get?',
     answer:
-      'Free accounts include 3 Atlas analyses per week. After that, you can upgrade to Pro for unlimited analyses. Pro subscribers also get access to additional features like price alerts and advanced technical indicators.',
+      'Free accounts include 3 Atlas runs per week. Each run includes the forecast path on the chart and key support/resistance levels. Upgrade to Pro for unlimited Atlas runs, plus price alerts and advanced indicators.',
   },
   {
-    id: '5',
+    id: '6',
     question: 'What timeframes are available?',
     answer:
       'ChartSignl supports multiple timeframes including 1-hour, 4-hour, daily, and weekly charts. Different timeframes are useful for different trading styles - day traders often use shorter timeframes, while swing traders prefer daily or weekly charts.',
   },
   {
-    id: '6',
+    id: '7',
     question: 'How accurate is Atlas analysis?',
     answer:
       'Atlas identifies technical levels based on historical price action and multiple indicators. While no analysis is perfect, we use confluence scoring to highlight the strongest levels. Always combine Atlas analysis with your own research and risk management.',
   },
   {
-    id: '7',
+    id: '8',
     question: 'Can I delete my analysis history?',
     answer:
       'Yes! Go to the History tab, swipe left on any analysis to delete it. You can also view past analyses by tapping on them.',
   },
   {
-    id: '8',
+    id: '9',
     question: 'How do I change my trading style profile?',
     answer:
       'Tap on your Profile tab, then select "Edit Profile" to update your trading style, experience level, and display name. This helps us tailor the analysis to your trading approach.',

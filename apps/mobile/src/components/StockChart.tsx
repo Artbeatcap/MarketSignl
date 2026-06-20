@@ -404,7 +404,7 @@ export function StockChart({
             <LegendItem color={CHART_COLORS.resistance} label="Resistance" />
           )}
           {showPrediction && projectedPath.length > 0 && (
-            <LegendItem color={CHART_COLORS.prediction} label="AI Prediction" />
+            <LegendItem color={CHART_COLORS.prediction} label="Atlas forecast" />
           )}
         </View>
       </View>
@@ -440,7 +440,7 @@ export function StockChart({
           <LegendItem color={CHART_COLORS.resistance} label="Resistance" />
         )}
         {showPrediction && projectedPath.length > 0 && (
-          <LegendItem color={CHART_COLORS.prediction} label="AI Prediction" />
+          <LegendItem color={CHART_COLORS.prediction} label="Atlas forecast" />
         )}
       </View>
     </View>

@@ -27,6 +27,7 @@ export interface PredictionRow {
   band_contained: boolean | null;
   magnitude_error_pct: number | null;
   resolved_at: string | null;
+  analysis_id?: string | null;
 }
 
 export interface ResolutionResult {
@@ -250,7 +251,7 @@ export function buildPredictionStats(rows: PredictionRow[]): PredictionStats {
   };
 }
 
-export function rowToHistoryItem(row: PredictionRow) {
+export function rowToHistoryItem(row: PredictionRow, analysisId?: string) {
   return {
     id: row.id,
     symbol: row.symbol,
@@ -269,6 +270,7 @@ export function rowToHistoryItem(row: PredictionRow) {
     magnitudeErrorPct:
       row.magnitude_error_pct != null ? Number(row.magnitude_error_pct) : undefined,
     status: row.resolved_at ? ('resolved' as const) : ('pending' as const),
+    ...(analysisId ? { analysisId } : {}),
   };
 }
 
