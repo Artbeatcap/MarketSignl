@@ -8,19 +8,31 @@
     ".": "./src/index.js",
     "./lib/trackRecord": {
       "types": "./src/lib/trackRecord.ts",
-      "default": "./dist/lib/trackRecord.js"
+      "react-native": "./src/lib/trackRecord.ts",
+      "browser": "./src/lib/trackRecord.ts",
+      "node": "./dist/lib/trackRecord.js",
+      "default": "./src/lib/trackRecord.ts"
     },
     "./lib/predictionCard": {
       "types": "./src/lib/predictionCard.ts",
-      "default": "./dist/lib/predictionCard.js"
+      "react-native": "./src/lib/predictionCard.ts",
+      "browser": "./src/lib/predictionCard.ts",
+      "node": "./dist/lib/predictionCard.js",
+      "default": "./src/lib/predictionCard.ts"
     },
     "./lib/dailyHighlight": {
       "types": "./src/lib/dailyHighlight.ts",
-      "default": "./dist/lib/dailyHighlight.js"
+      "react-native": "./src/lib/dailyHighlight.ts",
+      "browser": "./src/lib/dailyHighlight.ts",
+      "node": "./dist/lib/dailyHighlight.js",
+      "default": "./src/lib/dailyHighlight.ts"
     },
     "./lib/predictionChart": {
       "types": "./src/lib/predictionChart.ts",
-      "default": "./dist/lib/predictionChart.js"
+      "react-native": "./src/lib/predictionChart.ts",
+      "browser": "./src/lib/predictionChart.ts",
+      "node": "./dist/lib/predictionChart.js",
+      "default": "./src/lib/predictionChart.ts"
     },
     "./types/*": "./src/types/*.ts"
   },
