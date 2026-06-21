@@ -10,6 +10,7 @@
  * This path is OUTSIDE android/ and is never deleted by prebuild.
  * Passwords are resolved at Gradle build time from environment variables or
  * apps/mobile/secrets/.env.signing. They are never written to gradle.properties.
+ * On EAS Build (EAS_BUILD=true), release signing is injected by eas-build.gradle.
  */
 const { withAppBuildGradle, withDangerousMod } = require("expo/config-plugins");
 const fs = require("fs");
@@ -88,14 +89,17 @@ function withSigningConfig(config) {
             def releaseKeyAlias = resolveReleaseSigning('CHARTSIGNL_RELEASE_KEY_ALIAS', 'chartsignl')
             def releaseStorePassword = resolveReleaseSigning('CHARTSIGNL_RELEASE_STORE_PASSWORD')
             def releaseKeyPassword = resolveReleaseSigning('CHARTSIGNL_RELEASE_KEY_PASSWORD')
+            def isEasBuild = System.getenv('EAS_BUILD') == 'true'
 
-            if (!releaseStorePassword || !releaseKeyPassword) {
+            if (releaseStorePassword && releaseKeyPassword) {
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            } else if (!isEasBuild) {
                 throw new GradleException("Release signing credentials not configured. Set CHARTSIGNL_RELEASE_* environment variables or create apps/mobile/secrets/.env.signing")
             }
-            storeFile file(releaseStoreFile)
-            storePassword releaseStorePassword
-            keyAlias releaseKeyAlias
-            keyPassword releaseKeyPassword
+            // On EAS, eas-build.gradle injects release signing from remote credentials.
         }
     }`;
 

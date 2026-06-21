@@ -27,6 +27,22 @@ CI/EAS release signing should set equivalent environment variables:
 - `CHARTSIGNL_RELEASE_STORE_PASSWORD`
 - `CHARTSIGNL_RELEASE_KEY_PASSWORD`
 
+### EAS Build (recommended)
+
+EAS cloud builds set `EAS_BUILD=true` and inject release signing via
+`eas-build.gradle` + remote credentials (`eas credentials`). You do **not**
+need `CHARTSIGNL_RELEASE_*` on EAS unless using local credentials.
+
+Configure once:
+
+```sh
+cd apps/mobile
+eas credentials
+```
+
+Choose Android → production → set up or upload your upload keystore.
+Then run `eas build --platform android --profile production`.
+
 ## Local Setup
 
 Run from `apps/mobile`:
