@@ -41,6 +41,7 @@ coverage/
 
 # Misc
 *.pem
+apps/backend/tmp/
 *.p8
 *.jks
 *.p12

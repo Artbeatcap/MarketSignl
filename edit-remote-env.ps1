@@ -36,8 +36,8 @@ Write-Host ""
 Write-Host "Step 3: Uploading .env file to server..." -ForegroundColor Yellow
 scp $LOCAL_ENV_FILE "${SERVER}:${REMOTE_ENV_PATH}"
 
-Write-Host "Restarting Docker container to apply changes..." -ForegroundColor Yellow
-ssh $SERVER 'cd /root/ChartSignl/apps/backend/deploy && docker-compose restart'
+Write-Host "Recreating Docker container to apply env changes..." -ForegroundColor Yellow
+ssh $SERVER 'cd /root/ChartSignl/apps/backend/deploy && docker compose up -d --force-recreate chartsignl-api'
 
 Write-Host "Waiting for container to start..." -ForegroundColor Yellow
 Start-Sleep -Seconds 5

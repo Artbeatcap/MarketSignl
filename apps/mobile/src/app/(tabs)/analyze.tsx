@@ -520,6 +520,9 @@ export default function AnalyzeScreen() {
             <View style={styles.errorContainer}>
               <Text style={styles.errorEmoji}>📊</Text>
               <Text style={styles.chartErrorText}>Failed to load chart data</Text>
+              {dataError instanceof Error && dataError.message ? (
+                <Text style={styles.chartErrorDetail}>{dataError.message}</Text>
+              ) : null}
               <Button title="Retry" onPress={() => refetch()} variant="outline" size="sm" />
             </View>
           ) : (
@@ -1129,6 +1132,13 @@ const styles = StyleSheet.create({
     ...typography.bodyMd,
     color: colors.neutral[500],
     marginBottom: spacing.md,
+  },
+  chartErrorDetail: {
+    ...typography.bodySm,
+    color: colors.neutral[400],
+    textAlign: 'center',
+    marginBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
   },
   // Trend
   trendCard: {

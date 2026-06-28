@@ -33,6 +33,8 @@ console.log(`  SUPABASE_URL: ${process.env.SUPABASE_URL ? '✓ Set' : '✗ Missi
 console.log(`  OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? '✓ Set' : '✗ Missing'}`);
 console.log(`  SMTP (deletion emails): ${process.env.SMTP_HOST && process.env.SMTP_USER ? '✓ Set' : '✗ Optional'}`);
 console.log(`  CRON_SECRET (push price checks): ${process.env.CRON_SECRET ? '✓ Set' : '✗ Missing (n8n /check-prices will fail)'}`);
+console.log(`  SENDGRID_API_KEY (weekly brief): ${process.env.SENDGRID_API_KEY ? '✓ Set' : '✗ Missing (weekly brief send will fail on boot)'}`);
+console.log(`  WEEKLY_CONTENT_INGEST_SECRET: ${process.env.WEEKLY_CONTENT_INGEST_SECRET ? '✓ Set' : '✗ Missing (ingest will fail)'}`);
 console.log(`  ENABLE_RESOLVER_CRON: ${process.env.ENABLE_RESOLVER_CRON === 'true' ? '✓ On' : 'off'}`);
 
 // Routes
@@ -48,6 +50,7 @@ import socialRoute from './routes/social.js';
 import predictRoute from './routes/predict.js';
 import predictionsRoute from './routes/predictions.js';
 import notificationRoutes from './routes/notifications.js';
+import { internalWeeklyBriefRoute, publicWeeklyBriefRoute } from './routes/weeklyBrief.js';
 import { startResolverSchedule } from './lib/resolverSchedule.js';
 
 const app = new Hono();
@@ -118,6 +121,8 @@ app.route('/api/social', socialRoute);
 app.route('/api/predict', predictRoute);
 app.route('/api/predictions', predictionsRoute);
 app.route('/api/notifications', notificationRoutes);
+app.route('/api/internal/weekly-brief', internalWeeklyBriefRoute);
+app.route('/api/weekly-brief', publicWeeklyBriefRoute);
 
 // 404 handler
 app.notFound((c) => {

@@ -75,6 +75,48 @@ Required env vars (in repo root `.env` or in `environment` in compose):
 
 Optional (social content pipeline: `POST /api/social/generate`): `ANTHROPIC_API_KEY`, `SOCIAL_API_SECRET`. The endpoint requires the `x-social-key` header to match `SOCIAL_API_SECRET`; both are already in the compose `environment` block.
 
+Optional (weekly brief email): `SENDGRID_API_KEY`, `WEEKLY_CONTENT_INGEST_SECRET`, `WEEKLY_BRIEF_FROM`, `ALERT_WEBHOOK_URL`, `API_URL`. Before production sends, authenticate `chartsignl.com` in SendGrid (SPF/DKIM) and verify the sender `weekly@chartsignl.com`.
+
+Apply the weekly brief migration before first use:
+
+```bash
+# Run supabase/migrations/20250627120000_weekly_brief.sql in Supabase SQL editor or via CLI
+```
+
+### Weekly Brief cron (Sunday evening ET)
+
+After Options Plunge publishes the artifact (via `POST /api/internal/weekly-brief/ingest`), send on Sunday evening:
+
+```bash
+curl -X POST "https://api.chartsignl.com/api/internal/weekly-brief/send" \
+  -H "x-cron-secret: $CRON_SECRET"
+```
+
+Preview HTML without sending:
+
+```bash
+curl -X POST "https://api.chartsignl.com/api/internal/weekly-brief/send?dryRun=1" \
+  -H "x-cron-secret: $CRON_SECRET"
+```
+
+Test send to one address:
+
+```bash
+curl -X POST "https://api.chartsignl.com/api/internal/weekly-brief/send?testEmail=you@example.com" \
+  -H "x-cron-secret: $CRON_SECRET"
+```
+
+Ingest from Options Plunge (shared secret):
+
+```bash
+curl -X POST "https://api.chartsignl.com/api/internal/weekly-brief/ingest" \
+  -H "Content-Type: application/json" \
+  -H "x-ingest-secret: $WEEKLY_CONTENT_INGEST_SECRET" \
+  -d @apps/backend/fixtures/weekly_content_sample.json
+```
+
+The freshness guard skips send if no artifact exists, `data_stale=true`, or `generated_at` is older than 8 days.
+
 To rebuild/restart on the server:
 
 ```bash

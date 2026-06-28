@@ -5,6 +5,7 @@ export * from './types/api';
 export * from './types/marketData';
 export * from './types/enhancedAnalysis';
 export * from './types/prediction';
+export * from './types/weeklyBrief';
 
 // Prediction chart helpers (used by mobile/web prediction overlays)
 export * from './lib/predictionChart';

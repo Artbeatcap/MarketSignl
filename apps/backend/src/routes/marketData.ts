@@ -59,6 +59,45 @@ const intervalConfig: Record<
   '5y': { timespan: 'week', multiplier: 1, daysBack: 1825, emaWarmupBars: 30 },
 };
 
+// GET /api/market-data/status - Verify Massive API connectivity (ops / debugging)
+marketDataRoute.get('/status', async (c) => {
+  const massiveApiKey = getMassiveApiKey();
+  if (!massiveApiKey) {
+    return c.json({ ok: false, error: 'MASSIVE_API_KEY is not configured' }, 503);
+  }
+
+  try {
+    const url = `${MASSIVE_BASE_URL}/v2/aggs/ticker/AAPL/prev?adjusted=true&apiKey=${massiveApiKey}`;
+    const response = await fetch(url);
+    const json = (await response.json().catch(() => ({}))) as { status?: string; error?: string };
+
+    if (!response.ok) {
+      return c.json(
+        {
+          ok: false,
+          httpStatus: response.status,
+          error: json.error ?? `Massive API returned HTTP ${response.status}`,
+        },
+        response.status === 401 ? 502 : 503
+      );
+    }
+
+    if (json.status === 'ERROR') {
+      return c.json({ ok: false, error: json.error ?? 'Massive API error' }, 503);
+    }
+
+    return c.json({ ok: true, provider: 'massive', sample: 'AAPL' });
+  } catch (error) {
+    return c.json(
+      {
+        ok: false,
+        error: error instanceof Error ? error.message : 'Failed to reach Massive API',
+      },
+      503
+    );
+  }
+});
+
 // GET /api/market-data/:symbol
 marketDataRoute.get('/:symbol', async (c) => {
   const symbol = c.req.param('symbol');
@@ -110,14 +149,27 @@ marketDataRoute.get('/:symbol', async (c) => {
         errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
       }
       console.error('Massive API error:', response.status, errorData);
-      
+
+      if (response.status === 401) {
+        return c.json(
+          { error: 'Market data provider rejected the API key. Update MASSIVE_API_KEY on the server.' },
+          502
+        );
+      }
       if (response.status === 403) {
         return c.json({ error: 'API rate limit exceeded. Please try again later.' }, 429);
       }
       if (response.status === 404) {
         return c.json({ error: 'Symbol not found' }, 404);
       }
-      return c.json({ error: 'Failed to fetch market data' }, 500);
+      const providerMessage =
+        typeof errorData?.error === 'string' && errorData.error.trim()
+          ? errorData.error.trim()
+          : null;
+      return c.json(
+        { error: providerMessage ?? 'Failed to fetch market data' },
+        500
+      );
     }
 
     let json: any;

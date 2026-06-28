@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "week_label": "Week of June 22\u201326, 2026",
+  "generated_at": "2026-06-28T17:00:00-04:00",
+  "data_stale": false,
+  "tape": [
+    {"symbol": "SPY", "price": "$728.99", "pct": -2.00},
+    {"symbol": "QQQ", "price": "$706.52", "pct": -4.60},
+    {"symbol": "IWM", "price": "$298.10", "pct": -0.80},
+    {"symbol": "VIX", "price": "18.41", "pct": null}
+  ],
+  "sectors": [
+    {"name": "Health Care", "etf": "XLV", "pct": 3.03},
+    {"name": "Real Estate", "etf": "XLRE", "pct": 1.46},
+    {"name": "Consumer Staples", "etf": "XLP", "pct": 0.92},
+    {"name": "Utilities", "etf": "XLU", "pct": 0.41},
+    {"name": "Financials", "etf": "XLF", "pct": -0.55},
+    {"name": "Industrials", "etf": "XLI", "pct": -1.59},
+    {"name": "Technology", "etf": "XLK", "pct": -1.87},
+    {"name": "Comm. Services", "etf": "XLC", "pct": -2.34}
+  ],
+  "movers": [
+    {"ticker": "NVDA", "pct": "-5.20%", "dir": "down", "why": "Chip leader led the AI unwind; gave back the week's earnings optimism."},
+    {"ticker": "AVGO", "pct": "-4.10%", "dir": "down", "why": "Sold off with the semis complex on the OpenAI IPO-delay headline."},
+    {"ticker": "LLY", "pct": "+3.80%", "dir": "up", "why": "Health Care bid as defensive rotation accelerated into quarter-end."}
+  ],
+  "levels": {
+    "spy": {"pivot": "731.40", "support": "724.10", "support2": "719.30", "resistance": "736.80", "resistance2": "742.10"},
+    "qqq": {"pivot": "709.20", "support": "700.40", "support2": "694.10", "resistance": "714.60", "resistance2": "721.00"}
+  },
+  "week_ahead_bullets": [
+    {"date": "Tue", "event": "Core PCE (May)", "why": "Fed's preferred inflation gauge"},
+    {"date": "Wed", "event": "ISM Manufacturing", "why": "Growth/sentiment signal"},
+    {"date": "Thu", "event": "Initial Jobless Claims", "why": "Labor-market read"},
+    {"date": "Fri", "event": "Nonfarm Payrolls", "why": "The week's main event for yields"}
+  ],
+  "sections": {
+    "major_driver": "A New York Times report that OpenAI may push its IPO to 2027 hit a market that had leaned its entire 2026 gain on the AI narrative. Chips and mega-cap tech sold off for a fifth straight session, and the damage was immediate and broad.",
+    "week_in_review_html": "<p>The tape spent the week repricing the AI trade rather than abandoning the market. <strong>QQQ</strong> fell 4.6% to $706.52, its fifth consecutive losing session, while <strong>SPY</strong> gave back roughly 2% to $728.99 \u2014 heavy, but orderly.</p><p>The tell was underneath the index. Breadth stayed positive into the selling, and money rotated out of semis into defensives \u2014 Health Care, Real Estate, and Staples all closed green on the week's worst tape.</p><p>That divergence \u2014 index red, breadth green \u2014 is the story going into next week.</p>",
+    "key_level_note": "QQQ $700 is the line. A weekly close below it confirms the breakdown and likely accelerates selling in semis; hold it, and the door stays open for a snap-back.",
+    "week_ahead_html": "<p>The setup is binary around $700 on QQQ. If yields press higher into next week's data, the rotation into defensives likely extends. If $700 holds and the OpenAI headline proves a one-day shock, beaten-up chips are where the bounce starts.</p>",
+    "biggest_risk": "If the company at the center of the AI story is stepping back from public markets, traders start asking whether the spending behind the demand has peaked. With the Fed still pricing multiple hikes and core PCE at 3.4%, there is no policy backstop ready to catch a falling tech trade."
+  }
+}
