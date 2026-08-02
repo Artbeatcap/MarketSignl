@@ -1,7 +1,14 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Platform, Dimensions } from 'react-native';
 import Svg, { Rect, Line as SvgLine, G, Path } from 'react-native-svg';
-import type { MarketDataPoint, AILevel, ChartViewType, ChartInterval, ProjectedPoint } from '@chartsignl/core';
+import type {
+  MarketDataPoint,
+  AILevel,
+  ChartViewType,
+  ChartInterval,
+  ProjectedPoint,
+  VolumeProfile as VolumeProfileData,
+} from '@chartsignl/core';
 import { CHART_COLORS } from '@chartsignl/core';
 import {
   getPredictionLayout,
@@ -11,6 +18,7 @@ import {
 } from '@chartsignl/core/lib/predictionChart';
 import { formatPrice, formatVolume } from '../lib/marketData';
 import { colors, typography, spacing, borderRadius } from '../theme';
+import { VolumeBars, VolumeProfile } from './chart';
 
 interface StockChartProps {
   data: MarketDataPoint[];
@@ -18,7 +26,10 @@ interface StockChartProps {
   interval: ChartInterval;
   viewType: ChartViewType;
   showEMA?: boolean;
+  /** Time volume underlay. Default false — opt-in via layer store. */
   showVolume?: boolean;
+  showVolumeProfile?: boolean;
+  volumeProfile?: Pick<VolumeProfileData, 'highVolumeNodes' | 'pointOfControl'> | null;
   supportLevels?: AILevel[];
   resistanceLevels?: AILevel[];
   height?: number;
@@ -248,7 +259,9 @@ export function StockChart({
   interval,
   viewType,
   showEMA = true,
-  showVolume = true,
+  showVolume = false,
+  showVolumeProfile = false,
+  volumeProfile = null,
   supportLevels = [],
   resistanceLevels = [],
   height = 300,
@@ -384,6 +397,9 @@ export function StockChart({
           maxPrice={maxPrice}
           height={height - 85}
           showEMA={showEMA}
+          showVolume={showVolume}
+          showVolumeProfile={showVolumeProfile}
+          volumeProfile={volumeProfile}
           supportLevels={supportLevels}
           resistanceLevels={resistanceLevels}
           projectedPath={projectedPath}
@@ -421,6 +437,9 @@ export function StockChart({
         maxPrice={maxPrice}
         height={height - 85}
         showEMA={showEMA}
+        showVolume={showVolume}
+        showVolumeProfile={showVolumeProfile}
+        volumeProfile={volumeProfile}
         supportLevels={supportLevels}
         resistanceLevels={resistanceLevels}
         projectedPath={projectedPath}
@@ -455,6 +474,9 @@ interface SimpleCandlestickChartProps {
   maxPrice: number;
   height: number;
   showEMA?: boolean;
+  showVolume?: boolean;
+  showVolumeProfile?: boolean;
+  volumeProfile?: Pick<VolumeProfileData, 'highVolumeNodes' | 'pointOfControl'> | null;
   supportLevels?: AILevel[];
   resistanceLevels?: AILevel[];
   projectedPath?: ProjectedPoint[];
@@ -469,6 +491,9 @@ function SimpleCandlestickChart({
   maxPrice,
   height,
   showEMA = true,
+  showVolume = false,
+  showVolumeProfile = false,
+  volumeProfile = null,
   supportLevels = [],
   resistanceLevels = [],
   projectedPath = [],
@@ -529,7 +554,31 @@ function SimpleCandlestickChart({
       </View>
 
       <Svg width={width} height={svgHeight}>
-        {/* Grid lines */}
+        {/* 1 — volume underlay (furthest back) */}
+        {showVolume ? (
+          <VolumeBars
+            data={data}
+            chartHeight={chartHeight + 10}
+            xForIndex={xForIndex}
+          />
+        ) : null}
+
+        {/* 2 — volume profile (right edge) */}
+        {showVolumeProfile && volumeProfile?.highVolumeNodes?.length ? (
+          <VolumeProfile
+            nodes={volumeProfile.highVolumeNodes}
+            pointOfControl={volumeProfile.pointOfControl}
+            priceToY={priceToY}
+            rightEdge={rightEdge}
+            leftEdge={CHART_LEFT_MARGIN}
+            highlightedPrices={[
+              ...supportLevels.map((l) => ({ price: l.price, role: 'support' as const })),
+              ...resistanceLevels.map((l) => ({ price: l.price, role: 'resistance' as const })),
+            ]}
+          />
+        ) : null}
+
+        {/* 3 — grid */}
         <SvgLine
           x1={CHART_LEFT_MARGIN}
           y1={priceToY(maxPrice)}
@@ -574,7 +623,105 @@ function SimpleCandlestickChart({
           );
         })}
 
-        {/* Support levels */}
+        {/* 4 — candlesticks */}
+        {data.map((candle, index) => {
+          const x = CHART_LEFT_MARGIN + index * (candleWidth + candleSpacing) + candleWidth / 2;
+          const isUp = candle.close >= candle.open;
+          const color = isUp ? CHART_COLORS.candleUp : CHART_COLORS.candleDown;
+
+          const highY = priceToY(candle.high);
+          const lowY = priceToY(candle.low);
+          const openY = priceToY(candle.open);
+          const closeY = priceToY(candle.close);
+
+          const bodyTop = Math.min(openY, closeY);
+          const bodyBottom = Math.max(openY, closeY);
+          const bodyHeight = Math.max(1, bodyBottom - bodyTop);
+
+          return (
+            <G key={index}>
+              <SvgLine
+                x1={x}
+                y1={highY}
+                x2={x}
+                y2={lowY}
+                stroke={color}
+                strokeWidth="1.5"
+              />
+              <Rect
+                x={x - candleWidth / 2}
+                y={bodyTop}
+                width={candleWidth}
+                height={bodyHeight}
+                fill={color}
+                fillOpacity={isUp ? 0.8 : 1}
+                stroke={color}
+                strokeWidth="1"
+              />
+            </G>
+          );
+        })}
+
+        {/* 5 — EMA lines */}
+        {showEMA && (
+          <>
+            {(() => {
+              const pathParts: string[] = [];
+              let isFirstPoint = true;
+
+              data.forEach((point, index) => {
+                if (point.ema9 !== undefined && point.ema9 !== null) {
+                  const x = CHART_LEFT_MARGIN + index * (candleWidth + candleSpacing) + candleWidth / 2;
+                  const y = priceToY(point.ema9);
+                  pathParts.push(`${isFirstPoint ? 'M' : 'L'} ${x} ${y}`);
+                  isFirstPoint = false;
+                }
+              });
+
+              if (pathParts.length > 0) {
+                return (
+                  <Path
+                    d={pathParts.join(' ')}
+                    stroke={CHART_COLORS.ema9}
+                    strokeWidth="1.5"
+                    fill="none"
+                    opacity="0.5"
+                  />
+                );
+              }
+              return null;
+            })()}
+
+            {(() => {
+              const pathParts: string[] = [];
+              let isFirstPoint = true;
+
+              data.forEach((point, index) => {
+                if (point.ema21 !== undefined && point.ema21 !== null) {
+                  const x = CHART_LEFT_MARGIN + index * (candleWidth + candleSpacing) + candleWidth / 2;
+                  const y = priceToY(point.ema21);
+                  pathParts.push(`${isFirstPoint ? 'M' : 'L'} ${x} ${y}`);
+                  isFirstPoint = false;
+                }
+              });
+
+              if (pathParts.length > 0) {
+                return (
+                  <Path
+                    d={pathParts.join(' ')}
+                    stroke={CHART_COLORS.ema21}
+                    strokeWidth="1.5"
+                    fill="none"
+                    opacity="0.5"
+                  />
+                );
+              }
+              return null;
+            })()}
+          </>
+        )}
+
+        {/* 6 — level lines (always on top of price layers) */}
         {supportLevels.map((level) => {
           const y = priceToY(level.price);
           return (
@@ -591,8 +738,6 @@ function SimpleCandlestickChart({
             />
           );
         })}
-
-        {/* Resistance levels */}
         {resistanceLevels.map((level) => {
           const y = priceToY(level.price);
           return (
@@ -610,109 +755,7 @@ function SimpleCandlestickChart({
           );
         })}
 
-        {/* EMA lines */}
-        {showEMA && (
-          <>
-            {/* EMA 9 */}
-            {(() => {
-              const pathParts: string[] = [];
-              let isFirstPoint = true;
-              
-              data.forEach((point, index) => {
-                if (point.ema9 !== undefined && point.ema9 !== null) {
-                  const x = CHART_LEFT_MARGIN + index * (candleWidth + candleSpacing) + candleWidth / 2;
-                  const y = priceToY(point.ema9);
-                  pathParts.push(`${isFirstPoint ? 'M' : 'L'} ${x} ${y}`);
-                  isFirstPoint = false;
-                }
-              });
-              
-              if (pathParts.length > 0) {
-                return (
-                  <Path
-                    d={pathParts.join(' ')}
-                    stroke={CHART_COLORS.ema9}
-                    strokeWidth="1.5"
-                    fill="none"
-                    opacity="0.5"
-                  />
-                );
-              }
-              return null;
-            })()}
-
-            {/* EMA 21 */}
-            {(() => {
-              const pathParts: string[] = [];
-              let isFirstPoint = true;
-              
-              data.forEach((point, index) => {
-                if (point.ema21 !== undefined && point.ema21 !== null) {
-                  const x = CHART_LEFT_MARGIN + index * (candleWidth + candleSpacing) + candleWidth / 2;
-                  const y = priceToY(point.ema21);
-                  pathParts.push(`${isFirstPoint ? 'M' : 'L'} ${x} ${y}`);
-                  isFirstPoint = false;
-                }
-              });
-              
-              if (pathParts.length > 0) {
-                return (
-                  <Path
-                    d={pathParts.join(' ')}
-                    stroke={CHART_COLORS.ema21}
-                    strokeWidth="1.5"
-                    fill="none"
-                    opacity="0.5"
-                  />
-                );
-              }
-              return null;
-            })()}
-          </>
-        )}
-
-        {/* Candlesticks */}
-        {data.map((candle, index) => {
-          const x = CHART_LEFT_MARGIN + index * (candleWidth + candleSpacing) + candleWidth / 2;
-          const isUp = candle.close >= candle.open;
-          const color = isUp ? CHART_COLORS.candleUp : CHART_COLORS.candleDown;
-
-          const highY = priceToY(candle.high);
-          const lowY = priceToY(candle.low);
-          const openY = priceToY(candle.open);
-          const closeY = priceToY(candle.close);
-
-          const bodyTop = Math.min(openY, closeY);
-          const bodyBottom = Math.max(openY, closeY);
-          const bodyHeight = Math.max(1, bodyBottom - bodyTop);
-
-          return (
-            <G key={index}>
-              {/* Wick (high to low) */}
-              <SvgLine
-                x1={x}
-                y1={highY}
-                x2={x}
-                y2={lowY}
-                stroke={color}
-                strokeWidth="1.5"
-              />
-              {/* Body (open to close) */}
-              <Rect
-                x={x - candleWidth / 2}
-                y={bodyTop}
-                width={candleWidth}
-                height={bodyHeight}
-                fill={isUp ? color : color}
-                fillOpacity={isUp ? 0.8 : 1}
-                stroke={color}
-                strokeWidth="1"
-              />
-            </G>
-          );
-        })}
-
-        {/* AI Prediction overlay (candle view) */}
+        {/* 7 — prediction overlay */}
         {hasPrediction && (() => {
           const layout = predictionLayout;
           const lastIndex = data.length - 1;
@@ -772,6 +815,9 @@ interface SimpleLineChartProps {
   maxPrice: number;
   height: number;
   showEMA?: boolean;
+  showVolume?: boolean;
+  showVolumeProfile?: boolean;
+  volumeProfile?: Pick<VolumeProfileData, 'highVolumeNodes' | 'pointOfControl'> | null;
   supportLevels?: AILevel[];
   resistanceLevels?: AILevel[];
   projectedPath?: ProjectedPoint[];
@@ -790,6 +836,9 @@ function SimpleLineChart({
   maxPrice,
   height,
   showEMA = true,
+  showVolume = false,
+  showVolumeProfile = false,
+  volumeProfile = null,
   supportLevels = [],
   resistanceLevels = [],
   projectedPath = [],
@@ -848,7 +897,28 @@ function SimpleLineChart({
         </View>
 
         <Svg width={width} height={chartSvgHeight}>
-          {/* Grid lines */}
+          {showVolume ? (
+            <VolumeBars
+              data={data}
+              chartHeight={chartSvgHeight}
+              xForIndex={xForIndex}
+            />
+          ) : null}
+
+          {showVolumeProfile && volumeProfile?.highVolumeNodes?.length ? (
+            <VolumeProfile
+              nodes={volumeProfile.highVolumeNodes}
+              pointOfControl={volumeProfile.pointOfControl}
+              priceToY={priceToY}
+              rightEdge={rightEdge}
+              leftEdge={CHART_LEFT_MARGIN}
+              highlightedPrices={[
+                ...supportLevels.map((l) => ({ price: l.price, role: 'support' as const })),
+                ...resistanceLevels.map((l) => ({ price: l.price, role: 'resistance' as const })),
+              ]}
+            />
+          ) : null}
+
           <SvgLine
             x1={CHART_LEFT_MARGIN}
             y1={priceToY(maxPrice)}
@@ -877,7 +947,6 @@ function SimpleLineChart({
             strokeDasharray="3,3"
           />
 
-          {/* X-axis tick marks */}
           {xAxisIndices.map((index) => {
             const xPosition = xForIndex(index);
             const bottomY = chartSvgHeight - 10;
@@ -894,7 +963,51 @@ function SimpleLineChart({
             );
           })}
 
-          {/* Support levels */}
+          <Path
+            d={closePathD}
+            stroke={CHART_COLORS.lineStroke}
+            strokeWidth="2.5"
+            fill="none"
+          />
+
+          {showEMA &&
+            (() => {
+              const parts: string[] = [];
+              data.forEach((point, i) => {
+                if (point.ema9 != null) {
+                  parts.push(`${parts.length ? 'L' : 'M'} ${xForIndex(i)} ${priceToY(point.ema9)}`);
+                }
+              });
+              return parts.length ? (
+                <Path
+                  d={parts.join(' ')}
+                  stroke={CHART_COLORS.ema9}
+                  strokeWidth="1.5"
+                  fill="none"
+                  opacity={0.5}
+                />
+              ) : null;
+            })()}
+
+          {showEMA &&
+            (() => {
+              const parts: string[] = [];
+              data.forEach((point, i) => {
+                if (point.ema21 != null) {
+                  parts.push(`${parts.length ? 'L' : 'M'} ${xForIndex(i)} ${priceToY(point.ema21)}`);
+                }
+              });
+              return parts.length ? (
+                <Path
+                  d={parts.join(' ')}
+                  stroke={CHART_COLORS.ema21}
+                  strokeWidth="1.5"
+                  fill="none"
+                  opacity={0.5}
+                />
+              ) : null;
+            })()}
+
           {supportLevels.map((level) => (
             <SvgLine
               key={`support-${level.id}`}
@@ -909,7 +1022,6 @@ function SimpleLineChart({
             />
           ))}
 
-          {/* Resistance levels */}
           {resistanceLevels.map((level) => (
             <SvgLine
               key={`resistance-${level.id}`}
@@ -924,100 +1036,51 @@ function SimpleLineChart({
             />
           ))}
 
-        {/* EMA 9 */}
-        {showEMA &&
-          (() => {
-            const parts: string[] = [];
-            data.forEach((point, i) => {
-              if (point.ema9 != null) {
-                parts.push(`${parts.length ? 'L' : 'M'} ${xForIndex(i)} ${priceToY(point.ema9)}`);
-              }
-            });
-            return parts.length ? (
-              <Path
-                d={parts.join(' ')}
-                stroke={CHART_COLORS.ema9}
-                strokeWidth="1.5"
-                fill="none"
-                opacity={0.5}
-              />
-            ) : null;
-          })()}
+          {hasPrediction && (() => {
+            const lastIndex = data.length - 1;
+            const startX = xForIndex(lastIndex);
+            const startY = priceToY(data[lastIndex].close);
+            const bandPath = buildPredictionBandPath(
+              projectedPath,
+              layout.xForFutureIndex,
+              priceToY,
+              startX,
+              startY
+            );
+            const linePath = buildPredictionLinePath(
+              projectedPath,
+              layout.xForFutureIndex,
+              priceToY,
+              startX,
+              startY
+            );
 
-        {/* EMA 21 */}
-        {showEMA &&
-          (() => {
-            const parts: string[] = [];
-            data.forEach((point, i) => {
-              if (point.ema21 != null) {
-                parts.push(`${parts.length ? 'L' : 'M'} ${xForIndex(i)} ${priceToY(point.ema21)}`);
-              }
-            });
-            return parts.length ? (
-              <Path
-                d={parts.join(' ')}
-                stroke={CHART_COLORS.ema21}
-                strokeWidth="1.5"
-                fill="none"
-                opacity={0.5}
-              />
-            ) : null;
-          })()}
-
-        {/* Close price line */}
-        <Path
-          d={closePathD}
-          stroke={CHART_COLORS.lineStroke}
-          strokeWidth="2.5"
-          fill="none"
-        />
-
-        {/* AI Prediction overlay */}
-        {hasPrediction && (() => {
-          const lastIndex = data.length - 1;
-          const startX = xForIndex(lastIndex);
-          const startY = priceToY(data[lastIndex].close);
-          const bandPath = buildPredictionBandPath(
-            projectedPath,
-            layout.xForFutureIndex,
-            priceToY,
-            startX,
-            startY
-          );
-          const linePath = buildPredictionLinePath(
-            projectedPath,
-            layout.xForFutureIndex,
-            priceToY,
-            startX,
-            startY
-          );
-
-          return (
-            <G>
-              <SvgLine
-                x1={layout.dividerX}
-                y1={10}
-                x2={layout.dividerX}
-                y2={chartSvgHeight - 10}
-                stroke={CHART_COLORS.grid}
-                strokeWidth="1"
-                strokeDasharray="4,4"
-              />
-              {bandPath ? (
-                <Path d={bandPath} fill={CHART_COLORS.predictionBand} stroke="none" />
-              ) : null}
-              {linePath ? (
-                <Path
-                  d={linePath}
-                  stroke={CHART_COLORS.prediction}
-                  strokeWidth="2.5"
-                  strokeDasharray="6,4"
-                  fill="none"
+            return (
+              <G>
+                <SvgLine
+                  x1={layout.dividerX}
+                  y1={10}
+                  x2={layout.dividerX}
+                  y2={chartSvgHeight - 10}
+                  stroke={CHART_COLORS.grid}
+                  strokeWidth="1"
+                  strokeDasharray="4,4"
                 />
-              ) : null}
-            </G>
-          );
-        })()}
+                {bandPath ? (
+                  <Path d={bandPath} fill={CHART_COLORS.predictionBand} stroke="none" />
+                ) : null}
+                {linePath ? (
+                  <Path
+                    d={linePath}
+                    stroke={CHART_COLORS.prediction}
+                    strokeWidth="2.5"
+                    strokeDasharray="6,4"
+                    fill="none"
+                  />
+                ) : null}
+              </G>
+            );
+          })()}
         </Svg>
       </View>
 

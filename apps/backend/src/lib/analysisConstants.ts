@@ -138,22 +138,36 @@ export function getTimeframeCategory(
 ): 'intraday' | 'daily' | 'weekly' {
   const lowerTf = timeframe.toLowerCase();
 
+  // ChartInterval keys used by the app (must be checked before the generic 'm' match).
   if (
-    lowerTf.includes('m') ||
-    lowerTf.includes('min') ||
-    lowerTf === '1h' ||
-    lowerTf === '60'
+    lowerTf === '1d' ||
+    lowerTf === '5d' ||
+    lowerTf === '1mo' ||
+    lowerTf === '3mo' ||
+    lowerTf === '6mo'
   ) {
-    return 'intraday';
+    return 'daily';
+  }
+  if (lowerTf === '1y' || lowerTf === '2y' || lowerTf === '5y') {
+    return 'weekly';
   }
 
   if (
     lowerTf.includes('w') ||
     lowerTf.includes('week') ||
-    lowerTf.includes('month') ||
-    lowerTf === 'm'
+    lowerTf.includes('month')
   ) {
     return 'weekly';
+  }
+
+  if (
+    lowerTf.includes('min') ||
+    lowerTf.endsWith('m') ||
+    lowerTf === '1h' ||
+    lowerTf === '60' ||
+    /^\d+m$/.test(lowerTf)
+  ) {
+    return 'intraday';
   }
 
   return 'daily';

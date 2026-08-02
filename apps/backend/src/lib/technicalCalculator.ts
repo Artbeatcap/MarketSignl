@@ -95,6 +95,9 @@ export interface FibonacciData {
     weight: number;
   }[];
   currentRetracement: number;
+  swingSource?: string;
+  swingBarsAgo?: number;
+  swingRangeATR?: number | null;
 }
 
 export interface VolumeProfile {
@@ -103,9 +106,17 @@ export interface VolumeProfile {
     priceRangeHigh: number;
     priceMid: number;
     volumePercent: number;
+    widthATR?: number | null;
+    distanceATR?: number | null;
+    trimmed?: boolean;
   }[];
   pointOfControl: number;
   averageVolume: number;
+  valueAreaHigh?: number;
+  valueAreaLow?: number;
+  bucketCount?: number;
+  bucketSize?: number;
+  recencyHalfLifeBars?: number;
 }
 
 export interface OverextensionData {
@@ -534,79 +545,184 @@ export function detectSwingPoints(
 // FIBONACCI RETRACEMENT
 // ============================================================================
 
+/**
+ * Pivot-based Fibonacci with shrinking-window and last-resort fallbacks.
+ *
+ * IMPORTANT: assign swingHigh/swingLow by PRICE, not by pivot type. A pivot
+ * tagged 'high' is only a local high — in a rising market it can sit below a
+ * later pivot tagged 'low'. Assigning by type yields a negative range.
+ * Don't "simplify" this back.
+ */
 export function calculateFibonacci(
   data: MarketDataPoint[],
-  timeframe: string
+  timeframe: string,
+  options: { atr?: number | null; lookback?: number; minSwingATR?: number; maxSwingATR?: number } = {}
 ): FibonacciData | null {
-  // Only calculate for daily and above
   if (!isFibonacciTimeframe(timeframe)) {
     return null;
   }
 
-  if (data.length < 20) {
-    return null;
+  const {
+    lookback = 120,
+    minSwingATR = 1.5,
+    maxSwingATR = 20,
+    atr = null,
+  } = options;
+
+  if (!Array.isArray(data) || data.length < 8) return null;
+
+  const slice = data.slice(-lookback);
+  const n = slice.length;
+  const currentPrice = slice[n - 1].close;
+
+  const effAtr =
+    typeof atr === 'number' && atr > 0
+      ? atr
+      : slice.reduce((s, b) => s + (b.high - b.low), 0) / n || currentPrice * 0.01;
+
+  const minRange = minSwingATR * effAtr;
+  const maxRange = maxSwingATR * effAtr;
+  const maxSwingAgeBars = Math.max(20, Math.floor(n * 0.4));
+
+  function findPivots(strength: number) {
+    const out: { type: 'high' | 'low'; price: number; index: number }[] = [];
+    for (let i = strength; i < n - strength; i++) {
+      let isHigh = true;
+      let isLow = true;
+      for (let j = i - strength; j <= i + strength; j++) {
+        if (j === i) continue;
+        if (slice[j].high >= slice[i].high) isHigh = false;
+        if (slice[j].low <= slice[i].low) isLow = false;
+        if (!isHigh && !isLow) break;
+      }
+      if (isHigh) out.push({ type: 'high', price: slice[i].high, index: i });
+      if (isLow) out.push({ type: 'low', price: slice[i].low, index: i });
+    }
+    return out;
   }
 
-  // Find the significant swing high and low in the dataset
-  let swingHighPrice = -Infinity;
-  let swingHighDate = '';
-  let swingHighIndex = 0;
-  let swingLowPrice = Infinity;
-  let swingLowDate = '';
-  let swingLowIndex = 0;
+  let swingHigh: { price: number; index: number } | null = null;
+  let swingLow: { price: number; index: number } | null = null;
+  let swingSource: string | null = null;
 
-  for (let i = 0; i < data.length; i++) {
-    if (data[i].high > swingHighPrice) {
-      swingHighPrice = data[i].high;
-      swingHighDate = data[i].date;
-      swingHighIndex = i;
+  for (const strength of [3, 2, 1]) {
+    if (n < strength * 2 + 2) continue;
+    const pivots = findPivots(strength);
+
+    for (let i = pivots.length - 1; i > 0 && !swingHigh; i--) {
+      const b = pivots[i];
+      let a: (typeof pivots)[number] | null = null;
+      for (let k = i - 1; k >= 0; k--) {
+        if (pivots[k].type !== b.type) {
+          a = pivots[k];
+          break;
+        }
+      }
+      if (!a) continue;
+
+      const legRange = Math.abs(b.price - a.price);
+      if (legRange < minRange || legRange > maxRange) continue;
+
+      const nearEnd = Math.min(
+        Math.abs(b.price - currentPrice),
+        Math.abs(a.price - currentPrice)
+      );
+      if (nearEnd > maxRange * 0.5) continue;
+
+      const legAge = n - 1 - Math.max(b.index, a.index);
+      if (legAge > maxSwingAgeBars) continue;
+
+      const hiP = Math.max(b.price, a.price);
+      const loP = Math.min(b.price, a.price);
+      const hiPivot = b.price === hiP ? b : a;
+      const loPivot = b.price === loP ? b : a;
+
+      swingHigh = { price: hiP, index: hiPivot.index };
+      swingLow = { price: loP, index: loPivot.index };
+      swingSource = `pivot_s${strength}`;
     }
-    if (data[i].low < swingLowPrice) {
-      swingLowPrice = data[i].low;
-      swingLowDate = data[i].date;
-      swingLowIndex = i;
+    if (swingHigh) break;
+  }
+
+  if (!swingHigh || !swingLow) {
+    for (const win of [90, 60, 40, 25, 15, 10]) {
+      if (win > n) continue;
+      const w = slice.slice(n - win);
+      const offset = n - win;
+      let hi = { price: -Infinity, index: 0 };
+      let lo = { price: Infinity, index: 0 };
+      w.forEach((bar, i) => {
+        if (bar.high > hi.price) hi = { price: bar.high, index: i + offset };
+        if (bar.low < lo.price) lo = { price: bar.low, index: i + offset };
+      });
+      if (hi.price - lo.price <= maxRange && hi.price - lo.price >= minRange) {
+        swingHigh = hi;
+        swingLow = lo;
+        swingSource = `window_${win}`;
+        break;
+      }
     }
   }
 
-  // Determine swing direction based on which came first
+  if (!swingHigh || !swingLow) {
+    const win = Math.min(20, n);
+    const w = slice.slice(n - win);
+    const offset = n - win;
+    let hi = { price: -Infinity, index: 0 };
+    let lo = { price: Infinity, index: 0 };
+    w.forEach((bar, i) => {
+      if (bar.high > hi.price) hi = { price: bar.high, index: i + offset };
+      if (bar.low < lo.price) lo = { price: bar.low, index: i + offset };
+    });
+    swingHigh = hi;
+    swingLow = lo;
+    swingSource = 'last_resort';
+  }
+
+  if (swingHigh.price < swingLow.price) {
+    const t = swingHigh;
+    swingHigh = swingLow;
+    swingLow = t;
+  }
+
+  const range = swingHigh.price - swingLow.price;
+  if (!Number.isFinite(range) || range < 0.001) return null;
+
   const swingDirection: 'up' | 'down' =
-    swingLowIndex < swingHighIndex ? 'up' : 'down';
+    swingHigh.index > swingLow.index ? 'up' : 'down';
 
-  // Calculate Fibonacci levels
-  const range = swingHighPrice - swingLowPrice;
-  const levels = ANALYSIS_CONFIG.FIB_LEVELS.map((fib: { level: number; label: string; weight: number }) => {
-    let price: number;
-    if (swingDirection === 'up') {
-      // Retracing an up move: levels are measured down from the high
-      price = swingHighPrice - range * fib.level;
-    } else {
-      // Retracing a down move: levels are measured up from the low
-      price = swingLowPrice + range * fib.level;
+  // Keep ANALYSIS_CONFIG weights (point values for confluenceScorer).
+  const levels = ANALYSIS_CONFIG.FIB_LEVELS.map(
+    (fib: { level: number; label: string; weight: number }) => {
+      const price =
+        swingDirection === 'up'
+          ? swingHigh!.price - range * fib.level
+          : swingLow!.price + range * fib.level;
+      return {
+        level: fib.level,
+        price,
+        label: fib.label,
+        weight: fib.weight,
+      };
     }
+  );
 
-    return {
-      level: fib.level,
-      price,
-      label: fib.label,
-      weight: fib.weight,
-    };
-  });
-
-  // Calculate current retracement level
-  const currentPrice = data[data.length - 1].close;
   const currentRetracement =
     swingDirection === 'up'
-      ? (swingHighPrice - currentPrice) / range
-      : (currentPrice - swingLowPrice) / range;
+      ? (swingHigh.price - currentPrice) / range
+      : (currentPrice - swingLow.price) / range;
 
   return {
-    swingHigh: swingHighPrice,
-    swingHighDate,
-    swingLow: swingLowPrice,
-    swingLowDate,
+    swingHigh: swingHigh.price,
+    swingHighDate: slice[swingHigh.index].date,
+    swingLow: swingLow.price,
+    swingLowDate: slice[swingLow.index].date,
     swingDirection,
     levels,
     currentRetracement: Math.max(0, Math.min(1, currentRetracement)),
+    swingBarsAgo: n - 1 - Math.max(swingHigh.index, swingLow.index),
+    swingRangeATR: effAtr > 0 ? range / effAtr : null,
+    swingSource: swingSource ?? 'last_resort',
   };
 }
 
@@ -614,8 +730,27 @@ export function calculateFibonacci(
 // VOLUME PROFILE
 // ============================================================================
 
-export function calculateVolumeProfile(data: MarketDataPoint[]): VolumeProfile {
-  if (data.length === 0) {
+export function calculateVolumeProfile(
+  data: MarketDataPoint[],
+  options: {
+    atr?: number | null;
+    halfLifeBars?: number | null;
+    minBuckets?: number;
+    maxBuckets?: number;
+    hvnThresholdMult?: number;
+    maxNodeWidthATR?: number;
+  } = {}
+): VolumeProfile {
+  const {
+    atr = null,
+    halfLifeBars = null,
+    minBuckets = 24,
+    maxBuckets = 120,
+    hvnThresholdMult = 1.6,
+    maxNodeWidthATR = 1.5,
+  } = options;
+
+  if (!Array.isArray(data) || data.length === 0) {
     return {
       highVolumeNodes: [],
       pointOfControl: 0,
@@ -623,73 +758,156 @@ export function calculateVolumeProfile(data: MarketDataPoint[]): VolumeProfile {
     };
   }
 
-  // Find price range
-  let minPrice = Infinity;
-  let maxPrice = -Infinity;
-  let totalVolume = 0;
-
-  for (const bar of data) {
-    minPrice = Math.min(minPrice, bar.low);
-    maxPrice = Math.max(maxPrice, bar.high);
-    totalVolume += bar.volume;
+  const n = data.length;
+  const currentPrice = data[n - 1].close;
+  const minPrice = Math.min(...data.map((b) => b.low));
+  const maxPrice = Math.max(...data.map((b) => b.high));
+  const range = maxPrice - minPrice;
+  if (!Number.isFinite(range) || range <= 0) {
+    return {
+      highVolumeNodes: [],
+      pointOfControl: currentPrice,
+      averageVolume: 0,
+    };
   }
 
-  const averageVolume = totalVolume / data.length;
-  const bucketCount = ANALYSIS_CONFIG.VOLUME_PROFILE_BUCKETS;
-  const bucketSize = (maxPrice - minPrice) / bucketCount;
+  const effAtr =
+    typeof atr === 'number' && atr > 0
+      ? atr
+      : data.reduce((s, b) => s + (b.high - b.low), 0) / n || currentPrice * 0.01;
 
-  // Initialize buckets
-  const buckets: { volume: number; priceLow: number; priceHigh: number }[] = [];
-  for (let i = 0; i < bucketCount; i++) {
-    buckets.push({
-      volume: 0,
-      priceLow: minPrice + i * bucketSize,
-      priceHigh: minPrice + (i + 1) * bucketSize,
-    });
-  }
+  const buckets = Math.max(
+    minBuckets,
+    Math.min(maxBuckets, Math.round(range / (effAtr / 3)) || minBuckets)
+  );
+  const bucketSize = range / buckets;
+  const halfLife = halfLifeBars || Math.max(Math.floor(n / 3), 5);
+  const volumeBuckets = new Array(buckets).fill(0);
 
-  // Distribute volume into buckets
-  for (const bar of data) {
-    // Simplified: assign volume to the bucket containing the close price
-    const bucketIndex = Math.min(
-      Math.floor((bar.close - minPrice) / bucketSize),
-      bucketCount - 1
+  data.forEach((bar, i) => {
+    const barsAgo = n - 1 - i;
+    const recency = Math.pow(0.5, barsAgo / halfLife);
+    const vol = (bar.volume || 0) * recency;
+    if (vol <= 0) return;
+
+    const loIdx = Math.min(
+      Math.floor((bar.low - minPrice) / bucketSize),
+      buckets - 1
     );
-    if (bucketIndex >= 0) {
-      buckets[bucketIndex].volume += bar.volume;
-    }
+    const hiIdx = Math.min(
+      Math.floor((bar.high - minPrice) / bucketSize),
+      buckets - 1
+    );
+    const span = Math.max(hiIdx - loIdx + 1, 1);
+    const per = vol / span;
+    for (let b = Math.max(0, loIdx); b <= hiIdx; b++) volumeBuckets[b] += per;
+  });
+
+  const totalVolume = volumeBuckets.reduce((a: number, b: number) => a + b, 0);
+  if (totalVolume <= 0) {
+    return {
+      highVolumeNodes: [],
+      pointOfControl: currentPrice,
+      averageVolume: 0,
+    };
   }
 
-  // Find high volume nodes and point of control
-  const avgBucketVolume = totalVolume / bucketCount;
-  const threshold = avgBucketVolume * ANALYSIS_CONFIG.VOLUME_NODE_THRESHOLD;
+  const avgBucket = totalVolume / buckets;
+  const threshold = avgBucket * hvnThresholdMult;
 
-  const highVolumeNodes: VolumeProfile['highVolumeNodes'] = [];
-  let maxVolume = 0;
-  let pocBucket = buckets[0];
+  type Run = {
+    startIdx: number;
+    endIdx: number;
+    volume: number;
+    peakIdx: number;
+    peakVol: number;
+    trimmed?: boolean;
+  };
 
-  for (const bucket of buckets) {
-    if (bucket.volume > threshold) {
-      highVolumeNodes.push({
-        priceRangeLow: bucket.priceLow,
-        priceRangeHigh: bucket.priceHigh,
-        priceMid: (bucket.priceLow + bucket.priceHigh) / 2,
-        volumePercent: (bucket.volume / totalVolume) * 100,
-      });
+  const rawNodes: Run[] = [];
+  let run: Run | null = null;
+  volumeBuckets.forEach((vol: number, i: number) => {
+    if (vol >= threshold) {
+      if (!run) {
+        run = { startIdx: i, endIdx: i, volume: vol, peakIdx: i, peakVol: vol };
+      } else {
+        run.endIdx = i;
+        run.volume += vol;
+        if (vol > run.peakVol) {
+          run.peakVol = vol;
+          run.peakIdx = i;
+        }
+      }
+    } else if (run) {
+      rawNodes.push(run);
+      run = null;
     }
-    if (bucket.volume > maxVolume) {
-      maxVolume = bucket.volume;
-      pocBucket = bucket;
+  });
+  if (run) rawNodes.push(run);
+
+  const maxNodeBuckets = Math.max(
+    1,
+    Math.round((maxNodeWidthATR * effAtr) / bucketSize)
+  );
+
+  const trimmed = rawNodes.map((node) => {
+    const width = node.endIdx - node.startIdx + 1;
+    if (width <= maxNodeBuckets) return node;
+
+    const half = Math.floor(maxNodeBuckets / 2);
+    let start = Math.max(node.startIdx, node.peakIdx - half);
+    let end = Math.min(node.endIdx, start + maxNodeBuckets - 1);
+    start = Math.max(node.startIdx, end - maxNodeBuckets + 1);
+
+    let volume = 0;
+    for (let i = start; i <= end; i++) volume += volumeBuckets[i];
+    return { ...node, startIdx: start, endIdx: end, volume, trimmed: true };
+  });
+
+  const highVolumeNodes = trimmed
+    .map((node) => {
+      const priceRangeLow = minPrice + node.startIdx * bucketSize;
+      const priceRangeHigh = minPrice + (node.endIdx + 1) * bucketSize;
+      const priceMid = minPrice + (node.peakIdx + 0.5) * bucketSize;
+      return {
+        priceRangeLow,
+        priceRangeHigh,
+        priceMid,
+        volumePercent: (node.volume / totalVolume) * 100,
+        widthATR: effAtr > 0 ? (priceRangeHigh - priceRangeLow) / effAtr : null,
+        distanceATR: effAtr > 0 ? Math.abs(priceMid - currentPrice) / effAtr : null,
+        trimmed: !!node.trimmed,
+      };
+    })
+    .sort((a, b) => b.volumePercent - a.volumePercent)
+    .slice(0, 5);
+
+  const pocIndex = volumeBuckets.indexOf(Math.max(...volumeBuckets));
+
+  let vaVolume = volumeBuckets[pocIndex];
+  let lowIdx = pocIndex;
+  let highIdx = pocIndex;
+  while (vaVolume < totalVolume * 0.7 && (lowIdx > 0 || highIdx < buckets - 1)) {
+    const below = lowIdx > 0 ? volumeBuckets[lowIdx - 1] : -1;
+    const above = highIdx < buckets - 1 ? volumeBuckets[highIdx + 1] : -1;
+    if (above >= below) {
+      highIdx += 1;
+      vaVolume += above;
+    } else {
+      lowIdx -= 1;
+      vaVolume += below;
     }
   }
-
-  // Sort by volume descending
-  highVolumeNodes.sort((a, b) => b.volumePercent - a.volumePercent);
 
   return {
-    highVolumeNodes: highVolumeNodes.slice(0, 5), // Top 5 nodes
-    pointOfControl: (pocBucket.priceLow + pocBucket.priceHigh) / 2,
-    averageVolume,
+    highVolumeNodes,
+    pointOfControl: minPrice + (pocIndex + 0.5) * bucketSize,
+    averageVolume: data.reduce((s, b) => s + (b.volume || 0), 0) / n,
+    valueAreaHigh: minPrice + (highIdx + 1) * bucketSize,
+    valueAreaLow: minPrice + lowIdx * bucketSize,
+    bucketCount: buckets,
+    bucketSize,
+    recencyHalfLifeBars: halfLife,
   };
 }
 
@@ -783,9 +1001,9 @@ export function calculateAllIndicators(
 
   const overextension = calculateOverextension(currentPrice, ema.ema21, atr.atr);
 
-  const fibonacci = calculateFibonacci(data, timeframe);
+  const fibonacci = calculateFibonacci(data, timeframe, { atr: atr.atr });
 
-  const volumeProfile = calculateVolumeProfile(data);
+  const volumeProfile = calculateVolumeProfile(data, { atr: atr.atr });
 
   const swingPoints = detectSwingPoints(data, timeframe);
 

@@ -1,7 +1,7 @@
 {
   "cli": {
     "version": ">= 16.0.0",
-    "appVersionSource": "remote"
+    "appVersionSource": "local"
   },
   "build": {
     "development": {
@@ -17,7 +17,8 @@
         "buildConfiguration": "Release"
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "prebuildCommand": "node scripts/copy-google-services.js"
       }
     },
     "production": {
@@ -26,15 +27,20 @@
         "image": "macos-sequoia-15.6-xcode-26.2"
       },
       "android": {
-        "buildType": "app-bundle"
-      },
-      "autoIncrement": true
+        "buildType": "app-bundle",
+        "prebuildCommand": "node scripts/copy-google-services.js"
+      }
     }
   },
   "submit": {
     "production": {
       "ios": {
-        "appleTeamId": "TWTN5CG47N"
+        "appleTeamId": "TWTN5CG47N",
+        "ascAppId": "6757512423"
+      },
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
       }
     }
   }

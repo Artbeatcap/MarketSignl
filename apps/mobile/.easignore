@@ -1,0 +1,2 @@
+# google-services.json is gitignored but must be uploaded for EAS Android FCM builds
+!google-services.json

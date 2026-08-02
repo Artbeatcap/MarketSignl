@@ -9,6 +9,7 @@ import { useAuthStore } from '../store/authStore';
 import { subscriptionService } from '../services/subscription.service';
 import { colors } from '../theme';
 import { usePushNotifications } from '../lib/usePushNotifications';
+import { EducationProvider } from '../components/education';
 
 type ErrorBoundaryState = { hasError: boolean; error: Error | null };
 
@@ -209,10 +210,12 @@ export default function RootLayout() {
     <RootErrorBoundary>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <SystemBars style="dark" />
-          <AuthGate>
-            <RootContentWithInsets />
-          </AuthGate>
+          <EducationProvider>
+            <SystemBars style="dark" />
+            <AuthGate>
+              <RootContentWithInsets />
+            </AuthGate>
+          </EducationProvider>
         </QueryClientProvider>
       </SafeAreaProvider>
     </RootErrorBoundary>

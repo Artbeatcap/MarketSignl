@@ -17,10 +17,10 @@ const ROOT_EXT_BLOCK = `
 // Expose SDK versions to subprojects (expo-modules-core, expo-asset, etc.)
 // buildscript.ext is not visible to subprojects; rootProject.ext is.
 ext {
-    buildToolsVersion = findProperty('android.buildToolsVersion') ?: '35.0.0'
+    buildToolsVersion = findProperty('android.buildToolsVersion') ?: '36.0.0'
     minSdkVersion = Integer.parseInt(findProperty('android.minSdkVersion') ?: '24')
-    compileSdkVersion = Integer.parseInt(findProperty('android.compileSdkVersion') ?: '35')
-    targetSdkVersion = Integer.parseInt(findProperty('android.targetSdkVersion') ?: '35')
+    compileSdkVersion = Integer.parseInt(findProperty('android.compileSdkVersion') ?: '36')
+    targetSdkVersion = Integer.parseInt(findProperty('android.targetSdkVersion') ?: '36')
     kotlinVersion = findProperty('android.kotlinVersion') ?: '2.0.21'
 }
 `;
@@ -59,9 +59,9 @@ function withGradleConfig(config) {
     setProperty("reactNativeArchitectures", "arm64-v8a,x86_64");
 
     // --- Android SDK versions (Google Play requirement) ---
-    setProperty("android.compileSdkVersion", "35");
-    setProperty("android.targetSdkVersion", "35");
-    setProperty("android.buildToolsVersion", "35.0.0");
+    setProperty("android.compileSdkVersion", "36");
+    setProperty("android.targetSdkVersion", "36");
+    setProperty("android.buildToolsVersion", "36.0.0");
     setProperty("android.kotlinVersion", "2.0.21");
     setProperty("android.minSdkVersion", "24");
 

@@ -8,7 +8,9 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "type-check": "tsc --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test:relevance": "tsx src/lib/__tests__/levelRelevance.test.ts",
+    "test:eyeball": "tsx src/lib/__tests__/eyeballLevels.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.8.0",

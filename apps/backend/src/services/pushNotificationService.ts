@@ -167,8 +167,16 @@ function formatPrice(price: number): string {
 // PRICE MONITORING
 // ============================================================================
 
+export type CheckPriceAlertsOptions = {
+  /** Skip Massive; use these prices keyed by uppercase symbol */
+  injectedPrices?: Record<string, number>;
+  /** Limit check to one user (harness safety) */
+  userIdFilter?: string;
+};
+
 export async function checkPriceAlerts(
-  supabase: SupabaseAdminClient
+  supabase: SupabaseAdminClient,
+  options?: CheckPriceAlertsOptions
 ): Promise<{
   checked: number;
   triggered: number;
@@ -183,12 +191,18 @@ export async function checkPriceAlerts(
   };
 
   try {
-    const { data: alerts, error: alertsError } = await supabase
+    let query = supabase
       .from('price_alerts')
       .select('*')
       .eq('status', 'active')
       .gt('expires_at', new Date().toISOString())
       .order('symbol');
+
+    if (options?.userIdFilter) {
+      query = query.eq('user_id', options.userIdFilter);
+    }
+
+    const { data: alerts, error: alertsError } = await query;
 
     if (alertsError) {
       result.errors.push(`Failed to fetch alerts: ${alertsError.message}`);
@@ -202,7 +216,8 @@ export async function checkPriceAlerts(
     const symbols = [...new Set((alerts as PriceAlert[]).map((a) => a.symbol))];
     result.checked = alerts.length;
 
-    const prices = await fetchCurrentPrices(symbols);
+    const prices =
+      options?.injectedPrices ?? (await fetchCurrentPrices(symbols));
 
     if (Object.keys(prices).length === 0) {
       result.errors.push('Failed to fetch any prices');
@@ -246,9 +261,11 @@ export async function checkPriceAlerts(
       result.notificationsSent = sent;
     }
 
-    const { error: rpcError } = await supabase.rpc('expire_stale_alerts');
-    if (rpcError) {
-      result.errors.push(`expire_stale_alerts: ${rpcError.message}`);
+    if (!options?.userIdFilter) {
+      const { error: rpcError } = await supabase.rpc('expire_stale_alerts');
+      if (rpcError) {
+        result.errors.push(`expire_stale_alerts: ${rpcError.message}`);
+      }
     }
   } catch (error) {
     result.errors.push(`Unexpected error: ${String(error)}`);

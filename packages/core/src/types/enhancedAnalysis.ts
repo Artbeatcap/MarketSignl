@@ -82,6 +82,10 @@ export interface FibonacciData {
   swingDirection: 'up' | 'down';
   levels: FibonacciLevel[];
   currentRetracement: number;
+  /** Additive: how the swing was chosen (pivot_sN | window_N | last_resort). */
+  swingSource?: string;
+  swingBarsAgo?: number;
+  swingRangeATR?: number | null;
 }
 
 export interface VolumeNode {
@@ -89,12 +93,20 @@ export interface VolumeNode {
   priceRangeHigh: number;
   priceMid: number;
   volumePercent: number;
+  widthATR?: number | null;
+  distanceATR?: number | null;
+  trimmed?: boolean;
 }
 
 export interface VolumeProfile {
   highVolumeNodes: VolumeNode[];
   pointOfControl: number;
   averageVolume: number;
+  valueAreaHigh?: number;
+  valueAreaLow?: number;
+  bucketCount?: number;
+  bucketSize?: number;
+  recencyHalfLifeBars?: number;
 }
 
 // ============================================================================
@@ -121,9 +133,17 @@ export interface ScoredLevel {
   zone: {
     high: number;
     low: number;
+    halfWidth?: number;
   };
   distanceFromPrice: number;
   distancePercent: number;
+  /** Ranking score = confluenceScore × proximity. UI shows confluenceScore. */
+  effectiveScore?: number;
+  relevance?: number;
+  distanceATR?: number;
+  proximityLabel?: 'at_price' | 'in_play' | 'nearby' | 'extended' | 'distant';
+  factorCount?: number;
+  mergedFrom?: number;
 }
 
 export interface ConfidenceFactor {

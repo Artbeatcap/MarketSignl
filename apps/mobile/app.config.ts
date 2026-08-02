@@ -1,10 +1,17 @@
 import { ConfigContext, ExpoConfig } from "expo/config";
+import { existsSync } from "fs";
+import { resolve } from "path";
+
+const googleServicesFile = "./google-services.json";
+const hasGoogleServices = existsSync(
+  resolve(__dirname, "google-services.json")
+);
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: "ChartSignl",
   slug: "chartsignl",
-  version: "1.1.2",
+  version: "1.1.3",
   orientation: "portrait",
   icon: "./assets/icon.png",
   scheme: "chartsignl",
@@ -22,6 +29,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: true,
     bundleIdentifier: "com.optionsplungellc.chartsignl",
+    buildNumber: "25",
     associatedDomains: [
       "applinks:chartsignl.com",
       "applinks:www.chartsignl.com",
@@ -61,10 +69,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     package: "com.optionsplungellc.chartsignl",
     permissions: ["com.android.vending.BILLING"],
-    versionCode: 32,
+    versionCode: 34,
 
     // Required for the modern Expo Notifications API on Android
     useNextNotificationsApi: true,
+
+    // FCM: download from Firebase Console (package com.optionsplungellc.chartsignl)
+    ...(hasGoogleServices ? { googleServicesFile } : {}),
 
     // App Links: replaces manual intent-filter in AndroidManifest.xml
     intentFilters: [
@@ -97,7 +108,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     "expo-secure-store",
     "expo-apple-authentication",
     "expo-web-browser",
-    ["expo-notifications", { color: "#14B8A6" }],
+    ["expo-notifications", { color: "#14B8A6", mode: "production" }],
+    "./plugins/withGoogleServices",
     "./plugins/withMonorepoConfig",
 
     // Android SDK versions for Expo modules (compileSdk/targetSdk/buildTools)
@@ -105,9 +117,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       "expo-build-properties",
       {
         android: {
-          compileSdkVersion: 35,
-          targetSdkVersion: 35,
-          buildToolsVersion: "35.0.0",
+          compileSdkVersion: 36,
+          targetSdkVersion: 36,
+          buildToolsVersion: "36.0.0",
           ndkVersion: "27.1.12297006",
         },
       },

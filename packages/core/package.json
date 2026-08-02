@@ -5,7 +5,18 @@
   "main": "./src/index.js",
   "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.js",
+    ".": {
+      "types": "./src/index.ts",
+      "react-native": "./src/index.ts",
+      "browser": "./src/index.ts",
+      "default": "./src/index.js"
+    },
+    "./content/indicatorEducation": {
+      "types": "./src/content/indicatorEducation.ts",
+      "react-native": "./src/content/indicatorEducation.ts",
+      "browser": "./src/content/indicatorEducation.ts",
+      "default": "./src/content/indicatorEducation.ts"
+    },
     "./lib/trackRecord": {
       "types": "./src/lib/trackRecord.ts",
       "react-native": "./src/lib/trackRecord.ts",

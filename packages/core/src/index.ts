@@ -10,6 +10,9 @@ export * from './types/weeklyBrief';
 // Prediction chart helpers (used by mobile/web prediction overlays)
 export * from './lib/predictionChart';
 
+// Indicator education copy (shared by mobile info sheets)
+export * from './content/indicatorEducation';
+
 // Constants
 export const FREE_ANALYSIS_LIMIT = 3;
 export const FREE_PREDICTION_LIMIT = 3;

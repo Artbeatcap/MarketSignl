@@ -83,7 +83,94 @@ Apply the weekly brief migration before first use:
 # Run supabase/migrations/20250627120000_weekly_brief.sql in Supabase SQL editor or via CLI
 ```
 
-### Weekly Brief cron (Sunday evening ET)
+### Weekly Brief cron (Sunday 6:00 PM ET)
+
+Production uses **n8n** for the weekly send (same pattern as **Push notification - Price Alert Checker**). Options Plunge publishes content via ingest; n8n triggers send on Sunday evening.
+
+#### n8n: Weekly Brief send workflow
+
+Create manually in the n8n UI at `https://n8n.chartsignl.com`, modeled on the existing price-checker workflow:
+
+| Node | Setting |
+|------|---------|
+| **Schedule Trigger** | Weekly, **Sunday 6:00 PM**, timezone `America/New_York` |
+| **HTTP Request** | `POST http://chartsignl-api:4000/api/internal/weekly-brief/send` |
+
+Use the **internal Docker hostname** (`chartsignl-api:4000`), not the public `api.chartsignl.com` URL — same as the price-checker workflow.
+
+**Headers** (inline keypair, matching the price-checker workflow):
+
+- `x-cron-secret`: value from VPS (see [Retrieve CRON_SECRET](#retrieve-cron_secret-on-the-vps) below)
+- `Content-Type`: `application/json`
+
+No request body. No market-hours Code node (unlike the price checker).
+
+**Suggested workflow name:** `ChartSignl Weekly Brief Send`
+
+**Activation order:**
+
+1. Create the workflow **inactive**
+2. Complete the [pre-flight tests](#pre-flight-tests-before-activating-schedule) below
+3. Activate only after a successful `testEmail` or `dryRun`
+
+#### Retrieve CRON_SECRET on the VPS
+
+The send endpoint authenticates with `x-cron-secret`, which must match `CRON_SECRET` in the API container. Retrieve it from your infrastructure (not from n8n itself).
+
+**Primary (file on disk):**
+
+```bash
+ssh root@167.88.43.61 "grep '^CRON_SECRET=' /root/ChartSignl/.env"
+```
+
+Copy the value after `=`. This is the same secret the API container loads via compose (`CRON_SECRET=${CRON_SECRET:-}` in `apps/backend/deploy/docker-compose.yml`).
+
+**Fallback (if missing from `.env`):**
+
+```bash
+ssh root@167.88.43.61 "docker exec chartsignl-api printenv CRON_SECRET"
+```
+
+**Do not commit** the secret to git. Paste only into the n8n HTTP Request header (or n8n credential store if you prefer that pattern).
+
+`WEEKLY_CONTENT_INGEST_SECRET` is a **different** secret — used only for `POST /api/internal/weekly-brief/ingest`, not the send workflow.
+
+#### Pre-flight tests (before activating schedule)
+
+1. **Ingest content** (weekly, from Options Plunge or manual curl with `WEEKLY_CONTENT_INGEST_SECRET`):
+   - Fixture: `apps/backend/fixtures/weekly_content_sample.json`
+   - Verify in Supabase: `SELECT COUNT(*) FROM weekly_brief_content;` should be > 0
+2. **Dry run** — `POST .../send?dryRun=1` with `x-cron-secret` (returns HTML, no emails)
+3. **Test send** — `POST .../send?testEmail=you@example.com` (single inbox)
+4. **Full send** — manual `POST .../send` once; confirm `recipientCount` in the JSON response and `[weekly-brief] Batch complete` in API logs
+5. **Activate** the n8n schedule
+
+**Expected failures:**
+
+- `401` — wrong or missing `x-cron-secret` (check n8n header vs `/root/ChartSignl/.env`)
+- `409 skipped` — no artifact, `data_stale=true`, or artifact older than 8 days
+- `409 No recipients` — no opted-in verified users
+
+If `ALERT_WEBHOOK_URL` is set, the API posts to that webhook on skip/failure.
+
+#### Secret rotation (CRON_SECRET)
+
+When rotating `CRON_SECRET`, update **both**:
+
+1. `/root/ChartSignl/.env` on the VPS
+2. n8n HTTP Request header (or credential) in **all** cron workflows:
+   - Push notification - Price Alert Checker
+   - ChartSignl Weekly Brief Send
+
+Then restart the API container so it picks up the new env:
+
+```bash
+cd /root/ChartSignl/apps/backend/deploy && docker-compose up -d
+```
+
+Rotating only one side causes `401 Unauthorized` on the affected workflows.
+
+#### curl reference (debugging)
 
 After Options Plunge publishes the artifact (via `POST /api/internal/weekly-brief/ingest`), send on Sunday evening:
 

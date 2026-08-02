@@ -50,6 +50,7 @@ import socialRoute from './routes/social.js';
 import predictRoute from './routes/predict.js';
 import predictionsRoute from './routes/predictions.js';
 import notificationRoutes from './routes/notifications.js';
+import testAlertRoute from './routes/test-alert.js';
 import { internalWeeklyBriefRoute, publicWeeklyBriefRoute } from './routes/weeklyBrief.js';
 import { startResolverSchedule } from './lib/resolverSchedule.js';
 
@@ -121,6 +122,7 @@ app.route('/api/social', socialRoute);
 app.route('/api/predict', predictRoute);
 app.route('/api/predictions', predictionsRoute);
 app.route('/api/notifications', notificationRoutes);
+app.route('/api/test-alert', testAlertRoute);
 app.route('/api/internal/weekly-brief', internalWeeklyBriefRoute);
 app.route('/api/weekly-brief', publicWeeklyBriefRoute);
 

@@ -13,3 +13,7 @@ expo-env.d.ts
 # Signing secrets (keystore + passwords)
 secrets/
 *.jks
+
+# Firebase FCM (download from Firebase Console — not committed)
+google-services.json
+android/app/google-services.json

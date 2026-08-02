@@ -15,10 +15,17 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, SymbolSearch, StockChart, EmailVerificationBanner, PredictionSummary } from '../../components';
+import {
+  InfoButton,
+  AnalysisEducationFooter,
+} from '../../components/education';
+import { ChartLayerToggles } from '../../components/chart';
+import { useChartLayers } from '../../store/chartLayerStore';
 import { useAuthStore } from '../../store/authStore';
+import { useOnboardingStore } from '../../store/onboardingStore';
 import { fetchMarketDataWithIndicators, formatPrice, calculatePriceChange } from '../../lib/marketData';
 import { findLocalLevels, detectTrend, analyzeChartData } from '../../lib/chartAnalysis';
-import { getUsage, getAnalysis, getPrediction, createPrediction } from '../../lib/api';
+import { getUsage, getAnalysis, getPrediction, createPrediction, getCurrentUser } from '../../lib/api';
 import { getWeeklyAtlasUsed } from '../../lib/usage';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import { API_URL } from '../../lib/apiConfig';
@@ -34,6 +41,15 @@ export default function AnalyzeScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user, isEmailVerified, showEmailVerificationModal, setShowEmailVerificationModal, pendingEmailVerification, setPendingEmailVerification } = useAuthStore();
+  const onboardingExperience = useOnboardingStore((s) => s.answers.experienceLevel);
+
+  const { data: profileData } = useQuery({
+    queryKey: ['profile'],
+    queryFn: getCurrentUser,
+    enabled: !!user,
+  });
+  const experienceLevel =
+    profileData?.user?.experienceLevel ?? onboardingExperience;
 
   const activeAlertsQuery = useActiveAlerts();
   const createAlertMutation = useCreateAlert();
@@ -54,7 +70,7 @@ export default function AnalyzeScreen() {
   const [selectedInterval, setSelectedInterval] = useState<ChartInterval>('3mo');
   const [viewType, setViewType] = useState<ChartViewType>('line');
   const [showSymbolSearch, setShowSymbolSearch] = useState(false);
-  const [showEMA, setShowEMA] = useState(true);
+  const chartLayers = useChartLayers();
 
   // Atlas Analysis state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -63,7 +79,6 @@ export default function AnalyzeScreen() {
     support: [],
     resistance: [],
   });
-  const [showLevels, setShowLevels] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // AI Prediction state
@@ -104,7 +119,6 @@ export default function AnalyzeScreen() {
         if (analysisData?.success && analysisData.analysis) {
           const saved = analysisData.analysis as unknown as EnhancedAIAnalysis;
           setAiAnalysis(saved);
-          setShowLevels(true);
           if (saved.symbol) setSelectedSymbol(saved.symbol);
           if (saved.timeframe) setSelectedInterval(saved.timeframe as ChartInterval);
         }
@@ -136,7 +150,6 @@ export default function AnalyzeScreen() {
     if (analysisId || predictionId) return;
 
     setAiAnalysis(null);
-    setShowLevels(false);
     setErrorMessage(null);
 
     // Keep the name simple; we can enhance with a search later if needed.
@@ -297,7 +310,6 @@ export default function AnalyzeScreen() {
     setAiAnalysis(null);
     setPrediction(null);
     setShowPredictionOverlay(false);
-    setShowLevels(false);
   };
 
   // Unified analysis: forecast first, then levels/setups conditioned on the
@@ -331,7 +343,6 @@ export default function AnalyzeScreen() {
         predictionId: pred.id ?? result.predictionId,
       });
       setAiAnalysis(analysis);
-      setShowLevels(true);
 
       queryClient.invalidateQueries({ queryKey: ['usage'] });
     } catch (err) {
@@ -357,10 +368,18 @@ export default function AnalyzeScreen() {
     }
   };
 
-  // Toggle local levels (instant, no API)
-  const handleToggleLevels = () => {
-    setShowLevels(!showLevels);
-  };
+  const volumeProfile = aiAnalysis?.technicalDetails?.raw?.volumeProfile ?? null;
+  const dataHasVolume = safeChartData.some((d) => (d.volume ?? 0) > 0);
+  const chartSupportLevels = chartLayers.levels
+    ? aiAnalysis
+      ? convertToAILevels(aiAnalysis.supportLevels)
+      : localLevels.support
+    : [];
+  const chartResistanceLevels = chartLayers.levels
+    ? aiAnalysis
+      ? convertToAILevels(aiAnalysis.resistanceLevels)
+      : localLevels.resistance
+    : [];
 
   return (
     <SafeAreaView style={styles.container}>
@@ -494,20 +513,16 @@ export default function AnalyzeScreen() {
               Candle
             </Text>
           </TouchableOpacity>
-          <View style={styles.viewSpacer} />
-          <TouchableOpacity
-            style={[styles.toggleButton, showEMA && styles.toggleButtonActive]}
-            onPress={() => setShowEMA(!showEMA)}
-          >
-            <Text style={[styles.toggleText, showEMA && styles.toggleTextActive]}>EMA</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.toggleButton, showLevels && styles.toggleButtonActive]}
-            onPress={handleToggleLevels}
-          >
-            <Text style={[styles.toggleText, showLevels && styles.toggleTextActive]}>S/R</Text>
-          </TouchableOpacity>
         </View>
+
+        <ChartLayerToggles
+          available={{
+            volumeProfile: !!volumeProfile?.highVolumeNodes?.length,
+            volume: dataHasVolume,
+          }}
+          withInfo
+          style={styles.layerToggles}
+        />
 
         {/* Chart */}
         <Card style={styles.chartCard} padding="none">
@@ -531,9 +546,12 @@ export default function AnalyzeScreen() {
               symbol={selectedSymbol}
               interval={selectedInterval}
               viewType={viewType}
-              showEMA={showEMA}
-              supportLevels={showLevels ? (aiAnalysis ? convertToAILevels(aiAnalysis.supportLevels) : localLevels.support) : []}
-              resistanceLevels={showLevels ? (aiAnalysis ? convertToAILevels(aiAnalysis.resistanceLevels) : localLevels.resistance) : []}
+              showEMA={chartLayers.ema}
+              showVolume={chartLayers.volume}
+              showVolumeProfile={chartLayers.volumeProfile}
+              volumeProfile={volumeProfile}
+              supportLevels={chartSupportLevels}
+              resistanceLevels={chartResistanceLevels}
               height={320}
               projectedPath={prediction?.projectedPath}
               expectedChangePct={prediction?.expectedChangePct}
@@ -649,9 +667,13 @@ export default function AnalyzeScreen() {
         {aiAnalysis && (
           <Card style={styles.analysisCard}>
             <View style={styles.analysisHeader}>
-              <Text style={styles.analysisTitle}>Atlas levels & setups</Text>
+              <View style={styles.analysisTitleRow}>
+                <Text style={styles.analysisTitle}>Atlas levels & setups</Text>
+                <InfoButton topic="confidence" />
+              </View>
               <View style={styles.confidenceBadge}>
                 <Text style={styles.confidenceText}>{aiAnalysis.overallConfidence}% confluence</Text>
+                <InfoButton topic="confluence" tone="muted" />
               </View>
             </View>
 
@@ -676,7 +698,10 @@ export default function AnalyzeScreen() {
 
             {/* Key Levels */}
             <View style={styles.levelsSection}>
-              <Text style={styles.levelsSectionTitle}>Support Levels</Text>
+              <View style={styles.levelsSectionTitleRow}>
+                <Text style={styles.levelsSectionTitle}>Support Levels</Text>
+                <InfoButton topic="supportLevel" />
+              </View>
               {aiAnalysis.supportLevels.map((level, index) => {
                 const symbol = aiAnalysis.symbol ?? selectedSymbol;
                 const isAlertActive = activeAlerts.some(
@@ -705,7 +730,10 @@ export default function AnalyzeScreen() {
             </View>
 
             <View style={styles.levelsSection}>
-              <Text style={styles.levelsSectionTitle}>Resistance Levels</Text>
+              <View style={styles.levelsSectionTitleRow}>
+                <Text style={styles.levelsSectionTitle}>Resistance Levels</Text>
+                <InfoButton topic="resistanceLevel" />
+              </View>
               {aiAnalysis.resistanceLevels.map((level, index) => {
                 const symbol = aiAnalysis.symbol ?? selectedSymbol;
                 const isAlertActive = activeAlerts.some(
@@ -752,7 +780,10 @@ export default function AnalyzeScreen() {
             {/* Trading Ideas */}
             {aiAnalysis.tradeIdeas && aiAnalysis.tradeIdeas.length > 0 && (
               <View style={styles.ideasSection}>
-                <Text style={styles.ideasTitle}>Trading Ideas</Text>
+                <View style={styles.levelsSectionTitleRow}>
+                  <Text style={styles.ideasTitle}>Trading Ideas</Text>
+                  <InfoButton topic="tradeIdea" />
+                </View>
                 {aiAnalysis.tradeIdeas.map((idea, i) => (
                   <View key={i} style={styles.ideaCard}>
                     <View style={styles.ideaHeader}>
@@ -769,8 +800,14 @@ export default function AnalyzeScreen() {
                     </View>
                     <Text style={styles.ideaDetail}>Entry: ${idea.entryZone.low.toFixed(2)} - ${idea.entryZone.high.toFixed(2)}</Text>
                     <Text style={styles.ideaDetail}>Target: ${idea.target.toFixed(2)}</Text>
-                    <Text style={styles.ideaDetail}>Stop: ${idea.stop.toFixed(2)}</Text>
-                    <Text style={styles.ideaDetail}>R/R: {idea.riskRewardRatio.toFixed(1)}:1</Text>
+                    <View style={styles.ideaDetailRow}>
+                      <Text style={styles.ideaDetail}>Stop: ${idea.stop.toFixed(2)}</Text>
+                      <InfoButton topic="stopLoss" tone="muted" />
+                    </View>
+                    <View style={styles.ideaDetailRow}>
+                      <Text style={styles.ideaDetail}>R/R: {idea.riskRewardRatio.toFixed(1)}:1</Text>
+                      <InfoButton topic="riskReward" tone="muted" />
+                    </View>
                     <Text style={styles.ideaRisk}>Invalidation: {idea.invalidation}</Text>
                   </View>
                 ))}
@@ -788,6 +825,11 @@ export default function AnalyzeScreen() {
                 ))}
               </View>
             )}
+
+            <AnalysisEducationFooter
+              analysis={aiAnalysis}
+              experienceLevel={experienceLevel}
+            />
           </Card>
         )}
 
@@ -822,6 +864,17 @@ function convertToAILevels(scoredLevels: ScoredLevel[]): AILevel[] {
     touches: level.factors.historicalTouches.count,
     description: level.description,
   }));
+}
+
+function formatLevelDistance(
+  level: ScoredLevel,
+  type: 'support' | 'resistance'
+): string {
+  const side = type === 'support' ? 'below' : 'above';
+  if (typeof level.distanceATR === 'number' && Number.isFinite(level.distanceATR)) {
+    return `${level.distanceATR.toFixed(1)} ATR ${side}`;
+  }
+  return `${level.distancePercent.toFixed(1)}% ${side}`;
 }
 
 function LevelRow({ level, type }: { level: AILevel; type: 'support' | 'resistance' }) {
@@ -887,6 +940,12 @@ function EnhancedLevelRow({
         <Text style={styles.levelPrice}>${formatPrice(level.price)}</Text>
         <Text style={styles.levelDescription}>{level.description}</Text>
         <Text style={styles.levelZone}>Zone: ${level.zone.low.toFixed(2)} - ${level.zone.high.toFixed(2)}</Text>
+        <View style={styles.distanceBadgeRow}>
+          <Text style={styles.distanceBadge}>
+            {formatLevelDistance(level, type)}
+          </Text>
+          <InfoButton topic="relevance" tone="muted" />
+        </View>
       </View>
       <View>
         <View style={styles.strengthAndBellRow}>
@@ -1063,8 +1122,12 @@ const styles = StyleSheet.create({
   viewToggle: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.md,
+    marginBottom: spacing.sm,
     gap: spacing.xs,
+  },
+  layerToggles: {
+    marginBottom: spacing.md,
+    paddingHorizontal: 0,
   },
   viewButton: {
     paddingVertical: spacing.sm,
@@ -1248,6 +1311,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  analysisTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 1,
   },
   analysisTitle: {
     ...typography.headingMd,
@@ -1258,6 +1327,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.md,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   confidenceText: {
     ...typography.labelSm,
@@ -1300,10 +1371,14 @@ const styles = StyleSheet.create({
   levelsSection: {
     marginBottom: spacing.md,
   },
+  levelsSectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
+  },
   levelsSectionTitle: {
     ...typography.labelMd,
     color: colors.neutral[600],
-    marginBottom: spacing.sm,
   },
   levelRow: {
     flexDirection: 'row',
@@ -1343,6 +1418,15 @@ const styles = StyleSheet.create({
     ...typography.bodySm,
     color: colors.neutral[400],
     marginTop: 2,
+  },
+  distanceBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  distanceBadge: {
+    ...typography.labelSm,
+    color: colors.neutral[500],
   },
   confluenceScore: {
     ...typography.labelSm,
@@ -1432,6 +1516,10 @@ const styles = StyleSheet.create({
   ideaDetail: {
     ...typography.bodySm,
     color: colors.neutral[600],
+  },
+  ideaDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   ideaRisk: {
     ...typography.bodySm,

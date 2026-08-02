@@ -18,6 +18,12 @@ import type {
   BollingerData,
 } from './technicalCalculator.js';
 
+import {
+  applyRelevance,
+  selectDisplayLevelsByRelevance,
+  getRelevanceProfile,
+} from './levelRelevance.js';
+
 // ============================================================================
 // TYPE DEFINITIONS
 // ============================================================================
@@ -42,10 +48,20 @@ export interface ScoredLevel {
   zone: {
     high: number;
     low: number;
+    halfWidth?: number;
   };
   // For display filtering
   distanceFromPrice: number;
   distancePercent: number;
+  /** Ranking score = confluenceScore × proximity relevance. UI shows confluenceScore. */
+  effectiveScore?: number;
+  /** Proximity multiplier in [floor, 1]. */
+  relevance?: number;
+  /** Distance from spot in ATR units. */
+  distanceATR?: number;
+  proximityLabel?: 'at_price' | 'in_play' | 'nearby' | 'extended' | 'distant';
+  factorCount?: number;
+  mergedFrom?: number;
 }
 
 export interface ConfidenceScoring {
@@ -270,12 +286,18 @@ function scoreLevel(
     }
 
     if (bestFibMatch) {
+      let fibPoints = bestFibMatch.weight;
+      // Weak structure (no clean pivot leg) — down-weight fib contribution.
+      const source = fibonacci.swingSource ?? '';
+      if (source.startsWith('window_') || source === 'last_resort') {
+        fibPoints = Math.round(fibPoints * 0.6);
+      }
       factors.fibonacciAlignment = {
         level: bestFibMatch.level,
         distance: bestFibMatch.distance,
-        points: bestFibMatch.weight,
+        points: fibPoints,
       };
-      totalScore += bestFibMatch.weight;
+      totalScore += fibPoints;
     }
   }
 
@@ -445,48 +467,6 @@ function consolidateLevels(
 }
 
 // ============================================================================
-// DISPLAY LEVEL SELECTION
-// ============================================================================
-
-function selectDisplayLevels(
-  levels: ScoredLevel[],
-  type: 'support' | 'resistance',
-  maxLevels: number,
-  currentPrice: number
-): ScoredLevel[] {
-  const minSpacing = ANALYSIS_CONFIG.MIN_LEVEL_SPACING_PERCENT;
-  const filtered = levels.filter((l) => l.type === type);
-
-  // Sort by confluence score descending
-  filtered.sort((a, b) => b.confluenceScore - a.confluenceScore);
-
-  const selected: ScoredLevel[] = [];
-
-  for (const level of filtered) {
-    if (selected.length >= maxLevels) break;
-
-    // Check spacing from already selected levels
-    let hasConflict = false;
-    for (const existing of selected) {
-      const spacing = Math.abs(level.price - existing.price) / currentPrice * 100;
-      if (spacing < minSpacing) {
-        hasConflict = true;
-        break;
-      }
-    }
-
-    if (!hasConflict) {
-      selected.push(level);
-    }
-  }
-
-  // Sort by distance from current price (closest first)
-  selected.sort((a, b) => a.distanceFromPrice - b.distanceFromPrice);
-
-  return selected;
-}
-
-// ============================================================================
 // OVERALL CONFIDENCE SCORING
 // ============================================================================
 
@@ -626,18 +606,42 @@ export function scoreLevels(indicators: TechnicalIndicators): ScoredAnalysis {
   );
 
   // Separate by type
-  const supportLevels = allLevels
+  const rawSupport = allLevels
     .filter((l) => l.type === 'support')
     .sort((a, b) => b.confluenceScore - a.confluenceScore);
 
-  const resistanceLevels = allLevels
+  const rawResistance = allLevels
     .filter((l) => l.type === 'resistance')
     .sort((a, b) => b.confluenceScore - a.confluenceScore);
 
-  // Select display levels
+  const interval = indicators.timeframe;
+  const relevant = applyRelevance(
+    { supportLevels: rawSupport, resistanceLevels: rawResistance },
+    {
+      currentPrice,
+      atr: atr.atr,
+      interval,
+      // Full proximity decay enabled (Phases 2+3).
+      options: { applyDecay: true },
+    }
+  );
+
+  const supportLevels = relevant.supportLevels;
+  const resistanceLevels = relevant.resistanceLevels;
+  const profile = getRelevanceProfile(interval);
+
+  // Select display levels (keep repo density: 2/side default)
   const maxPerSide = Math.floor(ANALYSIS_CONFIG.MAX_LEVELS_DEFAULT / 2);
-  const displaySupport = selectDisplayLevels(supportLevels, 'support', maxPerSide, currentPrice);
-  const displayResistance = selectDisplayLevels(resistanceLevels, 'resistance', maxPerSide, currentPrice);
+  const displaySupport = selectDisplayLevelsByRelevance(
+    supportLevels,
+    maxPerSide,
+    profile
+  );
+  const displayResistance = selectDisplayLevelsByRelevance(
+    resistanceLevels,
+    maxPerSide,
+    profile
+  );
 
   // Calculate overall confidence
   const confidence = calculateOverallConfidence(
@@ -666,22 +670,19 @@ export function scoreLevels(indicators: TechnicalIndicators): ScoredAnalysis {
 
 export function getExpandedLevels(
   scoredAnalysis: ScoredAnalysis,
-  currentPrice: number
+  _currentPrice: number
 ): { support: ScoredLevel[]; resistance: ScoredLevel[] } {
   const maxPerSide = Math.floor(ANALYSIS_CONFIG.MAX_LEVELS_EXPANDED / 2);
-
-  const expandedSupport = selectDisplayLevels(
+  // Expanded list: no displayMaxATR cap so distant strong levels remain available.
+  const expandedSupport = selectDisplayLevelsByRelevance(
     scoredAnalysis.supportLevels,
-    'support',
     maxPerSide,
-    currentPrice
+    undefined
   );
-
-  const expandedResistance = selectDisplayLevels(
+  const expandedResistance = selectDisplayLevelsByRelevance(
     scoredAnalysis.resistanceLevels,
-    'resistance',
     maxPerSide,
-    currentPrice
+    undefined
   );
 
   return {

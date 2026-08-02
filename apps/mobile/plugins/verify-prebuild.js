@@ -133,6 +133,21 @@ check(
   "com.android.billingclient:billing"
 );
 check(
+  "Google Services plugin (FCM)",
+  "app/build.gradle",
+  "com.google.gms.google-services"
+);
+check(
+  "Google Services classpath",
+  "build.gradle",
+  "com.google.gms:google-services"
+);
+warn(
+  "google-services.json in android/app/",
+  path.join(ANDROID_ROOT, "app", "google-services.json"),
+  "Run: node scripts/copy-google-services.js"
+);
+check(
   "resConfigs English only",
   "app/build.gradle",
   "resConfigs"

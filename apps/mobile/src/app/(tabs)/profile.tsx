@@ -11,13 +11,15 @@ import { colors, typography, spacing, borderRadius, shadows } from '../../theme'
 import { FREE_ANALYSIS_LIMIT, TRADING_STYLE_OPTIONS } from '@chartsignl/core';
 import { useEffect, useCallback, useState } from 'react';
 import { API_URL } from '../../lib/apiConfig';
-import { getExpoPushToken, unregisterPushToken } from '../../lib/usePushNotifications';
+import { getExpoPushToken, unregisterPushToken, usePushNotifications } from '../../lib/usePushNotifications';
+import { pushDebugProbe } from '../../lib/pushDebug';
 import Constants from 'expo-constants';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user, signOut, isPremium, checkSubscriptionStatus, isEmailVerified, refreshSubscription, checkEmailVerification, session } = useAuthStore();
+  const pushState = usePushNotifications();
 
   const { data: profileData } = useQuery({
     queryKey: ['profile'],
@@ -375,6 +377,22 @@ export default function ProfileScreen() {
           >
         {/* Email Verification Banner */}
         {!isEmailVerified && <EmailVerificationBanner variant="banner" />}
+
+        {Platform.OS !== 'web' && pushState.error && (
+          <View style={styles.pushBanner}>
+            <Ionicons name="notifications-off-outline" size={18} color={colors.warning} />
+            <Text style={styles.pushBannerText}>{pushState.error}</Text>
+          </View>
+        )}
+
+        {Platform.OS !== 'web' && !pushState.error && !pushState.expoPushToken && (
+          <View style={styles.pushBanner}>
+            <Ionicons name="notifications-outline" size={18} color={colors.neutral[600]} />
+            <Text style={styles.pushBannerText}>
+              Registering this device for price alerts…
+            </Text>
+          </View>
+        )}
         
         {/* Header */}
         <View style={styles.header}>
@@ -489,6 +507,15 @@ export default function ProfileScreen() {
           {renderSettingItem('person-outline', 'Edit Profile', handleEditProfile, true)}
           {renderSettingItem('lock-closed-outline', 'Change Password', handleChangePassword, true)}
           {renderSettingItem('notifications-outline', 'Notifications', handleNotifications, true)}
+          {Platform.OS !== 'web' && (
+            <TouchableOpacity style={styles.settingsItem} onPress={() => void pushDebugProbe()}>
+              <View style={styles.settingsItemLeft}>
+                <Ionicons name="bug-outline" size={24} color={colors.neutral[600]} />
+                <Text style={styles.settingsItemText}>Push registration probe</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.neutral[400]} />
+            </TouchableOpacity>
+          )}
           {renderSettingItem('help-circle-outline', 'Help & Support', handleHelp, false)}
           {renderSettingItem('shield-outline', 'Privacy Policy', handlePrivacy, false)}
           {renderSettingItem('document-text-outline', 'Terms of Service', handleTerms, false)}
@@ -571,6 +598,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: Platform.OS === 'web' ? 100 : spacing.xxl,
+  },
+  pushBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: colors.amber[50],
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.amber[200],
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  pushBannerText: {
+    ...typography.bodySm,
+    color: colors.neutral[800],
+    flex: 1,
+    lineHeight: 20,
   },
   // Header
   header: {

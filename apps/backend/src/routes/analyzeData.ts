@@ -58,6 +58,8 @@ const SYSTEM_PROMPT = `You are a technical analysis expert for ChartSignl. You r
 
 IMPORTANT: You are NOT calculating indicators - they are provided. Focus on interpretation and actionable insights.
 
+Levels are listed with their distance from current price in ATR. Prioritise levels within 2 ATR when suggesting entries or targets. If the nearest level on a side is more than 4 ATR away, say so plainly rather than treating it as actionable.
+
 Rules:
 - Be concise and actionable
 - Lead with the most important insight
@@ -86,6 +88,41 @@ Return your analysis as JSON with this exact structure:
 
 Return ONLY valid JSON, no other text.`;
 
+function formatLevelFactors(factors: Record<string, unknown>): string {
+  const chips: string[] = [];
+  for (const [key, value] of Object.entries(factors ?? {})) {
+    if (!value || typeof value !== 'object') continue;
+    const v = value as Record<string, unknown>;
+    const active =
+      (typeof v.points === 'number' && v.points > 0) ||
+      v.isHighVolume === true ||
+      v.isRound === true ||
+      v.isRecent === true ||
+      (v.level != null) ||
+      (v.ema != null) ||
+      (typeof v.count === 'number' && v.count > 0);
+    if (!active) continue;
+    chips.push(key);
+  }
+  return chips.length ? chips.join(', ') : 'none';
+}
+
+function formatLevelLine(l: {
+  price: number;
+  confluenceScore: number;
+  distanceATR?: number;
+  distancePercent: number;
+  type: string;
+  factors: Record<string, unknown>;
+}): string {
+  const side = l.type === 'support' ? 'below' : 'above';
+  const atrPart =
+    typeof l.distanceATR === 'number'
+      ? `${l.distanceATR.toFixed(1)} ATR ${side} (${l.distancePercent.toFixed(1)}%)`
+      : `${l.distancePercent.toFixed(1)}% ${side}`;
+  return `- $${l.price.toFixed(2)} — confluence ${l.confluenceScore}% — ${atrPart} — ${formatLevelFactors(l.factors)}`;
+}
+
 function buildUserPrompt(
   symbol: string,
   timeframe: string,
@@ -96,10 +133,15 @@ function buildUserPrompt(
   const { currentPrice, priceChangePercent, trend, ema, atr, bollinger, overextension, fibonacci } =
     indicators;
 
-  const { supportLevels, resistanceLevels, confidence } = scoredAnalysis;
+  const { supportLevels, resistanceLevels, confidence, displayLevels } = scoredAnalysis;
 
-  const topSupport = supportLevels.slice(0, 3);
-  const topResistance = resistanceLevels.slice(0, 3);
+  // Nearest first for the model — prefer display set, fall back to full lists.
+  const topSupport = [...(displayLevels?.support?.length ? displayLevels.support : supportLevels)]
+    .sort((a, b) => (a.distanceATR ?? a.distancePercent) - (b.distanceATR ?? b.distancePercent))
+    .slice(0, 3);
+  const topResistance = [...(displayLevels?.resistance?.length ? displayLevels.resistance : resistanceLevels)]
+    .sort((a, b) => (a.distanceATR ?? a.distancePercent) - (b.distanceATR ?? b.distancePercent))
+    .slice(0, 3);
 
   // Calculate EMA percentage differences from current price
   const ema9Diff = ema.ema9 > 0 ? ((ema.ema9 - currentPrice) / currentPrice) * 100 : 0;
@@ -125,25 +167,17 @@ VOLATILITY & MOMENTUM:
 - Band Position: ${(bollinger.percentB * 100).toFixed(1)}% (0% = lower band, 100% = upper band)
 - Overextension: ${overextension.status} (${overextension.direction} EMA21, signal: ${overextension.signalType})
 
-${fibonacci ? `FIBONACCI LEVELS (${fibonacci.swingDirection === 'up' ? 'retracement' : 'extension'} from ${fibonacci.swingHighDate} to ${fibonacci.swingLowDate}):
+${fibonacci ? `FIBONACCI LEVELS (${fibonacci.swingDirection === 'up' ? 'retracement' : 'extension'} from ${fibonacci.swingHighDate} to ${fibonacci.swingLowDate}${fibonacci.swingSource ? `, source=${fibonacci.swingSource}` : ''}):
 - 0%: $${(fibonacci.swingDirection === 'up' ? fibonacci.swingLow : fibonacci.swingHigh).toFixed(2)}
 ${fibonacci.levels.map((fib: any) => `- ${fib.label}: $${fib.price.toFixed(2)}`).join('\n')}
 - 100%: $${(fibonacci.swingDirection === 'up' ? fibonacci.swingHigh : fibonacci.swingLow).toFixed(2)}
 ` : ''}
 
-TOP SUPPORT LEVELS (${supportLevels.length} total, showing top 3):
-${topSupport.map((l: any, i: number) => `${i + 1}. $${l.price.toFixed(2)} - ${l.strength} (${l.confluenceScore}% confluence, ${l.distancePercent.toFixed(2)}% away)
-   Factors: ${Object.entries(l.factors)
-     .filter(([_k, v]: [string, any]) => v)
-     .map((entry: [string, any]) => entry[0])
-     .join(', ')}`).join('\n')}
+SUPPORT LEVELS (nearest first):
+${topSupport.map((l) => formatLevelLine(l as any)).join('\n') || '- none'}
 
-TOP RESISTANCE LEVELS (${resistanceLevels.length} total, showing top 3):
-${topResistance.map((l: any, i: number) => `${i + 1}. $${l.price.toFixed(2)} - ${l.strength} (${l.confluenceScore}% confluence, ${l.distancePercent.toFixed(2)}% away)
-   Factors: ${Object.entries(l.factors)
-     .filter(([_k, v]: [string, any]) => v)
-     .map((entry: [string, any]) => entry[0])
-     .join(', ')}`).join('\n')}
+RESISTANCE LEVELS (nearest first):
+${topResistance.map((l) => formatLevelLine(l as any)).join('\n') || '- none'}
 
 ANALYSIS CONFIDENCE: ${confidence.overall}% (${confidence.label})
 Factors affecting confidence:

@@ -20,6 +20,8 @@ import { colors, typography, spacing, borderRadius } from '../theme';
 import { formatPrice } from '../lib/marketData';
 import { getCurrentUser, updateNotificationPreferences } from '../lib/api';
 import { useActiveAlerts, useAllAlerts, useDeleteAlert, useToggleAlert } from '../hooks/useAlerts';
+import { usePushNotifications } from '../lib/usePushNotifications';
+import { pushDebugProbe } from '../lib/pushDebug';
 
 export default function NotificationSettingsScreen() {
   const router = useRouter();
@@ -33,6 +35,7 @@ export default function NotificationSettingsScreen() {
   const allAlertsQuery = useAllAlerts();
   const deleteAlertMutation = useDeleteAlert();
   const toggleAlertMutation = useToggleAlert();
+  const pushState = usePushNotifications();
 
   const activeAlerts = activeAlertsQuery.data ?? [];
   const manageAlerts = useMemo(() => {
@@ -66,6 +69,19 @@ export default function NotificationSettingsScreen() {
       toggleAlertMutation.isPending,
     [savingKey, isClearingAll, deleteAlertMutation.isPending, toggleAlertMutation.isPending]
   );
+
+  const pushDeliveryIssue = useMemo(() => {
+    if (Platform.OS === 'web') {
+      return 'Browser alerts are not supported yet. Install the ChartSignl iOS or Android app to receive push notifications when price levels are crossed.';
+    }
+    if (pushState.error) {
+      return pushState.error;
+    }
+    if (!pushState.expoPushToken) {
+      return 'This device is not registered for push notifications. Allow notifications in your device settings, then reopen the app.';
+    }
+    return null;
+  }, [pushState.error, pushState.expoPushToken]);
 
   const handleBack = () => {
     router.replace('/(tabs)/profile');
@@ -232,6 +248,10 @@ export default function NotificationSettingsScreen() {
                 </Text>
               )}
 
+              {pushEnabled && pushDeliveryIssue && (
+                <Text style={styles.warningNote}>{pushDeliveryIssue}</Text>
+              )}
+
               <View style={styles.rowDivider} />
 
               <View style={styles.row}>
@@ -248,6 +268,17 @@ export default function NotificationSettingsScreen() {
                 />
               </View>
             </Card>
+
+            {Platform.OS !== 'web' && (
+              <Button
+                title="Run push registration probe"
+                onPress={() => void pushDebugProbe()}
+                variant="outline"
+                size="md"
+                fullWidth
+                disabled={isBusy}
+              />
+            )}
 
             <Card style={styles.sectionCard}>
               <Text style={styles.sectionTitle}>Manage Alerts</Text>
@@ -465,6 +496,12 @@ const styles = StyleSheet.create({
     ...typography.bodySm,
     color: colors.neutral[500],
     marginTop: spacing.sm,
+  },
+  warningNote: {
+    ...typography.bodySm,
+    color: colors.warning,
+    marginTop: spacing.sm,
+    lineHeight: 20,
   },
   countRight: {
     flexDirection: 'row',
