@@ -10,7 +10,9 @@
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist",
     "test:relevance": "tsx src/lib/__tests__/levelRelevance.test.ts",
-    "test:eyeball": "tsx src/lib/__tests__/eyeballLevels.ts"
+    "test:eyeball": "tsx src/lib/__tests__/eyeballLevels.ts",
+    "accept:weekly-brief": "tsx scripts/weekly-brief-acceptance.ts",
+    "accept:daily-brief": "tsx scripts/daily-brief-acceptance.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.8.0",

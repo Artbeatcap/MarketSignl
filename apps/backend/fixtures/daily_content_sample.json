@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "date_label": "Monday, August 10, 2026",
+  "generated_at": "2026-08-10 07:15 ET",
+  "data_stale": false,
+  "preheader": "Soft open with yields steady — watch SPY 548 and the semis tape into the open.",
+  "tape": [
+    {"symbol": "SPY", "price": "$548.20", "pct": 0.18},
+    {"symbol": "QQQ", "price": "$478.65", "pct": 0.32},
+    {"symbol": "IWM", "price": "$221.40", "pct": -0.12},
+    {"symbol": "VIX", "price": "14.80", "pct": null}
+  ],
+  "sectors": [
+    {"name": "Technology", "etf": "XLK", "pct": 0.45},
+    {"name": "Comm. Services", "etf": "XLC", "pct": 0.28},
+    {"name": "Financials", "etf": "XLF", "pct": 0.10},
+    {"name": "Energy", "etf": "XLE", "pct": -0.55},
+    {"name": "Utilities", "etf": "XLU", "pct": -0.22}
+  ],
+  "movers": [
+    {"ticker": "NVDA", "pct": "+1.40%", "dir": "up", "why": "Semis bid on overnight Asia strength; futures leaning risk-on into the open."},
+    {"ticker": "XOM", "pct": "-1.10%", "dir": "down", "why": "Crude slipped overnight; energy complex lagging the broader tape."},
+    {"ticker": "JPM", "pct": "+0.60%", "dir": "up", "why": "Banks catching a bid as the curve holds steady."}
+  ],
+  "levels": {
+    "spy": {"pivot": "547.80", "support": "545.20", "support2": "542.50", "resistance": "550.10", "resistance2": "552.80"},
+    "qqq": {"pivot": "477.90", "support": "474.60", "support2": "471.20", "resistance": "481.40", "resistance2": "484.00"}
+  },
+  "catalyst_bullets": [
+    {"date": "8:30", "event": "Empire Manufacturing", "why": "Regional growth pulse"},
+    {"date": "10:00", "event": "JOLTS Job Openings", "why": "Labor demand read"},
+    {"date": "PM", "event": "Fed speakers", "why": "Rate-path tone risk"}
+  ],
+  "headlines": [
+    {"headline": "Treasury yields steady ahead of labor data", "summary": "10-year holding near recent range; rate-sensitive sectors mixed in futures."},
+    {"headline": "Asia tech closes higher", "summary": "Chip names led overnight; sets a constructive tone for U.S. semis."}
+  ],
+  "sections": {
+    "opening_bias": "Soft open with yields steady — watch SPY 548 and the semis tape into the open. Bias is cautiously constructive while QQQ holds overnight gains.",
+    "session_setup_html": "<p>Futures are pointing to a quiet open after a constructive Asia session. <strong>SPY</strong> is hovering near its overnight pivot, and breadth in futures looks constructive rather than euphoric.</p><p>The main tell is whether semis can extend without a sharp yield spike. If the 10-year stays contained, the path of least resistance is a grind higher into the midmorning data.</p>",
+    "key_level_note": "SPY 545 is the line for the morning. Lose it on volume and the open strength is a fade; hold it through JOLTS and the door stays open for a push toward 550.",
+    "todays_watch_html": "<p>Focus the first hour on whether QQQ can hold above overnight support while energy stays soft. A clean hold with rising semis is the constructive tell; a failed reclaim of SPY 548 with rising VIX is the risk-off tell.</p>",
+    "biggest_risk": "A hot JOLTS print that lifts yields and knocks rate-sensitive tech lower would flip a soft open into a failed rally. There is little room for a simultaneous squeeze in yields and a break of SPY 545."
+  }
+}

@@ -1,3 +1,4 @@
+import { parseGeneratedAt } from '../briefShared/parseGeneratedAt.js';
 import type { StoredWeeklyBrief } from './types.js';
 
 const MAX_AGE_MS = 8 * 24 * 60 * 60 * 1000;
@@ -19,7 +20,7 @@ export function checkArtifactFreshness(stored: StoredWeeklyBrief | null): Freshn
     return { ok: false, reason: 'Latest artifact has no generated_at timestamp' };
   }
 
-  const generatedAt = Date.parse(stored.generated_at);
+  const generatedAt = parseGeneratedAt(stored.generated_at);
   if (Number.isNaN(generatedAt)) {
     return { ok: false, reason: `Invalid generated_at: ${stored.generated_at}` };
   }

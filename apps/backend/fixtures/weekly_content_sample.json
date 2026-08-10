@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "week_label": "Week of June 22\u201326, 2026",
-  "generated_at": "2026-06-28T17:00:00-04:00",
+  "generated_at": "2026-08-09T17:00:00-04:00",
   "data_stale": false,
   "tape": [
     {"symbol": "SPY", "price": "$728.99", "pct": -2.00},

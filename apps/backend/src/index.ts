@@ -52,6 +52,7 @@ import predictionsRoute from './routes/predictions.js';
 import notificationRoutes from './routes/notifications.js';
 import testAlertRoute from './routes/test-alert.js';
 import { internalWeeklyBriefRoute, publicWeeklyBriefRoute } from './routes/weeklyBrief.js';
+import { internalDailyBriefRoute, publicDailyBriefRoute } from './routes/dailyBrief.js';
 import { startResolverSchedule } from './lib/resolverSchedule.js';
 
 const app = new Hono();
@@ -125,6 +126,8 @@ app.route('/api/notifications', notificationRoutes);
 app.route('/api/test-alert', testAlertRoute);
 app.route('/api/internal/weekly-brief', internalWeeklyBriefRoute);
 app.route('/api/weekly-brief', publicWeeklyBriefRoute);
+app.route('/api/internal/daily-brief', internalDailyBriefRoute);
+app.route('/api/daily-brief', publicDailyBriefRoute);
 
 // 404 handler
 app.notFound((c) => {

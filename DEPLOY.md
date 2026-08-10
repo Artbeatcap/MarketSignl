@@ -75,12 +75,14 @@ Required env vars (in repo root `.env` or in `environment` in compose):
 
 Optional (social content pipeline: `POST /api/social/generate`): `ANTHROPIC_API_KEY`, `SOCIAL_API_SECRET`. The endpoint requires the `x-social-key` header to match `SOCIAL_API_SECRET`; both are already in the compose `environment` block.
 
-Optional (weekly brief email): `SENDGRID_API_KEY`, `WEEKLY_CONTENT_INGEST_SECRET`, `WEEKLY_BRIEF_FROM`, `ALERT_WEBHOOK_URL`, `API_URL`. Before production sends, authenticate `chartsignl.com` in SendGrid (SPF/DKIM) and verify the sender `weekly@chartsignl.com`.
+Optional (weekly + daily brief email): `SENDGRID_API_KEY`, `WEEKLY_CONTENT_INGEST_SECRET` (shared ingest secret for both briefs), `WEEKLY_BRIEF_FROM`, `DAILY_BRIEF_FROM`, `ALERT_WEBHOOK_URL`, `API_URL`. Before production sends, authenticate `chartsignl.com` in SendGrid (SPF/DKIM) and verify senders `weekly@chartsignl.com` and `daily@chartsignl.com`.
 
-Apply the weekly brief migration before first use:
+Apply the brief migrations before first use:
 
 ```bash
-# Run supabase/migrations/20250627120000_weekly_brief.sql in Supabase SQL editor or via CLI
+# Run in Supabase SQL editor or via CLI:
+#   supabase/migrations/20250627120000_weekly_brief.sql
+#   supabase/migrations/20260810120000_daily_brief.sql
 ```
 
 ### Weekly Brief cron (Sunday 6:00 PM ET)
@@ -203,6 +205,67 @@ curl -X POST "https://api.chartsignl.com/api/internal/weekly-brief/ingest" \
 ```
 
 The freshness guard skips send if no artifact exists, `data_stale=true`, or `generated_at` is older than 8 days.
+
+### Daily / Morning Brief cron (weekdays 7:30 AM ET)
+
+Same pattern as weekly: Options Plunge builds the daily brief, then `daily_content_publisher.py` POSTs a neutral artifact to ChartSignl ingest. n8n triggers ChartSignl send on weekday mornings. ChartSignl does **not** re-fetch market APIs.
+
+**OP env (server-backup):**
+
+| Var | Purpose |
+|-----|---------|
+| `CHARTSIGNL_DAILY_INGEST_URL` | Default `https://api.chartsignl.com/api/internal/daily-brief/ingest` |
+| `WEEKLY_CONTENT_INGEST_SECRET` | Shared `x-ingest-secret` (same as weekly) |
+| `DAILY_CONTENT_INGEST_SECRET` | Optional override for daily only |
+
+After a successful OP daily send, `send_daily_brief.py` calls `publish_daily_content(context)` (non-fatal). Dry-run logs `ChartSignl contract keys: …` without POSTing.
+
+#### n8n: Morning Brief send workflow
+
+| Node | Setting |
+|------|---------|
+| **Schedule Trigger** | Weekdays (Mon–Fri), **7:30 AM**, timezone `America/New_York` |
+| **HTTP Request** | `POST http://chartsignl-api:4000/api/internal/daily-brief/send` |
+
+**Headers:** `x-cron-secret` (same `CRON_SECRET` as weekly / price checker), `Content-Type: application/json`.
+
+**Suggested workflow name:** `ChartSignl Morning Brief Send`
+
+**Activation order:** inactive → ingest fixture or live OP publish → `dryRun=1` → `testEmail=` → activate.
+
+When rotating `CRON_SECRET`, also update this workflow alongside Weekly Brief and Price Alert Checker.
+
+#### Pre-flight (daily)
+
+1. Apply `20260810120000_daily_brief.sql` (adds `daily_brief_content`, `profiles.daily_brief_opt_in` mirrored from weekly opt-in, `get_daily_brief_recipients`)
+2. Ingest: `POST /api/internal/daily-brief/ingest` with `x-ingest-secret` + `apps/backend/fixtures/daily_content_sample.json`
+3. Dry run: `POST .../daily-brief/send?dryRun=1`
+4. Test: `POST .../daily-brief/send?testEmail=you@example.com`
+5. Activate n8n schedule **after** OP daily publisher is deploying and ingesting
+
+Freshness: skip if no artifact, `data_stale=true`, or older than **36 hours**.
+
+```bash
+curl -X POST "https://api.chartsignl.com/api/internal/daily-brief/send" \
+  -H "x-cron-secret: $CRON_SECRET"
+
+curl -X POST "https://api.chartsignl.com/api/internal/daily-brief/send?dryRun=1" \
+  -H "x-cron-secret: $CRON_SECRET"
+
+curl -X POST "https://api.chartsignl.com/api/internal/daily-brief/ingest" \
+  -H "Content-Type: application/json" \
+  -H "x-ingest-secret: $WEEKLY_CONTENT_INGEST_SECRET" \
+  -d @apps/backend/fixtures/daily_content_sample.json
+```
+
+Local acceptance (no APIs):
+
+```bash
+npx tsx apps/backend/scripts/weekly-brief-acceptance.ts
+npx tsx apps/backend/scripts/daily-brief-acceptance.ts
+# HTML: apps/backend/tmp/weekly-brief-dryrun.html
+#       apps/backend/tmp/daily-brief-dryrun.html
+```
 
 To rebuild/restart on the server:
 

@@ -1,5 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { parseGeneratedAt } from '../briefShared/parseGeneratedAt.js';
 import type { StoredWeeklyBrief, WeeklyContent } from './types.js';
+
+function toTimestamptz(value: string): string | null {
+  const ms = parseGeneratedAt(value);
+  return Number.isNaN(ms) ? null : new Date(ms).toISOString();
+}
 
 export async function saveArtifact(
   supabase: SupabaseClient,
@@ -9,7 +15,7 @@ export async function saveArtifact(
     .from('weekly_brief_content')
     .insert({
       week_label: content.week_label,
-      generated_at: content.generated_at,
+      generated_at: toTimestamptz(content.generated_at),
       data_stale: content.data_stale,
       artifact: content,
     })

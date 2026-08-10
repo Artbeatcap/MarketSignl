@@ -1,16 +1,25 @@
 import { CHART_COLORS } from '@chartsignl/core';
 import type { WeeklyBrand } from './types.js';
 
+/** Fallback if package resolution races during local scripts. */
+const colors = CHART_COLORS ?? {
+  lineStroke: '#14B8A6',
+  prediction: '#3B82F6',
+  support: '#10B981',
+  resistance: '#EF4444',
+};
+
+/** ChartSignl product tokens for weekly + daily brief emails (not Options Plunge). */
 export const CHARTSIGNL_BRAND: WeeklyBrand = {
   name: 'ChartSignl',
   appUrl: process.env.FRONTEND_URL?.includes('app.chartsignl')
     ? process.env.FRONTEND_URL
     : 'https://app.chartsignl.com',
-  accent: CHART_COLORS.lineStroke,
-  accentLight: CHART_COLORS.prediction,
-  support: CHART_COLORS.support,
-  resistance: CHART_COLORS.resistance,
-  cta: CHART_COLORS.prediction,
+  accent: colors.lineStroke,
+  accentLight: colors.prediction,
+  support: colors.support,
+  resistance: colors.resistance,
+  cta: colors.prediction,
   headerGradientStart: '#0b1220',
   headerGradientEnd: '#0f2e2a',
 };
