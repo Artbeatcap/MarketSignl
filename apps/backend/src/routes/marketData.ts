@@ -274,81 +274,210 @@ marketDataRoute.get('/:symbol/quote', async (c) => {
   }
 });
 
+type MassiveTickerResult = {
+  ticker?: string;
+  name?: string;
+  type?: string;
+  market?: string;
+  primary_exchange?: string;
+};
+
+type SymbolSearchResult = {
+  symbol: string;
+  name: string;
+  type: string;
+  market?: string;
+  exchange?: string;
+  marketCap: number;
+};
+
+const MAJOR_EXCHANGES = ['XNAS', 'XNYS', 'ARCX', 'BATS'];
+const EXCLUDE_OTC_EXCHANGES = ['OTCM', 'PINK', 'OTCB', 'OTCQ', 'OTCX'];
+const SEARCHABLE_TYPES = new Set(['CS', 'ETF', 'ETV', 'ADRC']);
+
+/** True when the query looks like a ticker symbol (e.g. MU, BRK.B), not a company name. */
+function isTickerLikeQuery(query: string): boolean {
+  return /^[A-Z]{1,5}(?:\.[A-Z]{1,2})?$/.test(query);
+}
+
+/** Lexicographic upper bound for ticker prefix range queries (MU -> MV). */
+function tickerPrefixUpperBound(prefix: string): string {
+  const last = prefix.charCodeAt(prefix.length - 1);
+  return prefix.slice(0, -1) + String.fromCharCode(last + 1);
+}
+
+async function fetchMassiveTickers(url: string): Promise<MassiveTickerResult[]> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return [];
+    const json = (await response.json()) as { results?: MassiveTickerResult[] };
+    return Array.isArray(json.results) ? json.results : [];
+  } catch {
+    return [];
+  }
+}
+
+function isAllowedSearchTicker(ticker: MassiveTickerResult): boolean {
+  if (!ticker.ticker || !ticker.name || !ticker.type) return false;
+  if (ticker.primary_exchange && EXCLUDE_OTC_EXCHANGES.includes(ticker.primary_exchange)) {
+    return false;
+  }
+  return SEARCHABLE_TYPES.has(ticker.type);
+}
+
+function toSearchResult(ticker: MassiveTickerResult, marketCap = 0): SymbolSearchResult {
+  return {
+    symbol: ticker.ticker!,
+    name: ticker.name!,
+    type: ticker.type!,
+    market: ticker.market,
+    exchange: ticker.primary_exchange,
+    marketCap,
+  };
+}
+
+/** Fetch market caps for ranking; best-effort and capped to avoid rate limits. */
+async function fetchMarketCaps(
+  symbols: string[],
+  apiKey: string,
+  limit = 12
+): Promise<Map<string, number>> {
+  const caps = new Map<string, number>();
+  const targets = symbols.slice(0, limit);
+
+  await Promise.all(
+    targets.map(async (symbol) => {
+      try {
+        const url = `${MASSIVE_BASE_URL}/v3/reference/tickers/${encodeURIComponent(symbol)}?apiKey=${apiKey}`;
+        const response = await fetch(url);
+        if (!response.ok) return;
+        const json = (await response.json()) as { results?: { market_cap?: number } };
+        const marketCap = json.results?.market_cap;
+        if (typeof marketCap === 'number' && marketCap > 0) {
+          caps.set(symbol, marketCap);
+        }
+      } catch {
+        // Ignore individual failures; ranking falls back to exchange/length.
+      }
+    })
+  );
+
+  return caps;
+}
+
+function compareSearchResults(
+  a: SymbolSearchResult,
+  b: SymbolSearchResult,
+  queryUpper: string
+): number {
+  const aExact = a.symbol === queryUpper;
+  const bExact = b.symbol === queryUpper;
+  if (aExact !== bExact) return aExact ? -1 : 1;
+
+  const aStarts = a.symbol.startsWith(queryUpper);
+  const bStarts = b.symbol.startsWith(queryUpper);
+  if (aStarts !== bStarts) return aStarts ? -1 : 1;
+
+  // Among ticker matches, prefer larger market caps when available.
+  if (aStarts && bStarts && a.marketCap !== b.marketCap) {
+    return b.marketCap - a.marketCap;
+  }
+
+  // Shorter tickers are usually the primary listing (MU before MUFG).
+  if (aStarts && bStarts && a.symbol.length !== b.symbol.length) {
+    return a.symbol.length - b.symbol.length;
+  }
+
+  const aIsMajor = !!a.exchange && MAJOR_EXCHANGES.includes(a.exchange);
+  const bIsMajor = !!b.exchange && MAJOR_EXCHANGES.includes(b.exchange);
+  if (aIsMajor !== bIsMajor) return aIsMajor ? -1 : 1;
+
+  return a.symbol.localeCompare(b.symbol);
+}
+
 // GET /api/market-data/search - Search for symbols
 marketDataRoute.get('/search/:query', async (c) => {
   try {
     const massiveApiKey = getMassiveApiKey();
-    const query = c.req.param('query');
+    const query = c.req.param('query').trim();
 
     if (!massiveApiKey) {
       console.error('[ROUTE ERROR] MASSIVE_API_KEY is not set or empty');
       return c.json({ error: 'Massive API key not configured' }, 500);
     }
 
-    // Fetch up to 100 results (stocks and ETFs) for better filtering
-    const url = `${MASSIVE_BASE_URL}/v3/reference/tickers?search=${encodeURIComponent(query)}&active=true&limit=100&apiKey=${massiveApiKey}`;
-
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      return c.json({ error: 'Search failed' }, 500);
+    if (!query) {
+      return c.json({ results: [] });
     }
 
-    const json = await response.json() as any;
-
-    // Filter results to prioritize major US exchanges (NASDAQ, NYSE, ARCA)
-    // and exclude OTC, pink sheets, and other minor exchanges
-    const majorExchanges = ['XNAS', 'XNYS', 'ARCX', 'BATS'];
-    const excludeOTC = ['OTCM', 'PINK', 'OTCB', 'OTCQ', 'OTCX'];
-    
-    const rawResults = json.results || [];
-    
-    let results = rawResults
-      .filter((ticker: any) => {
-        // Exclude OTC and pink sheets
-        if (excludeOTC.includes(ticker.primary_exchange)) {
-          return false;
-        }
-        // Only include common stocks, ETFs, and ETVs (Exchange Traded Vehicles)
-        return ticker.type === 'CS' || ticker.type === 'ETF' || ticker.type === 'ETV' || ticker.type === 'ADRC';
-      })
-      .map((ticker: any) => ({
-        symbol: ticker.ticker,
-        name: ticker.name,
-        type: ticker.type,
-        market: ticker.market,
-        exchange: ticker.primary_exchange,
-      }));
-
-    // Sort: Exact match first, then closest match, then major exchanges, then alphabetically
     const queryUpper = query.toUpperCase();
-    results.sort((a: any, b: any) => {
-      // 1. Exact match comes first
-      const aExact = a.symbol === queryUpper;
-      const bExact = b.symbol === queryUpper;
-      if (aExact && !bExact) return -1;
-      if (!aExact && bExact) return 1;
-      
-      // 2. Starts with query comes next
-      const aStarts = a.symbol.startsWith(queryUpper);
-      const bStarts = b.symbol.startsWith(queryUpper);
-      if (aStarts && !bStarts) return -1;
-      if (!aStarts && bStarts) return 1;
-      
-      // 3. Major exchanges preferred
-      const aIsMajor = majorExchanges.includes(a.exchange);
-      const bIsMajor = majorExchanges.includes(b.exchange);
-      if (aIsMajor && !bIsMajor) return -1;
-      if (!aIsMajor && bIsMajor) return 1;
-      
-      // 4. Alphabetically
-      return a.symbol.localeCompare(b.symbol);
+    const tickerLike = isTickerLikeQuery(queryUpper);
+
+    // Name/relevance search alone often buries short tickers (e.g. search=MU never returns MU).
+    // For ticker-like queries, also fetch exact + prefix ticker matches and merge.
+    const nameSearchUrl =
+      `${MASSIVE_BASE_URL}/v3/reference/tickers` +
+      `?search=${encodeURIComponent(query)}&active=true&market=stocks&limit=100&apiKey=${massiveApiKey}`;
+
+    const requests: Promise<MassiveTickerResult[]>[] = [fetchMassiveTickers(nameSearchUrl)];
+
+    if (tickerLike) {
+      const upperBound = tickerPrefixUpperBound(queryUpper);
+      const prefixUrl =
+        `${MASSIVE_BASE_URL}/v3/reference/tickers` +
+        `?ticker.gte=${encodeURIComponent(queryUpper)}` +
+        `&ticker.lt=${encodeURIComponent(upperBound)}` +
+        `&active=true&market=stocks&limit=100&apiKey=${massiveApiKey}`;
+      const exactUrl =
+        `${MASSIVE_BASE_URL}/v3/reference/tickers` +
+        `?ticker=${encodeURIComponent(queryUpper)}&active=true&limit=10&apiKey=${massiveApiKey}`;
+      requests.push(fetchMassiveTickers(prefixUrl), fetchMassiveTickers(exactUrl));
+    }
+
+    const pages = await Promise.all(requests);
+    const bySymbol = new Map<string, SymbolSearchResult>();
+
+    // Insert name hits first, then overlay ticker hits so symbol matches win on conflicts.
+    for (const page of pages) {
+      for (const ticker of page) {
+        if (!isAllowedSearchTicker(ticker)) continue;
+        const symbol = ticker.ticker!;
+        if (!bySymbol.has(symbol)) {
+          bySymbol.set(symbol, toSearchResult(ticker));
+        }
+      }
+    }
+
+    let results = Array.from(bySymbol.values());
+
+    // Best-effort market-cap enrichment for ticker-like queries (ranking only).
+    // Cap detail lookups to keep search snappy and stay within provider rate limits.
+    if (tickerLike && results.length > 0) {
+      const prefixSymbols = results
+        .filter((r) => r.symbol.startsWith(queryUpper))
+        .sort((a, b) => a.symbol.length - b.symbol.length || a.symbol.localeCompare(b.symbol))
+        .map((r) => r.symbol);
+
+      const caps = await fetchMarketCaps(prefixSymbols, massiveApiKey, 8);
+      if (caps.size > 0) {
+        for (const result of results) {
+          const marketCap = caps.get(result.symbol);
+          if (marketCap != null) result.marketCap = marketCap;
+        }
+      }
+    }
+
+    results.sort((a, b) => compareSearchResults(a, b, queryUpper));
+
+    return c.json({
+      results: results.slice(0, 40).map(({ symbol, name, type, market, exchange }) => ({
+        symbol,
+        name,
+        type,
+        market,
+        exchange,
+      })),
     });
-
-    // Limit to top 40 results
-    results = results.slice(0, 40);
-
-    return c.json({ results });
   } catch (error) {
     console.error('Search error:', error);
     return c.json(
