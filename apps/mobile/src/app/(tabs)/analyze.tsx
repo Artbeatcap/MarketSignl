@@ -633,6 +633,7 @@ export default function AnalyzeScreen() {
               loading={isAnalyzing}
               disabled={isLoadingData || safeChartData.length === 0 || !usage}
               variant={analyzeLocked ? 'secondary' : 'primary'}
+              testID="atlas-analyze-cta"
             />
           </View>
           {errorMessage && (

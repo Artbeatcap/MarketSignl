@@ -269,7 +269,7 @@ export default function NotificationSettingsScreen() {
               </View>
             </Card>
 
-            {Platform.OS !== 'web' && (
+            {__DEV__ && Platform.OS !== 'web' && (
               <Button
                 title="Run push registration probe"
                 onPress={() => void pushDebugProbe()}
