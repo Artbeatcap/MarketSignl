@@ -7,6 +7,7 @@ export * from './types/enhancedAnalysis';
 export * from './types/prediction';
 export * from './types/weeklyBrief';
 export * from './types/dailyBrief';
+export * from './types/dataFreshness';
 
 // Prediction chart helpers (used by mobile/web prediction overlays)
 export * from './lib/predictionChart';
@@ -19,6 +20,11 @@ export const FREE_ANALYSIS_LIMIT = 3;
 export const FREE_PREDICTION_LIMIT = 3;
 export const MAX_IMAGE_SIZE_MB = 10;
 export const SUPPORTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
+
+/** Delay of the current market-data plan, in minutes. 0 = real-time. */
+export const MARKET_DATA_DELAY_MINUTES = 15;
+/** Confirm against current Massive/Polygon ToS before shipping. */
+export const MARKET_DATA_SOURCE = 'Polygon.io';
 
 // Color palette for chart markup
 export const MARKUP_COLORS: Record<string, string> = {

@@ -74,6 +74,12 @@ const FAQ_ITEMS: FAQItem[] = [
     answer:
       'Tap on your Profile tab, then select "Edit Profile" to update your trading style, experience level, and display name. This helps us tailor the analysis to your trading approach.',
   },
+  {
+    id: '10',
+    question: 'Is ChartSignl market data real-time?',
+    answer:
+      'No. US equity, ETF, and index prices are delayed by at least 15 minutes. Support and resistance levels are based on chart structure, which does not change on a 15-minute timescale. Always confirm the current price with your broker before placing a trade. See Settings → Data & Disclosures for the live timestamp and full disclaimer.',
+  },
 ];
 
 export default function HelpScreen() {

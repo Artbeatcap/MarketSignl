@@ -50,6 +50,7 @@
   "scripts": {
     "build": "tsc",
     "type-check": "tsc --noEmit",
+    "test:freshness": "npx tsx src/types/__tests__/dataFreshness.test.ts",
     "clean": "rm -rf dist"
   },
   "devDependencies": {

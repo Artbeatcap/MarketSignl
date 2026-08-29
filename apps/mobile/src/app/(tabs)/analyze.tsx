@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, SymbolSearch, StockChart, EmailVerificationBanner, PredictionSummary } from '../../components';
+import { Button, Card, SymbolSearch, StockChart, EmailVerificationBanner, PredictionSummary, DataFreshnessBadge, DataFreshnessSheet } from '../../components';
 import {
   InfoButton,
   AnalysisEducationFooter,
@@ -31,7 +31,7 @@ import { colors, typography, spacing, borderRadius, shadows } from '../../theme'
 import { API_URL } from '../../lib/apiConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { FREE_ANALYSIS_LIMIT, FREE_PREDICTION_LIMIT, CHART_INTERVAL_OPTIONS, CHART_COLORS } from '@chartsignl/core';
-import type { ChartViewType, ChartInterval, AILevel, EnhancedAIAnalysis, ScoredLevel, AIPrediction } from '@chartsignl/core';
+import type { ChartViewType, ChartInterval, AILevel, EnhancedAIAnalysis, ScoredLevel, AIPrediction, DataFreshness } from '@chartsignl/core';
 import * as SecureStore from 'expo-secure-store';
 import * as Haptics from 'expo-haptics';
 
@@ -75,6 +75,10 @@ export default function AnalyzeScreen() {
   // Atlas Analysis state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<EnhancedAIAnalysis | null>(null);
+  const [freshnessSheet, setFreshnessSheet] = useState<{
+    freshness?: DataFreshness;
+    historical?: boolean;
+  } | null>(null);
   const [localLevels, setLocalLevels] = useState<{ support: AILevel[]; resistance: AILevel[] }>({
     support: [],
     resistance: [],
@@ -252,17 +256,18 @@ export default function AnalyzeScreen() {
 
   // Fetch market data
   const {
-    data: chartData,
+    data: chartQuery,
     isLoading: isLoadingData,
     error: dataError,
     refetch,
   } = useQuery({
     queryKey: ['marketData', selectedSymbol, selectedInterval],
     queryFn: () => fetchMarketDataWithIndicators(selectedSymbol, selectedInterval),
-    staleTime: 1000 * 60 * 5, // 5 minutes
+    staleTime: 1000 * 60, // 60s — delayed feed returns identical bytes more often than this
     retry: 2,
   });
-  const safeChartData = chartData ?? [];
+  const safeChartData = chartQuery?.data ?? [];
+  const chartFreshness = chartQuery?.freshness;
 
   // Calculate local levels when data changes
   useEffect(() => {
@@ -341,7 +346,7 @@ export default function AnalyzeScreen() {
         direction: pred.direction,
         confidence: pred.confidence,
         predictionId: pred.id ?? result.predictionId,
-      });
+      }, chartFreshness);
       setAiAnalysis(analysis);
 
       queryClient.invalidateQueries({ queryKey: ['usage'] });
@@ -461,6 +466,15 @@ export default function AnalyzeScreen() {
           </View>
           <Text style={styles.selectorArrow}>▼</Text>
         </TouchableOpacity>
+
+        {chartFreshness ? (
+          <View style={styles.freshnessRow}>
+            <DataFreshnessBadge
+              freshness={chartFreshness}
+              onPress={() => setFreshnessSheet({ freshness: chartFreshness })}
+            />
+          </View>
+        ) : null}
 
         {/* Interval Selector */}
         <ScrollView
@@ -677,6 +691,18 @@ export default function AnalyzeScreen() {
                 <InfoButton topic="confluence" tone="muted" />
               </View>
             </View>
+            <View style={styles.analysisFreshnessRow}>
+              <DataFreshnessBadge
+                freshness={aiAnalysis.freshness}
+                historical={!!analysisId}
+                onPress={() =>
+                  setFreshnessSheet({
+                    freshness: aiAnalysis.freshness,
+                    historical: !!analysisId,
+                  })
+                }
+              />
+            </View>
 
             {/* Lightweight confirmation after setting/removing alerts */}
             {alertFeedback && isNative && (
@@ -842,6 +868,12 @@ export default function AnalyzeScreen() {
             onClose={() => setShowSymbolSearch(false)}
             onSelectSymbol={handleSelectSymbol}
             currentSymbol={selectedSymbol}
+          />
+          <DataFreshnessSheet
+            freshness={freshnessSheet?.freshness}
+            historical={freshnessSheet?.historical}
+            visible={!!freshnessSheet}
+            onClose={() => setFreshnessSheet(null)}
           />
         </View>
       </View>
@@ -1096,6 +1128,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.neutral[400],
   },
+  freshnessRow: {
+    marginBottom: spacing.md,
+  },
   // Intervals
   intervalScroll: {
     marginBottom: spacing.md,
@@ -1313,6 +1348,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.sm,
     gap: spacing.sm,
+  },
+  analysisFreshnessRow: {
+    marginBottom: spacing.md,
   },
   analysisTitleRow: {
     flexDirection: 'row',

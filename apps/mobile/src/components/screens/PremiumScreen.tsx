@@ -19,6 +19,7 @@ import { useAuthStore } from '../../store/authStore';
 import { subscriptionService } from '../../services/subscription.service';
 import * as api from '../../lib/api';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
+import { MARKET_DATA_DELAY_MINUTES } from '@chartsignl/core';
 
 interface PremiumFeature {
   icon: keyof typeof Ionicons.glyphMap;
@@ -662,6 +663,10 @@ export default function PremiumScreen() {
               </View>
             </View>
           ))}
+          <Text style={styles.dataNote}>
+            Market data is delayed at least {MARKET_DATA_DELAY_MINUTES} minutes. Pro unlocks
+            unlimited analyses, not faster data.
+          </Text>
         </Card>
 
         {/* Subscription Plan */}
@@ -916,6 +921,12 @@ const styles = StyleSheet.create({
   featureDescription: {
     ...typography.bodySm,
     color: colors.neutral[500],
+    lineHeight: 20,
+  },
+  dataNote: {
+    ...typography.bodySm,
+    color: colors.neutral[500],
+    marginTop: spacing.md,
     lineHeight: 20,
   },
   // Current plan styles (for premium users)

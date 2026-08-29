@@ -9,5 +9,6 @@
     "declaration": false,
     "declarationMap": false
   },
-  "include": ["src/lib/**/*"]
+  "include": ["src/lib/**/*", "src/types/dataFreshness.ts"],
+  "exclude": ["**/__tests__/**"]
 }

@@ -10,4 +10,7 @@ export { PredictionSummary } from './PredictionSummary';
 export { EmailVerificationBanner } from './EmailVerificationBanner';
 export { GoogleLogo } from './GoogleLogo';
 export { AppleLogo } from './AppleLogo';
-export { NewsletterSignup } from './NewsletterSignup';
+export { DataFreshnessBadge } from './DataFreshnessBadge';
+export { DataFreshnessSheet } from './DataFreshnessSheet';
+export { DataFreshnessBadge } from './DataFreshnessBadge';
+export { DataFreshnessSheet } from './DataFreshnessSheet';

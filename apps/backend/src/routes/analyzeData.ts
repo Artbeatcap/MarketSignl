@@ -25,7 +25,14 @@ import type {
   EnhancedAIAnalysis,
   TechnicalDetails,
   TradeIdea,
+  DataFreshness,
 } from '@chartsignl/core';
+import {
+  FreshnessValidationError,
+  formatAsOf,
+  freshnessFromBars,
+  validateClientFreshness,
+} from '../lib/feedFreshness.js';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -49,7 +56,10 @@ function getEffectiveUsedThisWeek(
 // AI PROMPT TEMPLATES
 // ============================================================================
 
-const SYSTEM_PROMPT = `You are a technical analysis expert for ChartSignl. You receive pre-calculated technical indicators and scored support/resistance levels. Your job is to:
+export const PROMPT_VERSION = '2026-08-29-delayed';
+
+function buildSystemPrompt(asOfFormatted: string): string {
+  return `You are a technical analysis expert for ChartSignl. You receive pre-calculated technical indicators and scored support/resistance levels. Your job is to:
 
 1. INTERPRET the data - explain what it means in plain English
 2. SYNTHESIZE - connect the indicators to form a cohesive market view
@@ -59,6 +69,26 @@ const SYSTEM_PROMPT = `You are a technical analysis expert for ChartSignl. You r
 IMPORTANT: You are NOT calculating indicators - they are provided. Focus on interpretation and actionable insights.
 
 Levels are listed with their distance from current price in ATR. Prioritise levels within 2 ATR when suggesting entries or targets. If the nearest level on a side is more than 4 ATR away, say so plainly rather than treating it as actionable.
+
+DATA FRESHNESS
+
+Price data is delayed and is timestamped ${asOfFormatted}. Never state where price is
+"right now" or "currently."
+
+- Anchor every price statement to the timestamp or to a completed candle.
+  Write "as of the 10:42 print, price sits just under the 452.30 shelf,"
+  not "price is currently testing 452.30."
+- Levels, zones, structure and invalidation points are STRUCTURAL. They are
+  not affected by the delay. Describe them with full confidence and without
+  hedging — that is what the user is paying for.
+- Trade ideas are conditional by nature. Phrase entries as conditions to be
+  met ("a reclaim of 452.30 on a closing basis opens..."), never as
+  instructions to act at this instant.
+- Never invent a time. If no timestamp is supplied, omit temporal framing
+  entirely rather than guessing.
+
+Banned phrasings: "right now", "currently", "at this moment", "as we speak",
+"live", "real-time", "just broke", "is breaking".
 
 Rules:
 - Be concise and actionable
@@ -87,6 +117,21 @@ Return your analysis as JSON with this exact structure:
 }
 
 Return ONLY valid JSON, no other text.`;
+}
+
+const BANNED_TENSE =
+  /\b(right now|currently|at this moment|as we speak|real[- ]time|just broke|is breaking)\b/i;
+
+function auditTense(analysis: EnhancedAIAnalysis): string[] {
+  const fields = [
+    analysis.headline,
+    analysis.summary,
+    ...(analysis.keyObservations ?? []),
+    ...(analysis.tradeIdeas ?? []).map((t) => t.scenario),
+    ...(analysis.riskFactors ?? []),
+  ];
+  return fields.filter((f) => typeof f === 'string' && BANNED_TENSE.test(f));
+}
 
 function formatLevelFactors(factors: Record<string, unknown>): string {
   const chips: string[] = [];
@@ -128,7 +173,8 @@ function buildUserPrompt(
   timeframe: string,
   indicators: TechnicalIndicators,
   scoredAnalysis: ScoredAnalysis,
-  forecast?: { direction: string; confidence: number } | null
+  forecast?: { direction: string; confidence: number } | null,
+  asOfFormatted?: string,
 ): string {
   const { currentPrice, priceChangePercent, trend, ema, atr, bollinger, overextension, fibonacci } =
     indicators;
@@ -149,7 +195,7 @@ function buildUserPrompt(
   const ema65Diff = ema.ema65 > 0 ? ((ema.ema65 - currentPrice) / currentPrice) * 100 : 0;
 
   return `Analyze ${symbol} on the ${timeframe} timeframe.
-
+${asOfFormatted ? `\nPRICE TIMESTAMP: as of ${asOfFormatted}. Anchor every price statement to this time. Do not say where price is right now.\n` : ''}
 CURRENT STATE:
 - Price: $${currentPrice.toFixed(2)} (${priceChangePercent > 0 ? '+' : ''}${priceChangePercent.toFixed(2)}%)
 - Trend: ${trend.direction} (${(trend.strength * 100).toFixed(0)}% strength)
@@ -245,19 +291,38 @@ analyzeDataRoute.post('/', async (c) => {
     // STEP 2: Parse request data
     // ========================================================================
     const body = await c.req.json();
-    const { symbol, interval, data, forecast, predictionId } = body as {
+    const { symbol, interval, data, forecast, predictionId, freshness: rawFreshness } = body as {
       symbol: string;
       interval: string;
       data: MarketDataPoint[];
       forecast?: { direction: string; confidence: number } | null;
       predictionId?: string;
+      freshness?: unknown;
     };
 
     if (!symbol || !interval || !Array.isArray(data) || data.length === 0) {
       return c.json({ success: false, error: 'Missing required fields' }, 400);
     }
 
-    console.log(`[Analysis] Analyzing ${symbol} (${interval}) with ${data.length} data points`);
+    let freshness: DataFreshness | undefined;
+    if (rawFreshness !== undefined && rawFreshness !== null) {
+      try {
+        freshness = validateClientFreshness(rawFreshness);
+      } catch (err) {
+        const message =
+          err instanceof FreshnessValidationError ? err.message : 'Invalid freshness payload';
+        return c.json({ success: false, error: message }, 400);
+      }
+    } else {
+      freshness = freshnessFromBars(data) ?? undefined;
+    }
+
+    const asOfFormatted = freshness ? formatAsOf(freshness.asOf) : '';
+
+    console.log(`[Analysis] Analyzing ${symbol} (${interval}) with ${data.length} data points`, {
+      promptVersion: PROMPT_VERSION,
+      asOf: freshness?.asOf ?? null,
+    });
 
     // ========================================================================
     // STEP 3: Calculate technical indicators
@@ -289,12 +354,19 @@ analyzeDataRoute.post('/', async (c) => {
     // ========================================================================
     // STEP 5: Get AI interpretation
     // ========================================================================
-    const userPrompt = buildUserPrompt(symbol, interval, indicators, scoredAnalysis, forecast);
+    const userPrompt = buildUserPrompt(
+      symbol,
+      interval,
+      indicators,
+      scoredAnalysis,
+      forecast,
+      asOfFormatted || undefined,
+    );
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: buildSystemPrompt(asOfFormatted || 'unknown') },
         { role: 'user', content: userPrompt },
       ],
       max_completion_tokens: 800,
@@ -423,6 +495,7 @@ analyzeDataRoute.post('/', async (c) => {
       symbol,
       timeframe: interval,
       analyzedAt: new Date().toISOString(),
+      ...(freshness ? { freshness } : {}),
 
       currentPrice: indicators.currentPrice,
       priceChange: indicators.priceChange,
@@ -459,6 +532,19 @@ analyzeDataRoute.post('/', async (c) => {
 
       technicalDetails,
     };
+
+    const tenseHits = auditTense(analysis);
+    if (tenseHits.length > 0) {
+      console.warn(
+        JSON.stringify({
+          event: 'atlas_tense_violation',
+          symbol,
+          promptVersion: PROMPT_VERSION,
+          count: tenseHits.length,
+          samples: tenseHits.slice(0, 3),
+        }),
+      );
+    }
 
     // ========================================================================
     // STEP 7: SAVE TO DATABASE
@@ -590,6 +676,8 @@ analyzeDataRoute.post('/', async (c) => {
       supportLevels: analysis.supportLevels.length,
       resistanceLevels: analysis.resistanceLevels.length,
       savedToDb: !saveError,
+      promptVersion: PROMPT_VERSION,
+      asOf: analysis.freshness?.asOf ?? null,
     });
 
     return c.json({ 

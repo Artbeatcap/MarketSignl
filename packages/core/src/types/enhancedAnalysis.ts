@@ -1,6 +1,8 @@
 // Enhanced Analysis Types for @chartsignl/core
 // These types define the structure of the enhanced technical analysis system
 
+import type { DataFreshness } from './dataFreshness';
+
 // ============================================================================
 // INDICATOR TYPES (from technical calculator)
 // ============================================================================
@@ -208,6 +210,8 @@ export interface EnhancedAIAnalysis {
   symbol: string;
   timeframe: string;
   analyzedAt: string;
+  /** Freshness of the price data this analysis was computed from. */
+  freshness?: DataFreshness;
 
   // Price info
   currentPrice: number;

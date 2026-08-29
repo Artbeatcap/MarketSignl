@@ -3,9 +3,21 @@
 import { Hono } from 'hono';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
 import { findLinkedPredictionId } from '../services/atlasLink.js';
-import type { GetHistoryResponse, GetAnalysisResponse, AnalysisHistoryItem } from '@chartsignl/core';
+import type {
+  GetHistoryResponse,
+  GetAnalysisResponse,
+  AnalysisHistoryItem,
+  DataFreshness,
+} from '@chartsignl/core';
 
 const historyRoute = new Hono();
+
+function freshnessFromJson(json: unknown): DataFreshness | undefined {
+  if (!json || typeof json !== 'object') return undefined;
+  const f = (json as { freshness?: DataFreshness }).freshness;
+  if (!f || typeof f.asOf !== 'string') return undefined;
+  return f;
+}
 
 // GET /api/analyses - Get user's analysis history
 historyRoute.get('/', async (c) => {
@@ -37,7 +49,7 @@ historyRoute.get('/', async (c) => {
     // Fetch analyses (no image_url needed)
     const { data: analyses, error, count } = await supabaseAdmin
       .from('chart_analyses')
-      .select('id, created_at, symbol, timeframe, headline, prediction_id', { count: 'exact' })
+      .select('id, created_at, symbol, timeframe, headline, prediction_id, analysis_json', { count: 'exact' })
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
@@ -63,6 +75,8 @@ historyRoute.get('/', async (c) => {
             prediction_id: a.prediction_id,
           }));
 
+        const storedFreshness = freshnessFromJson(a.analysis_json);
+
         return {
           id: a.id,
           createdAt: a.created_at,
@@ -70,6 +84,7 @@ historyRoute.get('/', async (c) => {
           timeframe: a.timeframe,
           headline: a.headline || 'Chart analysis',
           ...(predictionId ? { predictionId } : {}),
+          ...(storedFreshness ? { freshness: storedFreshness } : {}),
         };
       })
     );

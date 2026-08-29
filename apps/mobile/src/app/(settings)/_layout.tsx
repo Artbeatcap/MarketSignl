@@ -16,6 +16,7 @@ export default function SettingsLayout() {
       <Stack.Screen name="notifications" />
       <Stack.Screen name="help" />
       <Stack.Screen name="terms" />
+      <Stack.Screen name="data-disclosures" />
     </Stack>
   );
 }

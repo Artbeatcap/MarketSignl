@@ -5,7 +5,7 @@ import { Button, ProgressIndicator } from '../../components';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import type { TradingStyle } from '@chartsignl/core';
-import { TRADING_STYLE_OPTIONS } from '@chartsignl/core';
+import { MARKET_DATA_DELAY_MINUTES, TRADING_STYLE_OPTIONS } from '@chartsignl/core';
 
 export default function StyleScreen() {
   const router = useRouter();
@@ -63,6 +63,11 @@ export default function StyleScreen() {
                   {style.label}
                 </Text>
                 <Text style={styles.optionDescription}>{style.description}</Text>
+                {style.value === 'day' ? (
+                  <Text style={styles.optionHelper}>
+                    Levels and structure, on {MARKET_DATA_DELAY_MINUTES}-minute delayed prices.
+                  </Text>
+                ) : null}
               </View>
               {answers.tradingStyle === style.value && (
                 <View style={styles.checkmark}>
@@ -173,6 +178,11 @@ const styles = StyleSheet.create({
   optionDescription: {
     ...typography.bodySm,
     color: colors.neutral[500],
+  },
+  optionHelper: {
+    ...typography.labelSm,
+    color: colors.primary[700],
+    marginTop: 4,
   },
   checkmark: {
     width: 24,

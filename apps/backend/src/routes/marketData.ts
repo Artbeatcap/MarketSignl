@@ -1,5 +1,10 @@
 import { Hono } from 'hono';
 import type { MarketDataPoint } from '@chartsignl/core';
+import {
+  fetchMarketOpen,
+  fetchSnapshotForFreshness,
+  resolveFeedFreshness,
+} from '../lib/feedFreshness.js';
 
 const marketDataRoute = new Hono();
 
@@ -135,8 +140,14 @@ marketDataRoute.get('/:symbol', async (c) => {
     const url = `${MASSIVE_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbolUpper)}/range/${config.multiplier}/${config.timespan}/${fromParam}/${toParam}?adjusted=true&sort=asc&limit=5000&apiKey=${massiveApiKey}`;
 
     let response: Response;
+    let snapshot: Awaited<ReturnType<typeof fetchSnapshotForFreshness>> = null;
+    let marketOpen: boolean | undefined;
     try {
-      response = await fetch(url);
+      [response, snapshot, marketOpen] = await Promise.all([
+        fetch(url),
+        fetchSnapshotForFreshness(symbolUpper),
+        fetchMarketOpen(),
+      ]);
     } catch (fetchError) {
       throw fetchError;
     }
@@ -207,6 +218,12 @@ marketDataRoute.get('/:symbol', async (c) => {
       volume: bar.v || 0,
     }));
 
+    const freshness = resolveFeedFreshness({
+      bars: json.results,
+      snapshot,
+      marketOpen,
+    });
+
     const responseData = {
       symbol: symbolUpper,
       interval: chartInterval,
@@ -215,6 +232,7 @@ marketDataRoute.get('/:symbol', async (c) => {
       visibleStartIndex,
       emaWarmupBars,
       totalBars: data.length,
+      ...(freshness ? { freshness } : {}),
     };
 
     return c.json(responseData);

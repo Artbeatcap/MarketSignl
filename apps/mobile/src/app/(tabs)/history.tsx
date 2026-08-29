@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { getAnalysisHistory, getPredictionHistory } from '../../lib/api';
+import { DataFreshnessBadge } from '../../components';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import type { AnalysisHistoryItem, PredictionHistoryItem } from '@chartsignl/core';
 import { Ionicons } from '@expo/vector-icons';
@@ -93,7 +94,10 @@ export default function HistoryScreen() {
         <Text style={styles.headline} numberOfLines={2}>
           {item.headline}
         </Text>
-        <Text style={styles.date}>{formatDate(item.createdAt)}</Text>
+        <View style={styles.historyMeta}>
+          <Text style={styles.date}>{formatDate(item.createdAt)}</Text>
+          <DataFreshnessBadge freshness={item.freshness} compact historical />
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -418,6 +422,10 @@ const styles = StyleSheet.create({
   date: {
     ...typography.labelSm,
     color: colors.neutral[400],
+  },
+  historyMeta: {
+    marginTop: spacing.xs,
+    gap: spacing.xs,
   },
   // Empty state
   emptyState: {

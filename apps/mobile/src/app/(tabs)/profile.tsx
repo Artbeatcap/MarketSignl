@@ -507,6 +507,7 @@ export default function ProfileScreen() {
           {renderSettingItem('person-outline', 'Edit Profile', handleEditProfile, true)}
           {renderSettingItem('lock-closed-outline', 'Change Password', handleChangePassword, true)}
           {renderSettingItem('notifications-outline', 'Notifications', handleNotifications, true)}
+          {renderSettingItem('information-circle-outline', 'Data & Disclosures', () => router.push('/(settings)/data-disclosures'), false)}
           {__DEV__ && Platform.OS !== 'web' && (
             <TouchableOpacity style={styles.settingsItem} onPress={() => void pushDebugProbe()}>
               <View style={styles.settingsItemLeft}>

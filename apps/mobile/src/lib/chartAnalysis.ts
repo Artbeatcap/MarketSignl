@@ -1,4 +1,4 @@
-import type { MarketDataPoint, EnhancedAIAnalysis, AILevel, EnhancedAnalysisResponse } from '@chartsignl/core';
+import type { MarketDataPoint, EnhancedAIAnalysis, AILevel, EnhancedAnalysisResponse, DataFreshness } from '@chartsignl/core';
 import { getAccessToken } from './supabase';
 import { API_URL } from './apiConfig';
 
@@ -7,7 +7,8 @@ export async function analyzeChartData(
   symbol: string,
   interval: string,
   data: MarketDataPoint[],
-  options?: { direction: string; confidence: number; predictionId?: string } | null
+  options?: { direction: string; confidence: number; predictionId?: string } | null,
+  freshness?: DataFreshness,
 ): Promise<EnhancedAIAnalysis> {
   const token = await getAccessToken();
 
@@ -25,6 +26,7 @@ export async function analyzeChartData(
       symbol,
       interval,
       data: data.slice(-100), // Send last 100 data points
+      ...(freshness ? { freshness } : {}),
       ...(options
         ? {
             forecast: { direction: options.direction, confidence: options.confidence },

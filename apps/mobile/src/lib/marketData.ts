@@ -1,5 +1,7 @@
-import type { MarketDataPoint, ChartInterval } from '@chartsignl/core';
+import type { MarketDataPoint, ChartInterval, DataFreshness } from '@chartsignl/core';
+import { MARKET_DATA_DELAY_MINUTES, MARKET_DATA_SOURCE } from '@chartsignl/core';
 import { API_URL } from './apiConfig';
+import { useMarketDataStore } from '../store/marketDataStore';
 
 export interface MarketDataResponse {
   symbol: string;
@@ -9,12 +11,46 @@ export interface MarketDataResponse {
   visibleStartIndex?: number;
   emaWarmupBars?: number;
   totalBars?: number;
+  freshness?: DataFreshness;
 }
 
 export interface FetchMarketDataResult {
   data: MarketDataPoint[];
   visibleStartIndex: number;
   emaWarmupBars: number;
+  freshness?: DataFreshness;
+}
+
+function assertPlausibleAsOf(asOf: string): void {
+  if (typeof __DEV__ === 'undefined' || !__DEV__) return;
+  const y = new Date(asOf).getUTCFullYear();
+  if (y < 2000 || y > 2100) {
+    console.error(`[freshness] implausible asOf ${asOf} — unit mismatch?`);
+  }
+}
+
+function freshnessFromBars(bars: MarketDataPoint[]): DataFreshness | undefined {
+  const last = bars[bars.length - 1];
+  if (!last) return undefined;
+  const ms = last.timestamp > 1e15 ? last.timestamp / 1_000_000 : last.timestamp;
+  if (!ms || !Number.isFinite(ms)) return undefined;
+  const asOf = new Date(ms).toISOString();
+  assertPlausibleAsOf(asOf);
+  const y = new Date(ms).getUTCFullYear();
+  if (y < 2000 || y > 2100) return undefined;
+  return {
+    asOf,
+    delayMinutes: MARKET_DATA_DELAY_MINUTES,
+    isDelayed: MARKET_DATA_DELAY_MINUTES > 0,
+    source: MARKET_DATA_SOURCE,
+  };
+}
+
+function rememberFreshness(freshness: DataFreshness | undefined): void {
+  if (freshness) {
+    assertPlausibleAsOf(freshness.asOf);
+    useMarketDataStore.getState().setLastFreshness(freshness);
+  }
 }
 
 // Fetch market data from our backend (which proxies to Massive.com)
@@ -70,6 +106,7 @@ export async function fetchMarketData(
     data: data.data as MarketDataPoint[],
     visibleStartIndex,
     emaWarmupBars,
+    freshness: (data.freshness as DataFreshness | undefined) ?? freshnessFromBars(data.data),
   };
 }
 
@@ -135,9 +172,11 @@ export function addIndicatorsAndTrim(data: MarketDataPoint[], visibleStartIndex:
 export async function fetchMarketDataWithIndicators(
   symbol: string,
   interval: ChartInterval = '3mo'
-): Promise<MarketDataPoint[]> {
-  const { data, visibleStartIndex } = await fetchMarketData(symbol, interval);
-  return addIndicatorsAndTrim(data, visibleStartIndex);
+): Promise<{ data: MarketDataPoint[]; freshness?: DataFreshness }> {
+  const { data, visibleStartIndex, freshness } = await fetchMarketData(symbol, interval);
+  const trimmed = addIndicatorsAndTrim(data, visibleStartIndex);
+  rememberFreshness(freshness);
+  return { data: trimmed, freshness };
 }
 
 // Format price for display

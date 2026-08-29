@@ -1,5 +1,7 @@
 // Market Data Types for Chart Display
 
+import type { DataFreshness } from './dataFreshness';
+
 export interface OHLCV {
   timestamp: number; // Unix timestamp in ms
   date: string; // ISO date string
@@ -47,7 +49,9 @@ export interface AIChartAnalysis {
   symbol: string;
   timeframe: string;
   analyzedAt: string;
-  
+  /** Freshness of the price data this analysis was computed from. */
+  freshness?: DataFreshness;
+
   // Current price context
   currentPrice: number;
   priceChange: number;
