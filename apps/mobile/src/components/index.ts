@@ -10,3 +10,4 @@ export { PredictionSummary } from './PredictionSummary';
 export { EmailVerificationBanner } from './EmailVerificationBanner';
 export { GoogleLogo } from './GoogleLogo';
 export { AppleLogo } from './AppleLogo';
+export { NewsletterSignup } from './NewsletterSignup';

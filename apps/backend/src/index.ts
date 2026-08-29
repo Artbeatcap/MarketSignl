@@ -34,6 +34,8 @@ console.log(`  OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? '✓ Set' : '✗ M
 console.log(`  SMTP (deletion emails): ${process.env.SMTP_HOST && process.env.SMTP_USER ? '✓ Set' : '✗ Optional'}`);
 console.log(`  CRON_SECRET (push price checks): ${process.env.CRON_SECRET ? '✓ Set' : '✗ Missing (n8n /check-prices will fail)'}`);
 console.log(`  SENDGRID_API_KEY (weekly brief): ${process.env.SENDGRID_API_KEY ? '✓ Set' : '✗ Missing (weekly brief send will fail on boot)'}`);
+console.log(`  RESEND_API_KEY (newsletter): ${process.env.RESEND_API_KEY ? '✓ Set' : '✗ Missing (newsletter send will fail)'}`);
+console.log(`  NEWSLETTER_API_SECRET: ${process.env.NEWSLETTER_API_SECRET ? '✓ Set' : '✗ Missing (POST /api/newsletter/send will fail)'}`);
 console.log(`  WEEKLY_CONTENT_INGEST_SECRET: ${process.env.WEEKLY_CONTENT_INGEST_SECRET ? '✓ Set' : '✗ Missing (ingest will fail)'}`);
 console.log(`  ENABLE_RESOLVER_CRON: ${process.env.ENABLE_RESOLVER_CRON === 'true' ? '✓ On' : 'off'}`);
 
@@ -53,6 +55,7 @@ import notificationRoutes from './routes/notifications.js';
 import testAlertRoute from './routes/test-alert.js';
 import { internalWeeklyBriefRoute, publicWeeklyBriefRoute } from './routes/weeklyBrief.js';
 import { internalDailyBriefRoute, publicDailyBriefRoute } from './routes/dailyBrief.js';
+import newsletterRoute from './routes/newsletter.js';
 import { startResolverSchedule } from './lib/resolverSchedule.js';
 
 const app = new Hono();
@@ -128,6 +131,7 @@ app.route('/api/internal/weekly-brief', internalWeeklyBriefRoute);
 app.route('/api/weekly-brief', publicWeeklyBriefRoute);
 app.route('/api/internal/daily-brief', internalDailyBriefRoute);
 app.route('/api/daily-brief', publicDailyBriefRoute);
+app.route('/api/newsletter', newsletterRoute);
 
 // 404 handler
 app.notFound((c) => {

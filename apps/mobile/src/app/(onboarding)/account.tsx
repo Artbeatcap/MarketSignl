@@ -595,6 +595,9 @@ export default function AccountScreen() {
           </View>
         </>
       )}
+      <Text style={styles.newsletterDisclosure}>
+        By creating an account you'll get the free ChartSignl daily brief. Unsubscribe anytime.
+      </Text>
     </>
   );
 
@@ -766,6 +769,9 @@ export default function AccountScreen() {
         disabled={isLoading || !password.trim() || !confirmPassword.trim()}
         style={styles.primaryButton}
       />
+      <Text style={styles.newsletterDisclosure}>
+        By creating an account you'll get the free ChartSignl daily brief. Unsubscribe anytime.
+      </Text>
 
       {ENABLE_SOCIAL_AUTH && (
         <>
@@ -1005,5 +1011,12 @@ const styles = StyleSheet.create({
   termsLink: {
     color: colors.primary[600],
     textDecorationLine: 'underline',
+  },
+  newsletterDisclosure: {
+    ...typography.bodySm,
+    color: colors.neutral[500],
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    lineHeight: 20,
   },
 });

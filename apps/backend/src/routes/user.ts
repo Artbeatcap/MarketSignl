@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
 import type { UsageResponse, AuthResponse } from '@chartsignl/core';
 import { FREE_ANALYSIS_LIMIT, FREE_PREDICTION_LIMIT } from '@chartsignl/core';
+import { getSubscriptionForUser, setSubscriptionForUser } from '../lib/newsletter.js';
 
 const userRoute = new Hono();
 
@@ -203,6 +204,52 @@ userRoute.get('/usage', async (c) => {
       error: error instanceof Error ? error.message : 'Internal server error',
     }, 500);
   }
+});
+
+userRoute.get('/newsletter', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return c.json({ success: false, error: 'Missing authorization token' }, 401);
+  }
+  const userId = await getUserFromToken(authHeader.slice(7));
+  if (!userId) {
+    return c.json({ success: false, error: 'Invalid authorization token' }, 401);
+  }
+
+  const result = await getSubscriptionForUser(userId);
+  return c.json({
+    success: true,
+    subscribed: result.subscribed,
+    status: result.status,
+  });
+});
+
+userRoute.put('/newsletter', async (c) => {
+  const authHeader = c.req.header('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return c.json({ success: false, error: 'Missing authorization token' }, 401);
+  }
+  const userId = await getUserFromToken(authHeader.slice(7));
+  if (!userId) {
+    return c.json({ success: false, error: 'Invalid authorization token' }, 401);
+  }
+
+  let body: { subscribed?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ success: false, error: 'Invalid JSON body' }, 400);
+  }
+  if (typeof body.subscribed !== 'boolean') {
+    return c.json({ success: false, error: 'subscribed must be a boolean' }, 400);
+  }
+
+  const result = await setSubscriptionForUser(userId, body.subscribed);
+  return c.json({
+    success: true,
+    subscribed: result.status === 'subscribed',
+    status: result.status,
+  });
 });
 
 export default userRoute;

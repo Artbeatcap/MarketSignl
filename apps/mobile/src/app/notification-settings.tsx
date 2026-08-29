@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card, Button } from '../components';
 import { colors, typography, spacing, borderRadius } from '../theme';
 import { formatPrice } from '../lib/marketData';
-import { getCurrentUser, updateNotificationPreferences } from '../lib/api';
+import { getCurrentUser, updateNotificationPreferences, getNewsletterSubscription, setNewsletterSubscription } from '../lib/api';
 import { useActiveAlerts, useAllAlerts, useDeleteAlert, useToggleAlert } from '../hooks/useAlerts';
 import { usePushNotifications } from '../lib/usePushNotifications';
 import { pushDebugProbe } from '../lib/pushDebug';
@@ -30,6 +30,10 @@ export default function NotificationSettingsScreen() {
   const { data: profileData, isLoading: isLoadingProfile } = useQuery({
     queryKey: ['profile'],
     queryFn: getCurrentUser,
+  });
+  const { data: newsletterData } = useQuery({
+    queryKey: ['newsletter-subscription'],
+    queryFn: getNewsletterSubscription,
   });
   const activeAlertsQuery = useActiveAlerts();
   const allAlertsQuery = useAllAlerts();
@@ -49,7 +53,8 @@ export default function NotificationSettingsScreen() {
 
   const [pushEnabled, setPushEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [savingKey, setSavingKey] = useState<'push' | 'sound' | null>(null);
+  const [briefEnabled, setBriefEnabled] = useState(false);
+  const [savingKey, setSavingKey] = useState<'push' | 'sound' | 'brief' | null>(null);
   const [isClearingAll, setIsClearingAll] = useState(false);
   const [pendingAlertId, setPendingAlertId] = useState<string | null>(null);
 
@@ -60,6 +65,12 @@ export default function NotificationSettingsScreen() {
     setPushEnabled(user.pushNotificationsEnabled ?? true);
     setSoundEnabled(user.alertSoundEnabled ?? true);
   }, [profileData]);
+
+  useEffect(() => {
+    if (typeof newsletterData?.subscribed === 'boolean') {
+      setBriefEnabled(newsletterData.subscribed);
+    }
+  }, [newsletterData]);
 
   const isBusy = useMemo(
     () =>
@@ -112,6 +123,21 @@ export default function NotificationSettingsScreen() {
     } catch (error) {
       setSoundEnabled(previous);
       Alert.alert('Update Failed', 'Could not update alert sound preference.');
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const handleToggleBrief = async (nextValue: boolean) => {
+    const previous = briefEnabled;
+    setBriefEnabled(nextValue);
+    setSavingKey('brief');
+    try {
+      await setNewsletterSubscription(nextValue);
+      await queryClient.invalidateQueries({ queryKey: ['newsletter-subscription'] });
+    } catch (error) {
+      setBriefEnabled(previous);
+      Alert.alert('Update Failed', 'Could not update the daily brief preference.');
     } finally {
       setSavingKey(null);
     }
@@ -264,6 +290,25 @@ export default function NotificationSettingsScreen() {
                   disabled={isBusy}
                   trackColor={{ false: colors.neutral[200], true: colors.primary[200] }}
                   thumbColor={soundEnabled ? colors.primary[500] : colors.neutral[400]}
+                  ios_backgroundColor={colors.neutral[200]}
+                />
+              </View>
+            </Card>
+
+            <Card style={styles.sectionCard}>
+              <View style={styles.row}>
+                <View style={styles.rowText}>
+                  <Text style={styles.rowTitle}>ChartSignl Daily Brief</Text>
+                  <Text style={styles.mutedNote}>
+                    One email each market morning. Free. Unsubscribe anytime.
+                  </Text>
+                </View>
+                <Switch
+                  value={briefEnabled}
+                  onValueChange={handleToggleBrief}
+                  disabled={isBusy}
+                  trackColor={{ false: colors.neutral[200], true: colors.primary[200] }}
+                  thumbColor={briefEnabled ? colors.primary[500] : colors.neutral[400]}
                   ios_backgroundColor={colors.neutral[200]}
                 />
               </View>

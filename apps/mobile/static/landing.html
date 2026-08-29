@@ -286,11 +286,105 @@
             max-width: 540px;
             margin-bottom: 32px;
         }
-        .cta-row {
+            .cta-row {
             display: flex;
             flex-wrap: wrap;
             gap: 12px;
             align-items: center;
+        }
+
+        .nl-form { width: 100%; max-width: 540px; }
+        .nl-form.hero { margin-top: 28px; }
+        .nl-form.footer { max-width: 420px; margin-top: 16px; }
+        .nl-headline {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--stone-900);
+            margin-bottom: 6px;
+        }
+        .nl-subhead {
+            font-size: 15px;
+            color: var(--stone-600);
+            margin-bottom: 14px;
+            line-height: 1.5;
+        }
+        .nl-footer-copy {
+            font-size: 14px;
+            color: var(--stone-600);
+            margin-bottom: 10px;
+        }
+        .nl-row {
+            display: flex;
+            gap: 10px;
+            align-items: stretch;
+        }
+        .nl-row input[type="email"] {
+            flex: 1;
+            min-width: 0;
+            height: 48px;
+            padding: 0 14px;
+            border: 1px solid var(--stone-200);
+            border-radius: var(--radius-md);
+            background: #fff;
+            font-size: 15px;
+            color: var(--stone-900);
+            font-family: inherit;
+        }
+        .nl-row input[type="email"]:focus {
+            outline: 2px solid var(--teal-300);
+            outline-offset: 1px;
+            border-color: var(--teal-400);
+        }
+        .nl-row button {
+            height: 48px;
+            padding: 0 20px;
+            border: 0;
+            border-radius: var(--radius-md);
+            background: linear-gradient(180deg, var(--teal-500), var(--teal-600));
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            white-space: nowrap;
+            font-family: inherit;
+        }
+        .nl-row button:hover { filter: brightness(1.05); }
+        .nl-row button:disabled { opacity: 0.7; cursor: default; }
+        .nl-note {
+            font-size: 12px;
+            color: var(--stone-500);
+            margin-top: 8px;
+        }
+        .nl-error { color: var(--red-500); }
+        .nl-success {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--teal-700);
+            line-height: 1.5;
+        }
+        .nl-hp {
+            position: absolute;
+            left: -10000px;
+            top: auto;
+            width: 1px;
+            height: 1px;
+            overflow: hidden;
+        }
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        @media (max-width: 480px) {
+            .nl-row { flex-direction: column; }
+            .nl-row button { width: 100%; }
         }
 
         .btn {
@@ -890,6 +984,19 @@
                     <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play">
                 </a>
             </div>
+            <form class="nl-form hero" data-nl-source="landing_hero" action="#" method="post">
+                <p class="nl-headline">The levels, before the open.</p>
+                <p class="nl-subhead">A short daily brief on what's moving and where the lines are. Free.</p>
+                <div class="nl-fields">
+                    <label class="visually-hidden" for="nl-hero-email">Email</label>
+                    <div class="nl-row">
+                        <input id="nl-hero-email" type="email" name="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required>
+                        <button type="submit">Subscribe</button>
+                    </div>
+                    <input class="nl-hp" type="text" name="website" autocomplete="off" tabindex="-1" aria-hidden="true">
+                    <p class="nl-note" aria-live="polite">Free. One email each market morning. Unsubscribe anytime.</p>
+                </div>
+            </form>
         </div>
 
         <!-- Chart visual -->
@@ -1278,6 +1385,18 @@
                     ChartSignl
                 </a>
                 <p>AI-powered support &amp; resistance for retail traders. Calm, focused, and built for clarity.</p>
+                <form class="nl-form footer" data-nl-source="landing_footer" action="#" method="post">
+                    <p class="nl-footer-copy">Get the ChartSignl daily brief.</p>
+                    <div class="nl-fields">
+                        <label class="visually-hidden" for="nl-footer-email">Email</label>
+                        <div class="nl-row">
+                            <input id="nl-footer-email" type="email" name="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required>
+                            <button type="submit">Subscribe</button>
+                        </div>
+                        <input class="nl-hp" type="text" name="website" autocomplete="off" tabindex="-1" aria-hidden="true">
+                        <p class="nl-note" aria-live="polite">Free. One email each market morning. Unsubscribe anytime.</p>
+                    </div>
+                </form>
             </div>
             <div class="foot-col">
                 <h5>Product</h5>
@@ -1330,6 +1449,61 @@
             });
         }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
         document.querySelectorAll('.reveal').forEach(function(el){ io.observe(el); });
+    })();
+
+    (function(){
+        var api = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+            ? 'http://localhost:4000'
+            : 'https://api.chartsignl.com';
+        document.querySelectorAll('form[data-nl-source]').forEach(function(form){
+            form.addEventListener('submit', function(ev){
+                ev.preventDefault();
+                var source = form.getAttribute('data-nl-source');
+                var emailInput = form.querySelector('input[name="email"]');
+                var websiteInput = form.querySelector('input[name="website"]');
+                var note = form.querySelector('.nl-note');
+                var fields = form.querySelector('.nl-fields');
+                var button = form.querySelector('button[type="submit"]');
+                var email = emailInput && emailInput.value;
+                if (!email || button.disabled) return;
+                button.disabled = true;
+                button.textContent = 'Sending…';
+                if (note) { note.classList.remove('nl-error'); note.textContent = 'Free. One email each market morning. Unsubscribe anytime.'; }
+                fetch(api + '/api/newsletter/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'omit',
+                    body: JSON.stringify({
+                        email: email,
+                        source: source,
+                        website: websiteInput ? websiteInput.value : ''
+                    })
+                }).then(function(res){
+                    if (res.status === 400) {
+                        button.disabled = false;
+                        button.textContent = 'Subscribe';
+                        if (note) {
+                            note.classList.add('nl-error');
+                            note.textContent = "That doesn't look like an email address.";
+                        }
+                        return;
+                    }
+                    if (!res.ok) throw new Error('network');
+                    var success = document.createElement('p');
+                    success.className = 'nl-success';
+                    success.setAttribute('role', 'status');
+                    success.textContent = "You're in. The first brief lands before tomorrow's open.";
+                    if (fields) fields.replaceWith(success);
+                }).catch(function(){
+                    button.disabled = false;
+                    button.textContent = 'Subscribe';
+                    if (note) {
+                        note.classList.add('nl-error');
+                        note.textContent = "Couldn't reach us — try again";
+                    }
+                });
+            });
+        });
     })();
 </script>
 

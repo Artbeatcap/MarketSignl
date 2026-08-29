@@ -204,3 +204,36 @@ export async function getPredictionStats(): Promise<GetPredictionStatsResponse> 
 export async function getPrediction(id: string): Promise<GetPredictionResponse> {
   return apiFetch(`/api/predictions/${id}`);
 }
+
+export async function subscribeToNewsletter(input: {
+  email: string;
+  source: 'landing_hero' | 'landing_footer';
+  website?: string;
+}): Promise<{ ok: boolean; invalid?: boolean }> {
+  const response = await fetch(`${API_URL}/api/newsletter/subscribe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'omit',
+    body: JSON.stringify(input),
+  });
+  if (response.status === 400) return { ok: false, invalid: true };
+  if (!response.ok) throw new Error('Request failed');
+  return { ok: true };
+}
+
+export async function getNewsletterSubscription(): Promise<{
+  success: boolean;
+  subscribed: boolean;
+}> {
+  return apiFetch('/api/user/newsletter');
+}
+
+export async function setNewsletterSubscription(
+  subscribed: boolean
+): Promise<{ success: boolean; subscribed: boolean }> {
+  return apiFetch('/api/user/newsletter', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ subscribed }),
+  });
+}
