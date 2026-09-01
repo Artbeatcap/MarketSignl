@@ -3,6 +3,7 @@ import { getUserFromToken } from '../lib/supabase.js';
 import {
   getSubscriberByToken,
   getSubscriptionForUser,
+  processSendGridEvents,
   resubscribeByToken,
   setSubscriptionForUser,
   subscribePublic,
@@ -18,13 +19,13 @@ import {
   renderUnsubscribeConfirmPage,
   renderUnsubscribedPage,
 } from '../lib/newsletterPages.js';
-import { sendNewsletter } from '../lib/newsletterSend.js';
+import { sendNewsletter, getPublicApiUrl } from '../lib/newsletterSend.js';
 import {
-  parseResendWebhookPayload,
-  verifyResendWebhookSignature,
+  parseSendGridWebhookPayload,
+  SENDGRID_SIGNATURE_HEADER,
+  SENDGRID_TIMESTAMP_HEADER,
+  verifySendGridWebhookSignature,
 } from '../lib/newsletterWebhook.js';
-import { recordDeliveryEvent } from '../lib/newsletter.js';
-import { getPublicApiUrl } from '../lib/newsletterSend.js';
 
 const newsletterRoute = new Hono();
 
@@ -248,39 +249,36 @@ newsletterRoute.post('/send', async (c) => {
   }
 });
 
-newsletterRoute.post('/webhook/resend', async (c) => {
-  const secret = process.env.RESEND_WEBHOOK_SECRET;
+newsletterRoute.post('/webhook/sendgrid', async (c) => {
+  // Capture the raw body before any JSON parse. ECDSA verification is
+  // byte-for-byte; re-stringifying parsed JSON fails every signature.
   const payload = await c.req.text();
-  const verified = verifyResendWebhookSignature({
-    payload,
-    secret: secret || '',
-    svixId: c.req.header('svix-id'),
-    svixTimestamp: c.req.header('svix-timestamp'),
-    svixSignature: c.req.header('svix-signature'),
-  });
+  const publicKey = process.env.SENDGRID_WEBHOOK_PUBLIC_KEY || '';
+  const signature =
+    c.req.header(SENDGRID_SIGNATURE_HEADER) ||
+    c.req.header('x-twilio-email-event-webhook-signature');
+  const timestamp =
+    c.req.header(SENDGRID_TIMESTAMP_HEADER) ||
+    c.req.header('x-twilio-email-event-webhook-timestamp');
 
-  if (!secret || !verified) {
-    console.warn('[newsletter] unverified webhook rejected');
+  const verified = verifySendGridWebhookSignature(
+    publicKey,
+    payload,
+    signature,
+    timestamp
+  );
+
+  if (!publicKey || !verified) {
+    console.warn('[newsletter] unverified sendgrid webhook rejected');
     return c.json({ error: 'unauthorized' }, 401);
   }
 
-  const event = parseResendWebhookPayload(payload);
-  if (!event?.type) {
+  const events = parseSendGridWebhookPayload(payload);
+  if (!events) {
     return c.json({ received: true });
   }
 
-  const recipients = event.data?.to ?? [];
-  if (event.type === 'email.complained') {
-    for (const email of recipients) {
-      await recordDeliveryEvent(email, 'complained');
-    }
-  } else if (event.type === 'email.bounced') {
-    const bounceType = event.data?.bounce?.type;
-    for (const email of recipients) {
-      await recordDeliveryEvent(email, 'bounced', bounceType);
-    }
-  }
-
+  await processSendGridEvents(events);
   return c.json({ received: true });
 });
 

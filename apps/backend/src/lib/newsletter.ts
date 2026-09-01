@@ -51,6 +51,8 @@ export interface NewsletterStore {
   ): Promise<Subscriber | null>;
   listActive(): Promise<Subscriber[]>;
   getProfileEmail(userId: string): Promise<string | null>;
+  /** Returns true if this is the first time we've seen the id. */
+  claimWebhookEvent(sgEventId: string, event: string, email?: string): Promise<boolean>;
 }
 
 const emailSchema = z.string().trim().max(254).email();
@@ -170,6 +172,19 @@ const supabaseStore: NewsletterStore = {
       .maybeSingle();
     if (error) throw new Error(`newsletter getProfileEmail: ${error.message}`);
     return data?.email ? String(data.email) : null;
+  },
+
+  async claimWebhookEvent(sgEventId, event, email) {
+    const { error } = await supabaseAdmin.from('newsletter_webhook_events').insert({
+      sg_event_id: sgEventId,
+      event,
+      email: email ?? null,
+    });
+    if (error) {
+      if (error.code === '23505') return false;
+      throw new Error(`newsletter claimWebhookEvent: ${error.message}`);
+    }
+    return true;
   },
 };
 
@@ -458,8 +473,9 @@ export async function getActiveSubscribers(): Promise<Subscriber[]> {
 /** Webhook-driven. Marks bounced/complained. A complained row is never revived here. */
 export async function recordDeliveryEvent(
   email: string,
-  event: 'bounced' | 'complained',
-  bounceType?: 'Permanent' | 'Temporary' | string
+  event: 'bounced' | 'complained' | 'unsubscribed' | 'dropped',
+  bounceType?: 'Permanent' | 'Temporary' | 'bounce' | 'blocked' | string,
+  droppedReason?: string
 ): Promise<void> {
   const normalized = normalizeEmail(email) ?? email.trim().toLowerCase();
   if (!normalized) return;
@@ -479,11 +495,58 @@ export async function recordDeliveryEvent(
     return;
   }
 
+  if (event === 'unsubscribed') {
+    if (row.status === 'complained') return;
+    if (row.status !== 'unsubscribed') {
+      await store.updateSubscriber(row.id, {
+        status: 'unsubscribed',
+        unsubscribed_at: new Date().toISOString(),
+        unsubscribe_reason: 'webhook',
+      });
+      logNewsletter({
+        event: 'newsletter_lifecycle',
+        action: 'unsubscribe',
+        source: 'webhook',
+      });
+    }
+    return;
+  }
+
+  if (event === 'dropped') {
+    const reason = (droppedReason || '').toLowerCase();
+    let next: SubscriberStatus | null = null;
+    if (reason.includes('spam')) next = 'complained';
+    else if (reason.includes('unsubscribed')) next = 'unsubscribed';
+    else if (reason.includes('bounce') || reason.includes('invalid')) next = 'bounced';
+
+    warnNewsletter({
+      event: 'newsletter_lifecycle',
+      action: 'dropped',
+      source: 'webhook',
+      warning: 'sendgrid_suppression_drift',
+      reason: droppedReason,
+      currentStatus: row.status,
+      reconciledTo: next,
+    });
+
+    if (!next) return;
+    if (row.status === 'complained' && next !== 'complained') return;
+    if (row.status === next) return;
+
+    const patch: Record<string, unknown> = { status: next };
+    if (next === 'unsubscribed') {
+      patch.unsubscribed_at = new Date().toISOString();
+      patch.unsubscribe_reason = 'sendgrid_dropped';
+    }
+    await store.updateSubscriber(row.id, patch);
+    return;
+  }
+
   if (row.status === 'complained') {
     return;
   }
 
-  const isSoft = bounceType === 'Temporary';
+  const isSoft = bounceType === 'Temporary' || bounceType === 'blocked';
   if (isSoft) {
     const nextCount = row.bounce_count + 1;
     const patch: Record<string, unknown> = { bounce_count: nextCount };
@@ -508,6 +571,37 @@ export async function recordDeliveryEvent(
     action: 'bounce',
     source: 'webhook',
   });
+}
+
+export interface SendGridEvent {
+  email?: string;
+  event?: string;
+  type?: string;
+  reason?: string;
+  sg_event_id?: string;
+}
+
+export async function processSendGridEvents(events: SendGridEvent[]): Promise<void> {
+  for (const item of events) {
+    const email = item.email;
+    const name = item.event;
+    if (!email || !name) continue;
+
+    if (item.sg_event_id) {
+      const first = await store.claimWebhookEvent(item.sg_event_id, name, email);
+      if (!first) continue;
+    }
+
+    if (name === 'spamreport') {
+      await recordDeliveryEvent(email, 'complained');
+    } else if (name === 'bounce') {
+      await recordDeliveryEvent(email, 'bounced', item.type);
+    } else if (name === 'unsubscribe' || name === 'group_unsubscribe') {
+      await recordDeliveryEvent(email, 'unsubscribed');
+    } else if (name === 'dropped') {
+      await recordDeliveryEvent(email, 'dropped', undefined, item.reason);
+    }
+  }
 }
 
 export function isSuppressedStatus(status: SubscriberStatus): boolean {

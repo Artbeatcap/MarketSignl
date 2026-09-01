@@ -6,10 +6,10 @@
 import './setupEnv.js';
 
 import assert from 'node:assert/strict';
-import { createHmac } from 'crypto';
 import {
   getActiveSubscribers,
   getSubscriptionForUser,
+  processSendGridEvents,
   recordDeliveryEvent,
   resubscribeByToken,
   setNewsletterStoreForTests,
@@ -22,10 +22,16 @@ import {
 } from '../newsletter.js';
 import {
   assertPerRecipientUnsubscribeTokens,
-  buildBatchMessages,
+  buildPersonalizations,
+  prepareSharedContent,
   sendNewsletter,
   type SendLedger,
 } from '../newsletterSend.js';
+import {
+  jsonRoundTripChangesBytes,
+  setSendGridWebhookVerifierForTests,
+  verifySendGridWebhookSignature,
+} from '../newsletterWebhook.js';
 import { resetNewsletterRateLimitForTests } from '../newsletterRateLimit.js';
 import newsletterRoute from '../../routes/newsletter.js';
 
@@ -46,6 +52,7 @@ function test(name: string, fn: () => void | Promise<void>) {
 class MemoryStore implements NewsletterStore {
   rows = new Map<string, Subscriber>();
   profileEmails = new Map<string, string>();
+  claimedEvents = new Set<string>();
 
   private key(email: string) {
     return email.toLowerCase();
@@ -111,6 +118,12 @@ class MemoryStore implements NewsletterStore {
     return this.profileEmails.get(userId) ?? null;
   }
 
+  async claimWebhookEvent(sgEventId: string) {
+    if (this.claimedEvents.has(sgEventId)) return false;
+    this.claimedEvents.add(sgEventId);
+    return true;
+  }
+
   seed(row: Partial<Subscriber> & { email: string; status: SubscriberStatus; source: SubscriberSource }) {
     const email = row.email.toLowerCase();
     const subscriber: Subscriber = {
@@ -174,6 +187,7 @@ let store: MemoryStore;
 function reset() {
   store = new MemoryStore();
   setNewsletterStoreForTests(store);
+  setSendGridWebhookVerifierForTests(null);
   resetNewsletterRateLimitForTests();
 }
 
@@ -304,13 +318,12 @@ async function run() {
       unsubscribe_token: 'c'.repeat(64),
     });
     const ledger = new MemoryLedger();
-    let batchCalls = 0;
+    let chunkCalls = 0;
     const deps = {
       ledger,
-      sleep: async () => {},
-      sendBatch: async () => {
-        batchCalls += 1;
-        return { ok: true, ids: [{ id: 'msg-1' }] };
+      sendChunk: async () => {
+        chunkCalls += 1;
+        return { ok: true, messageId: 'msg-1' };
       },
     };
     const first = await sendNewsletter(
@@ -323,7 +336,7 @@ async function run() {
     );
     assert.equal(first.skipped, undefined);
     assert.equal(second.skipped, true);
-    assert.equal(batchCalls, 1);
+    assert.equal(chunkCalls, 1);
     assert.equal(ledger.recipients.length, 1);
   });
 
@@ -340,7 +353,7 @@ async function run() {
   });
 
   reset();
-  await test('10. two subscribers in the same batch receive different List-Unsubscribe tokens', async () => {
+  await test('10. two subscribers in the same request get different List-Unsubscribe tokens', async () => {
     const a = store.seed({
       email: 'a@example.com',
       status: 'subscribed',
@@ -353,21 +366,22 @@ async function run() {
       source: 'landing_hero',
       unsubscribe_token: 'token-bbb',
     });
-    const batch = buildBatchMessages(
-      [a, b],
-      { sendKey: 'k', subject: 's', html: '<p>{{unsubscribe_url}}</p>' },
-      'ChartSignl <brief@mail.chartsignl.com>'
-    );
+    const personalizations = buildPersonalizations([a, b]);
     assert.notEqual(
-      batch[0].headers['List-Unsubscribe'],
-      batch[1].headers['List-Unsubscribe']
+      personalizations[0].headers['List-Unsubscribe'],
+      personalizations[1].headers['List-Unsubscribe']
     );
-    assert.ok(batch[0].headers['List-Unsubscribe'].includes('token-aaa'));
-    assert.ok(batch[1].headers['List-Unsubscribe'].includes('token-bbb'));
-    assert.equal(batch[0].headers['List-Unsubscribe-Post'], 'List-Unsubscribe=One-Click');
-    assert.ok(batch[0].html.includes('token-aaa'));
-    assert.ok(batch[1].html.includes('token-bbb'));
-    assertPerRecipientUnsubscribeTokens(batch);
+    assert.ok(personalizations[0].headers['List-Unsubscribe'].includes('token-aaa'));
+    assert.ok(personalizations[1].headers['List-Unsubscribe'].includes('token-bbb'));
+    assert.equal(personalizations[0].headers['List-Unsubscribe-Post'], 'List-Unsubscribe=One-Click');
+    assert.notEqual(
+      personalizations[0].substitutions.unsubscribe_url,
+      personalizations[1].substitutions.unsubscribe_url
+    );
+    const html = prepareSharedContent('<p>{{unsubscribe_url}}</p>');
+    assert.equal(html.includes('token-aaa'), false);
+    assert.ok(html.includes('{{unsubscribe_url}}'));
+    assertPerRecipientUnsubscribeTokens(personalizations);
   });
 
   reset();
@@ -377,43 +391,34 @@ async function run() {
       status: 'subscribed',
       source: 'landing_hero',
     });
-    const res = await newsletterRoute.request('/webhook/resend', {
+    const res = await newsletterRoute.request('/webhook/sendgrid', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: 'email.complained',
-        data: { to: ['keep@example.com'] },
-      }),
+      body: JSON.stringify([
+        { email: 'keep@example.com', event: 'spamreport', sg_event_id: 'evt-unverified' },
+      ]),
     });
     assert.equal(res.status, 401);
     assert.equal((await store.findByEmail('keep@example.com'))?.status, 'subscribed');
   });
 
   reset();
-  await test('verified complaint webhook marks the row permanently complained', async () => {
+  await test('verified spamreport webhook marks the row permanently complained', async () => {
     store.seed({
       email: 'complain@example.com',
       status: 'subscribed',
       source: 'landing_hero',
     });
-    const payload = JSON.stringify({
-      type: 'email.complained',
-      data: { to: ['complain@example.com'] },
-    });
-    const secret = process.env.RESEND_WEBHOOK_SECRET!;
-    const svixId = 'msg_1';
-    const svixTimestamp = String(Math.floor(Date.now() / 1000));
-    const key = Buffer.from(secret.slice(6), 'base64');
-    const sig = createHmac('sha256', key)
-      .update(`${svixId}.${svixTimestamp}.${payload}`)
-      .digest('base64');
-    const res = await newsletterRoute.request('/webhook/resend', {
+    setSendGridWebhookVerifierForTests(() => true);
+    const payload = JSON.stringify([
+      { email: 'complain@example.com', event: 'spamreport', sg_event_id: 'evt-complaint' },
+    ]);
+    const res = await newsletterRoute.request('/webhook/sendgrid', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'svix-id': svixId,
-        'svix-timestamp': svixTimestamp,
-        'svix-signature': `v1,${sig}`,
+        'X-Twilio-Email-Event-Webhook-Signature': 'test-sig',
+        'X-Twilio-Email-Event-Webhook-Timestamp': '1',
       },
       body: payload,
     });
@@ -424,6 +429,74 @@ async function run() {
       source: 'landing_footer',
     });
     assert.equal(revived, 'suppressed');
+  });
+
+  reset();
+  await test('12. signature verification runs against the raw body; parse+stringify must fail', async () => {
+    const raw = '[\n  {"email":"keep@example.com","event":"spamreport"}\n]';
+    assert.equal(jsonRoundTripChangesBytes(raw), true);
+    setSendGridWebhookVerifierForTests((_key, payload) => payload === raw);
+    assert.equal(
+      verifySendGridWebhookSignature('key', raw, 'sig', '1'),
+      true
+    );
+    const roundTripped = JSON.stringify(JSON.parse(raw));
+    assert.notEqual(roundTripped, raw);
+    assert.equal(
+      verifySendGridWebhookSignature('key', roundTripped, 'sig', '1'),
+      false
+    );
+  });
+
+  reset();
+  await test('13. the same sg_event_id delivered twice produces one state change', async () => {
+    store.seed({
+      email: 'dup@example.com',
+      status: 'subscribed',
+      source: 'landing_hero',
+      bounce_count: 0,
+    });
+    const events = [
+      {
+        email: 'dup@example.com',
+        event: 'bounce',
+        type: 'blocked',
+        sg_event_id: 'evt-dup-1',
+      },
+    ];
+    await processSendGridEvents(events);
+    await processSendGridEvents(events);
+    const row = await store.findByEmail('dup@example.com');
+    assert.equal(row?.bounce_count, 1);
+    assert.equal(row?.status, 'subscribed');
+  });
+
+  reset();
+  await test('14. dropped Bounced Address reconciles subscribed to bounced and warns', async () => {
+    store.seed({
+      email: 'drift@example.com',
+      status: 'subscribed',
+      source: 'landing_hero',
+    });
+    const warns: string[] = [];
+    const orig = console.warn;
+    console.warn = (...args: unknown[]) => {
+      warns.push(String(args[0]));
+    };
+    try {
+      await processSendGridEvents([
+        {
+          email: 'drift@example.com',
+          event: 'dropped',
+          reason: 'Bounced Address',
+          sg_event_id: 'evt-dropped-1',
+        },
+      ]);
+    } finally {
+      console.warn = orig;
+    }
+    assert.equal((await store.findByEmail('drift@example.com'))?.status, 'bounced');
+    assert.ok(warns.some((line) => line.includes('sendgrid_suppression_drift')));
   });
 
   reset();

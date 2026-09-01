@@ -92,15 +92,26 @@ create table if not exists public.newsletter_send_recipients (
   primary key (send_id, subscriber_id)
 );
 
+-- Webhook idempotency: SendGrid redelivers. bounce_count increments are
+-- not themselves idempotent, so we claim each sg_event_id once.
+create table if not exists public.newsletter_webhook_events (
+  sg_event_id text primary key,
+  event text not null,
+  email text,
+  received_at timestamptz not null default now()
+);
+
 -- RLS: enabled with NO policies. No row is visible to anon or authenticated.
 -- The backend uses the service role and bypasses RLS.
 alter table public.newsletter_subscribers enable row level security;
 alter table public.newsletter_sends enable row level security;
 alter table public.newsletter_send_recipients enable row level security;
+alter table public.newsletter_webhook_events enable row level security;
 
 revoke all on table public.newsletter_subscribers from anon, authenticated, public;
 revoke all on table public.newsletter_sends from anon, authenticated, public;
 revoke all on table public.newsletter_send_recipients from anon, authenticated, public;
+revoke all on table public.newsletter_webhook_events from anon, authenticated, public;
 
 -- updated_at maintenance
 create or replace function public.touch_updated_at()

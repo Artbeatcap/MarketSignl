@@ -10,7 +10,10 @@
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist",
     "test:relevance": "tsx src/lib/__tests__/levelRelevance.test.ts",
-    "test:eyeball": "tsx src/lib/__tests__/eyeballLevels.ts",
+    "test:movers": "tsx src/lib/__tests__/moversFilter.test.ts",
+    "test:newsletter": "tsx src/lib/__tests__/newsletter.test.ts",
+    "test:drivers": "tsx src/lib/__tests__/indexDrivers.test.ts && tsx src/lib/__tests__/catalyst.test.ts && tsx src/lib/__tests__/breadth.test.ts",
+    "test:calendar": "tsx src/lib/__tests__/weekAhead.test.ts",
     "test:freshness": "tsx src/lib/__tests__/feedFreshness.test.ts",
     "accept:weekly-brief": "tsx scripts/weekly-brief-acceptance.ts",
     "accept:daily-brief": "tsx scripts/daily-brief-acceptance.ts"
@@ -18,13 +21,14 @@
   "dependencies": {
     "@hono/node-server": "^1.8.0",
     "@resvg/resvg-js": "^2.6.2",
+    "@sendgrid/eventwebhook": "^8.0.0",
+    "@sendgrid/mail": "^8.1.0",
     "@supabase/supabase-js": "^2.38.0",
     "dotenv": "^16.4.5",
     "hono": "^4.0.0",
     "node-cron": "^4.4.1",
     "nodemailer": "^6.9.0",
     "openai": "^4.20.0",
-    "@sendgrid/mail": "^8.1.0",
     "stripe": "^14.21.0",
     "zod": "^3.22.0"
   },

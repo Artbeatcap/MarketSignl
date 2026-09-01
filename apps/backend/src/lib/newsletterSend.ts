@@ -1,3 +1,5 @@
+import sgMail from '@sendgrid/mail';
+import type { MailDataRequired } from '@sendgrid/mail';
 import {
   getActiveSubscribers,
   logNewsletter,
@@ -6,8 +8,7 @@ import {
 } from './newsletter.js';
 import { supabaseAdmin } from './supabase.js';
 
-export const RESEND_BATCH_MAX = 100;
-export const BATCH_GAP_MS = 150;
+export const SENDGRID_PERSONALIZATION_MAX = 500;
 
 export interface SendInput {
   sendKey: string;
@@ -16,17 +17,24 @@ export interface SendInput {
   text?: string;
 }
 
-export interface BatchEmail {
-  from: string;
-  reply_to?: string;
-  to: string[];
-  subject: string;
-  html: string;
-  text?: string;
+export interface NewsletterPersonalization {
+  to: Array<{ email: string }>;
   headers: {
     'List-Unsubscribe': string;
     'List-Unsubscribe-Post': string;
   };
+  substitutions: {
+    unsubscribe_url: string;
+  };
+}
+
+export interface NewsletterMailPayload {
+  from: string;
+  replyTo?: string;
+  subject: string;
+  html: string;
+  text?: string;
+  personalizations: NewsletterPersonalization[];
 }
 
 export interface SendLedger {
@@ -52,13 +60,12 @@ export interface SendLedger {
 }
 
 export interface SendDeps {
-  sendBatch: (emails: BatchEmail[]) => Promise<{
+  sendChunk: (mail: NewsletterMailPayload) => Promise<{
     ok: boolean;
-    ids?: Array<{ id?: string } | null>;
+    messageId?: string;
     error?: string;
   }>;
   ledger?: SendLedger;
-  sleep?: (ms: number) => Promise<void>;
   now?: () => Date;
 }
 
@@ -84,10 +91,16 @@ export function buildUnsubscribeUrl(token: string): string {
   return `${getPublicApiUrl()}/api/newsletter/unsubscribe?token=${encodeURIComponent(token)}`;
 }
 
-export function personalizeContent(template: string, unsubscribeUrl: string): string {
+/**
+ * Shared body: one HTML blob per request. Per-recipient URL is a substitution.
+ * The Node SDK wraps substitution keys with `{{ }}`, so the placeholder in
+ * HTML must be `{{unsubscribe_url}}` — not SendGrid's raw `-unsubscribe_url-`
+ * form, which the SDK would turn into `{{-unsubscribe_url-}}`.
+ */
+export function prepareSharedContent(template: string): string {
   return template
-    .replaceAll('{{unsubscribe_url}}', unsubscribeUrl)
-    .replaceAll('{{UNSUBSCRIBE_URL}}', unsubscribeUrl);
+    .replaceAll('{{UNSUBSCRIBE_URL}}', '{{unsubscribe_url}}')
+    .replaceAll('-unsubscribe_url-', '{{unsubscribe_url}}');
 }
 
 export function chunk<T>(items: T[], size: number): T[][] {
@@ -98,72 +111,83 @@ export function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-export function buildBatchMessages(
-  subscribers: Subscriber[],
-  input: SendInput,
-  from: string,
-  replyTo?: string
-): BatchEmail[] {
+export function buildPersonalizations(subscribers: Subscriber[]): NewsletterPersonalization[] {
   return subscribers.map((subscriber) => {
     const unsubUrl = buildUnsubscribeUrl(subscriber.unsubscribe_token);
-    const email: BatchEmail = {
-      from,
-      to: [subscriber.email],
-      subject: input.subject,
-      html: personalizeContent(input.html, unsubUrl),
+    return {
+      to: [{ email: subscriber.email }],
       headers: {
         'List-Unsubscribe': `<${unsubUrl}>`,
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
       },
+      substitutions: {
+        unsubscribe_url: unsubUrl,
+      },
     };
-    if (replyTo) email.reply_to = replyTo;
-    if (input.text) email.text = personalizeContent(input.text, unsubUrl);
-    return email;
   });
 }
 
 /** Guards the batching risk: every recipient must carry their own token. */
-export function assertPerRecipientUnsubscribeTokens(batch: BatchEmail[]): void {
-  const tokens = batch.map((email) => email.headers['List-Unsubscribe']);
+export function assertPerRecipientUnsubscribeTokens(
+  personalizations: NewsletterPersonalization[]
+): void {
+  const tokens = personalizations.map((item) => item.headers['List-Unsubscribe']);
   const unique = new Set(tokens);
   if (tokens.length > 1 && unique.size !== tokens.length) {
-    throw new Error('Batch messages share a List-Unsubscribe token');
+    throw new Error('Personalizations share a List-Unsubscribe token');
   }
 }
 
-async function defaultSleep(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
+let sendGridReady = false;
+
+function ensureSendGrid(): string | null {
+  const apiKey = process.env.SENDGRID_API_KEY?.trim();
+  if (!apiKey) return null;
+  if (!sendGridReady) {
+    sgMail.setApiKey(apiKey);
+    sendGridReady = true;
+  }
+  return apiKey;
 }
 
-export async function defaultSendBatch(
-  emails: BatchEmail[]
-): Promise<{ ok: boolean; ids?: Array<{ id?: string } | null>; error?: string }> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    return { ok: false, error: 'RESEND_API_KEY is not configured' };
+export async function defaultSendChunk(
+  mail: NewsletterMailPayload
+): Promise<{ ok: boolean; messageId?: string; error?: string }> {
+  if (!ensureSendGrid()) {
+    return { ok: false, error: 'SENDGRID_API_KEY is not configured' };
   }
 
-  const response = await fetch('https://api.resend.com/emails/batch', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
+  const payload: MailDataRequired = {
+    from: mail.from,
+    subject: mail.subject,
+    html: mail.html,
+    ...(mail.text ? { text: mail.text } : {}),
+    personalizations: mail.personalizations,
+    trackingSettings: {
+      subscriptionTracking: { enable: false },
+      openTracking: { enable: true },
+      clickTracking: { enable: false },
     },
-    body: JSON.stringify(emails),
-  });
-
-  const body = (await response.json().catch(() => null)) as
-    | { data?: Array<{ id: string }>; error?: { message?: string } }
-    | null;
-
-  if (!response.ok) {
-    return {
-      ok: false,
-      error: body?.error?.message || `Resend batch failed (${response.status})`,
-    };
+    mailSettings: {
+      bypassListManagement: { enable: false },
+    },
+    substitutionWrappers: ['{{', '}}'],
+    categories: ['newsletter'],
+  };
+  if (mail.replyTo) {
+    payload.replyTo = mail.replyTo;
   }
 
-  return { ok: true, ids: body?.data ?? [] };
+  try {
+    const [response] = await sgMail.send(payload);
+    const messageId =
+      (response.headers?.['x-message-id'] as string | undefined) ||
+      (response.headers?.['X-Message-Id'] as string | undefined);
+    return { ok: true, messageId };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, error: message };
+  }
 }
 
 export const supabaseSendLedger: SendLedger = {
@@ -235,11 +259,10 @@ export async function sendNewsletter(
   deps: Partial<SendDeps> = {}
 ): Promise<SendResult> {
   const started = Date.now();
-  const sendBatch = deps.sendBatch ?? defaultSendBatch;
+  const sendChunk = deps.sendChunk ?? defaultSendChunk;
   const ledger = deps.ledger ?? supabaseSendLedger;
-  const sleep = deps.sleep ?? defaultSleep;
-  const from = process.env.NEWSLETTER_FROM || 'ChartSignl <brief@mail.chartsignl.com>';
-  const replyTo = process.env.NEWSLETTER_REPLY_TO || undefined;
+  const from = process.env.NEWSLETTER_FROM || 'ChartSignl <brief@chartsignl.com>';
+  const replyTo = process.env.NEWSLETTER_REPLY_TO || 'support@chartsignl.com';
 
   const begun = await ledger.beginSend(input.sendKey, input.subject);
   if ('skipped' in begun) {
@@ -248,25 +271,30 @@ export async function sendNewsletter(
 
   const sendId = begun.sendId;
   const subscribers = await getActiveSubscribers();
-  const batches = chunk(subscribers, RESEND_BATCH_MAX);
+  const batches = chunk(subscribers, SENDGRID_PERSONALIZATION_MAX);
+  const html = prepareSharedContent(input.html);
+  const text = input.text ? prepareSharedContent(input.text) : undefined;
   let delivered = 0;
   let failed = 0;
 
   try {
     await ledger.markEligible(sendId, subscribers.length);
 
-    for (let i = 0; i < batches.length; i += 1) {
-      const batchSubscribers = batches[i];
-      const messages = buildBatchMessages(batchSubscribers, input, from, replyTo);
-      assertPerRecipientUnsubscribeTokens(messages);
+    for (const batchSubscribers of batches) {
+      const personalizations = buildPersonalizations(batchSubscribers);
+      assertPerRecipientUnsubscribeTokens(personalizations);
 
-      const result = await sendBatch(messages);
+      const result = await sendChunk({
+        from,
+        replyTo,
+        subject: input.subject,
+        html,
+        text,
+        personalizations,
+      });
 
-      for (let index = 0; index < batchSubscribers.length; index += 1) {
-        const subscriber = batchSubscribers[index];
-        const id = result.ok ? result.ids?.[index]?.id ?? null : null;
-        const ok = result.ok && !!id;
-        if (ok) {
+      for (const subscriber of batchSubscribers) {
+        if (result.ok) {
           delivered += 1;
           await ledger.bumpDelivered(subscriber.id, deps.now?.() ?? new Date());
         } else {
@@ -275,14 +303,10 @@ export async function sendNewsletter(
         await ledger.recordRecipient({
           sendId,
           subscriberId: subscriber.id,
-          providerMessageId: id,
-          status: ok ? 'sent' : 'failed',
-          error: ok ? null : result.error || 'batch failed',
+          providerMessageId: result.ok ? result.messageId ?? null : null,
+          status: result.ok ? 'sent' : 'failed',
+          error: result.ok ? null : result.error || 'send failed',
         });
-      }
-
-      if (i < batches.length - 1) {
-        await sleep(BATCH_GAP_MS);
       }
     }
 
