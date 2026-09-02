@@ -15,14 +15,24 @@ export const CHARTSIGNL_BRAND: WeeklyBrand = {
   appUrl: process.env.FRONTEND_URL?.includes('app.chartsignl')
     ? process.env.FRONTEND_URL
     : 'https://app.chartsignl.com',
+  // Served as static HTML that launches chartsignl:// (and Android intent) when the app is installed
+  chartsUrl: 'https://www.chartsignl.com/open-app',
   accent: colors.lineStroke,
   accentLight: colors.prediction,
   support: colors.support,
   resistance: colors.resistance,
   cta: colors.prediction,
-  headerGradientStart: '#0b1220',
-  headerGradientEnd: '#0f2e2a',
+  // Match app splash / screen wash (#F0F9F9) → white card header
+  headerGradientStart: '#F0F9F9',
+  headerGradientEnd: '#FFFFFF',
 };
+
+/** Outer email canvas — same warm surface as chart / web UI. */
+export const EMAIL_PAGE_BG = (colors as { background?: string }).background ?? '#FAFAF9';
+export const EMAIL_SURFACE = '#F0F9F9';
+export const EMAIL_BORDER = '#E7E5E4';
+export const EMAIL_MUTED = '#78716C';
+export const EMAIL_INK = '#1C1917';
 
 export function getApiBaseUrl(): string {
   return process.env.API_URL || 'https://api.chartsignl.com';

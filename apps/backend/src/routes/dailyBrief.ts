@@ -7,6 +7,8 @@ import { saveArtifact, getLatestArtifact } from '../services/dailyBrief/store.js
 import { checkArtifactFreshness } from '../services/dailyBrief/freshness.js';
 import { postDailyBriefAlert } from '../services/dailyBrief/alert.js';
 import { parseDailyContent } from '../services/dailyBrief/validate.js';
+import { sanitizeAiField, sanitizeDailySections } from '../lib/briefSanitize.js';
+import { filterMoversByType } from '../lib/tickerMeta.js';
 import {
   buildPreheader,
   buildSubject,
@@ -19,6 +21,9 @@ import {
 } from '../services/dailyBrief/sendEmail.js';
 import { getApiBaseUrl } from '../services/dailyBrief/brand.js';
 import { ZodError } from 'zod';
+import { loadWeekAhead } from '../lib/weekAheadLoad.js';
+import { buildThisWeekBlock, ATLAS_HARD_RULE, ATLAS_CALENDAR_OUTPUT_RULES } from '../lib/weekAhead.js';
+import { refreshEarningsCalendar } from '../lib/earningsCalendarRefresh.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -55,6 +60,20 @@ internalDailyBriefRoute.post('/ingest', async (c) => {
 
   try {
     const content = parseDailyContent(body);
+    content.sections = sanitizeDailySections(content.sections);
+    if (content.preheader) content.preheader = sanitizeAiField(content.preheader);
+    const before = content.movers.length;
+    content.movers = await filterMoversByType(content.movers);
+    console.log(
+      JSON.stringify({
+        event: 'movers_filter',
+        candidates: before,
+        rendered: content.movers.length,
+      })
+    );
+    if (content.movers.length < 3) {
+      console.warn(`[daily-brief] movers_filter rendered ${content.movers.length} (< 3)`);
+    }
     const { id } = await saveArtifact(supabaseAdmin, content);
     console.log(`[daily-brief] Ingested artifact ${id} for ${content.date_label}`);
     return c.json({ success: true, id });
@@ -95,12 +114,15 @@ internalDailyBriefRoute.post('/send', async (c) => {
 
   const content = stored!.artifact;
   const placeholderUnsub = `${getApiBaseUrl()}/api/daily-brief/unsubscribe?token=preview`;
+  const weekAhead = await loadWeekAhead();
+  const calendar = weekAhead.rows;
 
   if (dryRun) {
     const html = renderDailyBriefEmail({
       content,
       preheader: buildPreheader(content),
       unsubscribeUrl: placeholderUnsub,
+      calendar,
     });
 
     await mkdir(resolve(__dirname, '../../tmp'), { recursive: true });
@@ -118,7 +140,7 @@ internalDailyBriefRoute.post('/send', async (c) => {
   }
 
   if (testEmail) {
-    const result = await sendTestEmail(content, testEmail);
+    const result = await sendTestEmail(content, testEmail, calendar);
     if (!result.ok) {
       await postDailyBriefAlert(`Test send failed to ${testEmail}: ${result.error}`);
       return c.json({ success: false, error: result.error }, 500);
@@ -137,7 +159,7 @@ internalDailyBriefRoute.post('/send', async (c) => {
     return c.json({ success: false, error: 'No recipients', skipped: true }, 409);
   }
 
-  void sendBatchInBackground(content, recipients).catch(async (err) => {
+  void sendBatchInBackground(content, recipients, calendar).catch(async (err) => {
     console.error('[daily-brief] Background send failed:', err);
     await postDailyBriefAlert(
       `Background send failed: ${err instanceof Error ? err.message : String(err)}`
@@ -149,6 +171,41 @@ internalDailyBriefRoute.post('/send', async (c) => {
     status: 'sending',
     recipientCount: recipients.length,
     date_label: content.date_label,
+  });
+});
+
+/** Nightly FMP cache refresh. Never called from the 8:30 send path. */
+internalDailyBriefRoute.post('/refresh-calendar', async (c) => {
+  if (!checkCronSecret(c)) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+  try {
+    const result = await refreshEarningsCalendar();
+    return c.json({ success: true, ...result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[week-ahead] refresh-calendar failed:', message);
+    await postDailyBriefAlert(`Earnings calendar refresh failed: ${message}`);
+    return c.json({ success: false, error: message }, 500);
+  }
+});
+
+/**
+ * Structured calendar + Atlas THIS WEEK block for Options Plunge / n8n.
+ * Reads the cache. Does not call FMP.
+ */
+internalDailyBriefRoute.get('/week-ahead', async (c) => {
+  if (!checkCronSecret(c) && !checkIngestSecret(c)) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+  const weekAhead = await loadWeekAhead();
+  return c.json({
+    success: true,
+    rows: weekAhead.rows,
+    promptBlock: buildThisWeekBlock(weekAhead.rows),
+    hardRule: ATLAS_HARD_RULE,
+    outputRules: ATLAS_CALENDAR_OUTPUT_RULES,
+    log: weekAhead.log,
   });
 });
 

@@ -1,0 +1,38 @@
+[
+  {
+    "symbol": "FDX",
+    "date": "2026-09-17",
+    "epsActual": null,
+    "epsEstimated": 4.21,
+    "revenueActual": null,
+    "revenueEstimated": 23211650000,
+    "lastUpdated": "2026-09-01"
+  },
+  {
+    "symbol": "ADBE",
+    "date": "2026-09-10",
+    "epsActual": null,
+    "epsEstimated": 6.07,
+    "revenueActual": null,
+    "revenueEstimated": 6689580000,
+    "lastUpdated": "2026-09-01"
+  },
+  {
+    "symbol": "DOCU",
+    "date": "2026-09-03",
+    "epsActual": null,
+    "epsEstimated": 1.09,
+    "revenueActual": null,
+    "revenueEstimated": 867215700,
+    "lastUpdated": "2026-09-01"
+  },
+  {
+    "symbol": "NIO",
+    "date": "2026-09-01",
+    "epsActual": -0.04,
+    "epsEstimated": -0.07,
+    "revenueActual": 4729903000,
+    "revenueEstimated": 4794806000,
+    "lastUpdated": "2026-09-01"
+  }
+]

@@ -206,9 +206,9 @@ curl -X POST "https://api.chartsignl.com/api/internal/weekly-brief/ingest" \
 
 The freshness guard skips send if no artifact exists, `data_stale=true`, or `generated_at` is older than 8 days.
 
-### Daily / Morning Brief cron (weekdays 7:30 AM ET)
+### Daily / Morning Brief cron (weekdays 8:30 AM ET)
 
-Same pattern as weekly: Options Plunge builds the daily brief, then `daily_content_publisher.py` POSTs a neutral artifact to ChartSignl ingest. n8n triggers ChartSignl send on weekday mornings. ChartSignl does **not** re-fetch market APIs.
+Same pattern as weekly: Options Plunge builds the daily brief at **8:00 AM ET** (`market-brief-scheduler.service` → `tasks.py` → `send_market_brief_to_subscribers`), then `daily_content_publisher.py` POSTs a neutral artifact to ChartSignl ingest. n8n triggers ChartSignl send **after** that ingest. ChartSignl does **not** re-fetch market APIs.
 
 **OP env (server-backup):**
 
@@ -218,13 +218,13 @@ Same pattern as weekly: Options Plunge builds the daily brief, then `daily_conte
 | `WEEKLY_CONTENT_INGEST_SECRET` | Shared `x-ingest-secret` (same as weekly) |
 | `DAILY_CONTENT_INGEST_SECRET` | Optional override for daily only |
 
-After a successful OP daily send, `send_daily_brief.py` calls `publish_daily_content(context)` (non-fatal). Dry-run logs `ChartSignl contract keys: …` without POSTing.
+After a successful OP daily **build** (`send_market_brief_to_subscribers` in the live `market-brief-scheduler` service, or `send_daily_brief.py` when run directly), Options Plunge calls `publish_daily_content(context)` (non-fatal). Dry-run of `send_daily_brief.py` logs `ChartSignl contract keys: …` without POSTing.
 
 #### n8n: Morning Brief send workflow
 
 | Node | Setting |
 |------|---------|
-| **Schedule Trigger** | Weekdays (Mon–Fri), **7:30 AM**, timezone `America/New_York` |
+| **Schedule Trigger** | Weekdays (Mon–Fri), **8:30 AM**, timezone `America/New_York` |
 | **HTTP Request** | `POST http://chartsignl-api:4000/api/internal/daily-brief/send` |
 
 **Headers:** `x-cron-secret` (same `CRON_SECRET` as weekly / price checker), `Content-Type: application/json`.
@@ -266,6 +266,32 @@ npx tsx apps/backend/scripts/daily-brief-acceptance.ts
 # HTML: apps/backend/tmp/weekly-brief-dryrun.html
 #       apps/backend/tmp/daily-brief-dryrun.html
 ```
+
+### Forward calendar (earnings + macro)
+
+Earnings dates are cached nightly into `earnings_calendar` from layered providers (Finnhub → FMP → Alpha Vantage, then Massive news gap-fill). The 8:30 send **reads the cache and never calls a vendor**. FMP Stable `/stable/earnings-calendar` is optional (legacy `/api/v3/earning_calendar` 403s on keys issued after ~Aug 2025). Macro dates live in the curated `macro_calendar` table (seeded from official BLS / BEA / FOMC / ISM / Census / UMich schedules — not from a first-Friday rule).
+
+Apply `supabase/migrations/20260831154500_week_ahead_calendar.sql` before the first live send.
+
+**n8n: Earnings calendar refresh** (after the close, before the 12:10 AM restart)
+
+| Node | Setting |
+|------|---------|
+| **Schedule Trigger** | Daily, **9:00 PM**, timezone `America/New_York` |
+| **HTTP Request** | `POST http://chartsignl-api:4000/api/internal/daily-brief/refresh-calendar` |
+
+Headers: `x-cron-secret`, `Content-Type: application/json`. Optional: `FMP_API_KEY`, `FINNHUB_API_KEY`, `ALPHAVANTAGE_API_KEY`. News gap-fill uses `MASSIVE_API_KEY`.
+
+Optional in-process backup: set `ENABLE_CALENDAR_CRON=true`.
+
+Options Plunge can pull the Atlas `THIS WEEK` block (no FMP call) via:
+
+```bash
+curl -H "x-cron-secret: $CRON_SECRET" \
+  "https://api.chartsignl.com/api/internal/daily-brief/week-ahead"
+```
+
+If `max(event_date)` on `macro_calendar` falls inside 30 days, the send path logs at `error` and pages `ALERT_WEBHOOK_URL` — seed the next quarter from the published schedules.
 
 To rebuild/restart on the server:
 

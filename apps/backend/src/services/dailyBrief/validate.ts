@@ -12,19 +12,34 @@ const sectorItemSchema = z.object({
   pct: z.number(),
 });
 
+const optionalStr = z.preprocess(
+  (v) => (v == null ? undefined : v),
+  z.string().optional()
+);
+
 const moverItemSchema = z.object({
   ticker: z.string(),
   pct: z.string(),
   dir: z.enum(['up', 'down']),
   why: z.string(),
+  companyName: z.string().optional(),
+  reasonUrl: optionalStr,
+  window: z
+    .enum(['index_driver', 'premarket', 'prior_session'])
+    .optional()
+    .default('prior_session'),
+  priorSessionPct: optionalStr,
+  premarketPct: optionalStr,
+  isEarnings: z.boolean().optional().default(false),
+  hasCatalyst: z.boolean().optional().default(true),
 });
 
 const levelSetSchema = z.object({
-  pivot: z.string().optional(),
+  pivot: optionalStr,
   support: z.string(),
-  support2: z.string().optional(),
+  support2: optionalStr,
   resistance: z.string(),
-  resistance2: z.string().optional(),
+  resistance2: optionalStr,
 });
 
 const catalystBulletSchema = z.object({
@@ -39,11 +54,13 @@ const headlineItemSchema = z.object({
 });
 
 const sectionsSchema = z.object({
+  greeting: z.string().optional().default(''),
   opening_bias: z.string().min(1),
   session_setup_html: z.string().optional().default(''),
   key_level_note: z.string().optional().default(''),
   todays_watch_html: z.string().optional().default(''),
   biggest_risk: z.string().optional().default(''),
+  signoff: z.string().optional().default(''),
 });
 
 export const dailyContentSchema = z.object({

@@ -1,0 +1,44 @@
+{
+  "earningsCalendar": [
+    {
+      "symbol": "AVGO",
+      "date": "2026-09-04",
+      "hour": "amc",
+      "quarter": 3,
+      "year": 2026,
+      "epsEstimate": 1.23,
+      "epsActual": null,
+      "revenueEstimate": 29400000000
+    },
+    {
+      "symbol": "DELL",
+      "date": "2026-09-01",
+      "hour": "amc",
+      "quarter": 3,
+      "year": 2026,
+      "epsEstimate": 2.38,
+      "epsActual": null,
+      "revenueEstimate": 27140000000
+    },
+    {
+      "symbol": "PANW",
+      "date": "2026-09-01",
+      "hour": "dmh",
+      "quarter": 3,
+      "year": 2026,
+      "epsEstimate": 0.89,
+      "epsActual": null,
+      "revenueEstimate": 2470000000
+    },
+    {
+      "symbol": "HPE",
+      "date": "2026-09-02",
+      "hour": "",
+      "quarter": 3,
+      "year": 2026,
+      "epsEstimate": 0.49,
+      "epsActual": null,
+      "revenueEstimate": null
+    }
+  ]
+}

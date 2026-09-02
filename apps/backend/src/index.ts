@@ -29,15 +29,19 @@ if (existsSync(envPath)) {
 console.log('Environment variables loaded:');
 const massiveKeyStatus = process.env.MASSIVE_API_KEY ? `✓ Set (${process.env.MASSIVE_API_KEY.length} chars)` : '✗ Missing';
 console.log(`  MASSIVE_API_KEY: ${massiveKeyStatus}`);
+console.log(`  FMP_API_KEY: ${process.env.FMP_API_KEY ? '✓ Set' : '✗ Missing (optional calendar provider)'}`);
+console.log(`  ALPHAVANTAGE_API_KEY: ${process.env.ALPHAVANTAGE_API_KEY ? '✓ Set' : '✗ Missing (optional calendar provider)'}`);
+console.log(`  FINNHUB_API_KEY: ${process.env.FINNHUB_API_KEY ? '✓ Set' : '✗ Missing (optional calendar provider)'}`);
 console.log(`  SUPABASE_URL: ${process.env.SUPABASE_URL ? '✓ Set' : '✗ Missing'}`);
 console.log(`  OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? '✓ Set' : '✗ Missing'}`);
 console.log(`  SMTP (deletion emails): ${process.env.SMTP_HOST && process.env.SMTP_USER ? '✓ Set' : '✗ Optional'}`);
 console.log(`  CRON_SECRET (push price checks): ${process.env.CRON_SECRET ? '✓ Set' : '✗ Missing (n8n /check-prices will fail)'}`);
-console.log(`  SENDGRID_API_KEY (weekly brief): ${process.env.SENDGRID_API_KEY ? '✓ Set' : '✗ Missing (weekly brief send will fail on boot)'}`);
-console.log(`  RESEND_API_KEY (newsletter): ${process.env.RESEND_API_KEY ? '✓ Set' : '✗ Missing (newsletter send will fail)'}`);
+console.log(`  SENDGRID_API_KEY (briefs + newsletter): ${process.env.SENDGRID_API_KEY ? '✓ Set' : '✗ Missing (brief/newsletter send will fail)'}`);
+console.log(`  SENDGRID_WEBHOOK_PUBLIC_KEY: ${process.env.SENDGRID_WEBHOOK_PUBLIC_KEY ? '✓ Set' : '✗ Missing (newsletter webhook will reject)'}`);
 console.log(`  NEWSLETTER_API_SECRET: ${process.env.NEWSLETTER_API_SECRET ? '✓ Set' : '✗ Missing (POST /api/newsletter/send will fail)'}`);
 console.log(`  WEEKLY_CONTENT_INGEST_SECRET: ${process.env.WEEKLY_CONTENT_INGEST_SECRET ? '✓ Set' : '✗ Missing (ingest will fail)'}`);
 console.log(`  ENABLE_RESOLVER_CRON: ${process.env.ENABLE_RESOLVER_CRON === 'true' ? '✓ On' : 'off'}`);
+console.log(`  ENABLE_CALENDAR_CRON: ${process.env.ENABLE_CALENDAR_CRON === 'true' ? '✓ On' : 'off'}`);
 
 // Routes
 import analyzeDataRoute from './routes/analyzeData.js';
@@ -57,6 +61,7 @@ import { internalWeeklyBriefRoute, publicWeeklyBriefRoute } from './routes/weekl
 import { internalDailyBriefRoute, publicDailyBriefRoute } from './routes/dailyBrief.js';
 import newsletterRoute from './routes/newsletter.js';
 import { startResolverSchedule } from './lib/resolverSchedule.js';
+import { startCalendarSchedule } from './lib/calendarSchedule.js';
 
 const app = new Hono();
 
@@ -199,5 +204,6 @@ serve({
 });
 
 startResolverSchedule();
+startCalendarSchedule();
 
 export default app;

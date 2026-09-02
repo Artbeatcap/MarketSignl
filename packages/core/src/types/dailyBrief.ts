@@ -16,11 +16,14 @@ export interface HeadlineItem {
 }
 
 export interface DailySections {
+  /** Rendered outside the callout boxes so it never bleeds into analysis fields. */
+  greeting?: string;
   opening_bias: string;
   session_setup_html: string;
   key_level_note: string;
   todays_watch_html: string;
   biggest_risk: string;
+  signoff?: string;
 }
 
 /**

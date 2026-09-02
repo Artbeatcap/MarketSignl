@@ -7,6 +7,7 @@ import {
   buildSubject,
   renderDailyBriefEmail,
 } from './renderEmail.js';
+import type { CalendarRow } from '../../lib/weekAhead.js';
 
 const apiKey = process.env.SENDGRID_API_KEY?.trim();
 if (!apiKey) {
@@ -34,13 +35,15 @@ function buildUnsubscribeUrl(token: string): string {
 
 export function renderForRecipient(
   content: DailyContent,
-  unsubscribeToken: string
+  unsubscribeToken: string,
+  calendar?: CalendarRow[]
 ): { html: string; subject: string; preheader: string } {
   const preheader = buildPreheader(content);
   const html = renderDailyBriefEmail({
     content,
     preheader,
     unsubscribeUrl: buildUnsubscribeUrl(unsubscribeToken),
+    calendar,
   });
 
   return {
@@ -53,9 +56,10 @@ export function renderForRecipient(
 export async function sendToRecipient(
   content: DailyContent,
   to: string,
-  unsubscribeToken: string
+  unsubscribeToken: string,
+  calendar?: CalendarRow[]
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { html, subject, preheader } = renderForRecipient(content, unsubscribeToken);
+  const { html, subject, preheader } = renderForRecipient(content, unsubscribeToken, calendar);
 
   try {
     await sgMail.send({
@@ -79,7 +83,8 @@ export async function sendToRecipient(
 
 export async function sendBatchInBackground(
   content: DailyContent,
-  recipients: DailyBriefRecipient[]
+  recipients: DailyBriefRecipient[],
+  calendar?: CalendarRow[]
 ): Promise<void> {
   let sent = 0;
   let failed = 0;
@@ -91,7 +96,8 @@ export async function sendBatchInBackground(
         const result = await sendToRecipient(
           content,
           recipient.email,
-          recipient.unsubscribe_token
+          recipient.unsubscribe_token,
+          calendar
         );
         if (result.ok) {
           sent += 1;
@@ -112,8 +118,9 @@ export async function sendBatchInBackground(
 
 export async function sendTestEmail(
   content: DailyContent,
-  testEmail: string
+  testEmail: string,
+  calendar?: CalendarRow[]
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const testToken = '00000000-0000-0000-0000-000000000000';
-  return sendToRecipient(content, testEmail, testToken);
+  return sendToRecipient(content, testEmail, testToken, calendar);
 }

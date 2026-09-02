@@ -1,0 +1,68 @@
+[
+  {
+    "date": "2026-09-01",
+    "symbol": "DELL",
+    "eps": null,
+    "epsEstimated": 2.38,
+    "time": "amc",
+    "revenue": null,
+    "revenueEstimated": 27140000000,
+    "fiscalDateEnding": "2026-08-01",
+    "updatedFromDate": "2026-08-18"
+  },
+  {
+    "date": "2026-09-01",
+    "symbol": "PANW",
+    "eps": null,
+    "epsEstimated": 0.89,
+    "time": "amc",
+    "revenue": null,
+    "revenueEstimated": 2470000000,
+    "fiscalDateEnding": "2026-07-31",
+    "updatedFromDate": "2026-08-20"
+  },
+  {
+    "date": "2026-09-02",
+    "symbol": "AVGO",
+    "eps": null,
+    "epsEstimated": 1.67,
+    "time": "amc",
+    "revenue": null,
+    "revenueEstimated": 15980000000,
+    "fiscalDateEnding": "2026-08-02",
+    "updatedFromDate": "2026-08-22"
+  },
+  {
+    "date": "2026-09-02",
+    "symbol": "HPE",
+    "eps": null,
+    "epsEstimated": 0.49,
+    "time": "amc",
+    "revenue": null,
+    "revenueEstimated": 8600000000,
+    "fiscalDateEnding": "2026-07-31",
+    "updatedFromDate": "2026-08-19"
+  },
+  {
+    "date": "2026-09-03",
+    "symbol": "CRM",
+    "eps": null,
+    "epsEstimated": 2.86,
+    "time": "--",
+    "revenue": null,
+    "revenueEstimated": 10240000000,
+    "fiscalDateEnding": "2026-07-31",
+    "updatedFromDate": "2026-08-21"
+  },
+  {
+    "date": "2026-09-01",
+    "symbol": "XYZQ",
+    "eps": null,
+    "epsEstimated": 0.02,
+    "time": "bmo",
+    "revenue": null,
+    "revenueEstimated": 12000000,
+    "fiscalDateEnding": "2026-06-30",
+    "updatedFromDate": "2026-08-01"
+  }
+]

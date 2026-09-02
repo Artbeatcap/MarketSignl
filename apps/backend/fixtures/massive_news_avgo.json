@@ -1,0 +1,120 @@
+{
+  "status": 200,
+  "count": 10,
+  "results": [
+    {
+      "title": "Broadcom Set to Report Q3 Earnings: Buy, Sell or Hold the Stock?",
+      "description": "Broadcom is expected to report Q3 fiscal 2026 results on September 2 with revenues of ~$29.4 billion (84% YoY growth) and AI semiconductor revenues accelerating to ~$16 billion (200%+ YoY growth). However, gross margin pressure from lower-margin AI semiconductors and stretched valuation present headwinds. The stock has underperformed peers despite strong AI momentum with major customers including Google, Anthropic, OpenAI, and Meta.",
+      "published_utc": "2026-09-01T15:02:00Z",
+      "tickers": [
+        "AVGO",
+        "CSCO",
+        "HPE",
+        "HPEpC",
+        "MRVL"
+      ]
+    },
+    {
+      "title": "Ciena's Next Earnings Report on September 3 Could Send the Stock Soaring. Here's Why.",
+      "description": "Ciena is expected to report strong Q3 fiscal 2026 earnings on September 3, with analysts projecting 34% revenue growth to $1.64B and 158% growth in adjusted net income to $1.73 per share. Despite beating estimates in four consecutive quarters, the stock fell sharply after the previous earnings report due to sky-high investor expectations and a 165% year-to-date run-up. The author believes a more forgiving market and another impressive performance could drive the stock higher, though the company must deliver yet another strong quarter and potentially raise guidance.",
+      "published_utc": "2026-09-01T13:30:02Z",
+      "tickers": [
+        "CIEN",
+        "AVGO"
+      ]
+    },
+    {
+      "title": "The Zacks Analyst Blog Highlights Broadcom, Nvidia, Palantir, Fortinet and Quanta Services",
+      "description": "Zacks highlights five stocks in their analyst blog covering global market themes for the week ahead. Key events include U.S. nonfarm payroll data, central bank meetings in New Zealand and Canada, and a G20 gathering. The article features three Zacks #1 (Strong Buy) stocks: Palantir, Fortinet, and Quanta Services, all with F Value scores but strong growth and momentum metrics.",
+      "published_utc": "2026-09-01T13:04:00Z",
+      "tickers": [
+        "AVGO",
+        "NVDA",
+        "PLTR",
+        "FTNT",
+        "PWR"
+      ]
+    },
+    {
+      "title": "Nvidia Just Proved It Doesn't Need China Anymore",
+      "description": "Nvidia provided fiscal 2028 guidance forecasting 70% revenue growth, significantly exceeding Wall Street's 44% expectations. The company demonstrated it can achieve substantial growth without relying on China, where it now generates less than 1% of data center revenue. With a forward P/E of 23 and PEG ratio of 0.6, Nvidia appears undervalued despite its accelerating growth trajectory.",
+      "published_utc": "2026-09-01T12:26:00Z",
+      "tickers": [
+        "NVDA",
+        "AMD",
+        "AVGO"
+      ]
+    },
+    {
+      "title": "Should You Invest in the Strive U.S. Semiconductor ETF (SHOC)?",
+      "description": "The article analyzes the Strive U.S. Semiconductor ETF (SHOC), highlighting its strong year-to-date performance of 50.94% and 12-month return of 85.72%. The ETF, which tracks the top 30 U.S. semiconductor companies, has a low expense ratio of 0.4% and holds a Zacks ETF Rank of 1 (Strong Buy). Top holdings include Nvidia, Micron Technology, and Broadcom, with the fund offering concentrated exposure to the semiconductor sector.",
+      "published_utc": "2026-09-01T10:20:01Z",
+      "tickers": [
+        "SHOC",
+        "NVDA",
+        "MU",
+        "AVGO"
+      ]
+    },
+    {
+      "title": "Should You Invest in the VanEck Fabless Semiconductor ETF (SMHX)?",
+      "description": "The VanEck Fabless Semiconductor ETF (SMHX) has delivered strong year-to-date returns of 46.38% and 12-month gains of 58.27%, driven by top holdings in major semiconductor companies. With a low expense ratio of 0.35% and a Zacks ETF Rank of 2 (Buy), SMHX offers concentrated exposure to the fabless semiconductor industry, though investors should note its higher volatility with a beta of 2.45.",
+      "published_utc": "2026-09-01T10:20:01Z",
+      "tickers": [
+        "SMHX",
+        "NVDA",
+        "AVGO",
+        "AMD"
+      ]
+    },
+    {
+      "title": "There Are 16 Billion Reasons to Pay Attention to Broadcom Earnings on Sept. 2",
+      "description": "Broadcom is set to report Q3 earnings on Sept. 2 with management guidance projecting $16 billion in AI semiconductor revenue with over 200% year-over-year growth. While the company has shown strong momentum with Q2 revenue up 48% and AI chip revenue up 143%, investor concerns persist over Alphabet's expanded partnership with Marvell Technology for custom AI chips. Broadcom's stock performance has lagged the S&P 500 this year, but hitting the $16 billion target could ease concerns and present a buying opportunity.",
+      "published_utc": "2026-08-31T17:03:50Z",
+      "tickers": [
+        "AVGO",
+        "GOOG",
+        "GOOGL",
+        "GOOGM",
+        "GOOGN",
+        "MRVL",
+        "AMD",
+        "NVDA"
+      ]
+    },
+    {
+      "title": "Cathie Wood Goes Bargain Hunting: 3 Stocks She Just Bought",
+      "description": "Cathie Wood's Ark Invest added to positions in Nvidia, Broadcom, and Intellia Therapeutics on Friday as these stocks declined. Nvidia exceeded earnings expectations with 106% revenue growth and raised guidance to 70% for fiscal 2028, now trading at 14x forward earnings. Broadcom is on track for accelerating growth with an upcoming earnings report. Intellia, a gene-editing biotech, has declined over 50% from recent highs but remains well-funded with analyst support.",
+      "published_utc": "2026-08-31T15:22:00Z",
+      "tickers": [
+        "NVDA",
+        "AVGO",
+        "NTLA",
+        "ARKG"
+      ]
+    },
+    {
+      "title": "Prediction: This AI Infrastructure Stock Will Soar After Sept. 3 (Hint: It's Not Broadcom)",
+      "description": "Ciena, an optical networking products company, is positioned to deliver strong quarterly results on Sept. 3, driven by surging demand for optical components in AI infrastructure. The company has consistently beaten Wall Street expectations and is benefiting from a supply shortage that's boosting margins. With revenue expected to grow 33% year-over-year and earnings projected to jump 157%, Ciena stock could soar following its earnings report.",
+      "published_utc": "2026-08-31T11:29:00Z",
+      "tickers": [
+        "CIEN",
+        "NVDA",
+        "AVGO",
+        "GS",
+        "GSpA",
+        "GSpC",
+        "GSpD"
+      ]
+    },
+    {
+      "title": "Tim Cook Committed Apple to a $60 Billion Domestic Manufacturing Bet Just Weeks Before Handing Off the CEO Job. Here's What It Means for Apple Investors.",
+      "description": "Apple is investing $60 billion in Texas as part of a broader $600 billion, four-year U.S. manufacturing commitment. A new Houston facility will produce Mac minis and advanced AI servers. This strategic move aims to reduce tariff risks and stabilize margins before CEO John Ternus takes over on September 1. Apple also signed a $30+ billion long-term agreement with Broadcom for custom silicon components.",
+      "published_utc": "2026-08-30T10:15:00Z",
+      "tickers": [
+        "AAPL",
+        "AVGO"
+      ]
+    }
+  ]
+}
