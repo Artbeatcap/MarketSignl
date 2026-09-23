@@ -3,7 +3,7 @@ import { Slot, useRouter, useSegments } from 'expo-router';
 import { View, ActivityIndicator, StyleSheet, Platform, Text } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import { SystemBars } from 'react-native-edge-to-edge';
-import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '../store/authStore';
 import { subscriptionService } from '../services/subscription.service';
@@ -126,6 +126,12 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       }
     }
 
+    const webPathname =
+      Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.pathname : '';
+    const isWebGuestAnalyze =
+      Platform.OS === 'web' &&
+      (webPathname === '/analyze' || webPathname.startsWith('/analyze/'));
+
     // Track if we've ever had non-empty segments (so we don't redirect on mid-navigation empty segments)
     if (segments && segments.length > 0) {
       hasSeenNonEmptySegments.current = true;
@@ -137,6 +143,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     if (!segments || segments.length === 0) {
       const timeoutId = setTimeout(() => {
         if (!hasSeenNonEmptySegments.current) {
+          if (isWebGuestAnalyze) {
+            return;
+          }
           if (!session && !user) {
             router.replace('/(onboarding)/home');
           } else {
@@ -151,6 +160,14 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     // Define which route groups don't require auth
     // Include (settings) so privacy/terms pages are accessible without authentication
     const inAuthGroup = segments[0] === '(onboarding)' || segments[0] === 'auth' || segments[0] === '(settings)';
+    // Guests on the web can use Analyze, and can open History/Profile to a
+    // sign-in prompt. A stale /analyze pathname must not keep them on another
+    // tab — Expo updates segments and the URL at different times.
+    const webGuestTab =
+      Platform.OS === 'web' &&
+      segments[0] === '(tabs)' &&
+      (segments[1] === 'analyze' || segments[1] === 'history' || segments[1] === 'profile');
+    const isGuestAnalyzeRoute = webGuestTab;
     
     // Exclude reset-password from redirect - it needs a session (from recovery token) but user should stay on screen
     const isResetPassword = segments[0] === 'auth' && segments[1] === 'reset-password';
@@ -158,7 +175,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     // Check if user has any auth (session OR user object for unverified users)
     const hasAuth = session || user;
 
-    if (!hasAuth && !inAuthGroup) {
+    if (!hasAuth && !inAuthGroup && !isGuestAnalyzeRoute) {
       // User is not signed in and trying to access protected route
       // Redirect to welcome/onboarding
       console.log('AuthGate: No auth, redirecting to home');
@@ -191,15 +208,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function RootContentWithInsets() {
-  const insets = useSafeAreaInsets();
+function RootContent() {
+  // Screens apply their own safe area. Padding here as well stacked a second
+  // status-bar and home-indicator gap on top of each screen's SafeAreaView.
   return (
-    <View
-      style={[
-        styles.screenWrapper,
-        { paddingTop: insets.top, paddingBottom: insets.bottom },
-      ]}
-    >
+    <View style={styles.screenWrapper}>
       <Slot />
     </View>
   );
@@ -213,7 +226,7 @@ export default function RootLayout() {
           <EducationProvider>
             <SystemBars style="dark" />
             <AuthGate>
-              <RootContentWithInsets />
+              <RootContent />
             </AuthGate>
           </EducationProvider>
         </QueryClientProvider>

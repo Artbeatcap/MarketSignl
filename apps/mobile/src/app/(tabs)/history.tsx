@@ -1,25 +1,29 @@
 // Simplified History Screen - Data Only (No Images)
 
 import { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { getAnalysisHistory, getPredictionHistory } from '../../lib/api';
-import { DataFreshnessBadge } from '../../components';
+import { Button, DataFreshnessBadge } from '../../components';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import type { AnalysisHistoryItem, PredictionHistoryItem } from '@chartsignl/core';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuthStore } from '../../store/authStore';
 
 type HistoryTab = 'analyses' | 'predictions';
 
 export default function HistoryScreen() {
   const router = useRouter();
+  const user = useAuthStore((s) => s.user);
+  const isGuest = !user;
   const [activeTab, setActiveTab] = useState<HistoryTab>('analyses');
 
   const { data, isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['analysisHistory'],
     queryFn: () => getAnalysisHistory(1, 50),
+    enabled: !!user,
   });
 
   const {
@@ -30,6 +34,7 @@ export default function HistoryScreen() {
   } = useQuery({
     queryKey: ['predictionHistory'],
     queryFn: () => getPredictionHistory(1, 50),
+    enabled: !!user,
   });
 
   const analyses = data?.analyses || [];
@@ -40,6 +45,7 @@ export default function HistoryScreen() {
       pathname: '/(tabs)/analyze',
       params: {
         analysisId: item.id,
+        ...(item.symbol ? { symbol: item.symbol } : {}),
         ...(item.predictionId ? { predictionId: item.predictionId } : {}),
       },
     });
@@ -50,6 +56,7 @@ export default function HistoryScreen() {
       pathname: '/(tabs)/analyze',
       params: {
         predictionId: item.id,
+        ...(item.symbol ? { symbol: item.symbol } : {}),
         ...(item.analysisId ? { analysisId: item.analysisId } : {}),
       },
     });
@@ -186,9 +193,13 @@ export default function HistoryScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.webWrapper}>
         <View style={styles.webInner}>
+          {isGuest ? (
+            <GuestHistoryPrompt onSignIn={() => router.push('/(onboarding)/account')} />
+          ) : (
+          <>
           <View style={styles.header}>
             <Text style={styles.headerTitle}>History</Text>
             <Text style={styles.headerSubtitle}>
@@ -222,12 +233,21 @@ export default function HistoryScreen() {
 
           {activeTab === 'analyses' ? (
             <FlatList
+              style={styles.list}
               data={analyses}
               keyExtractor={(item) => item.id}
               renderItem={renderItem}
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
-              ListEmptyComponent={!isLoading ? renderEmptyState : null}
+              ListEmptyComponent={
+                isLoading ? (
+                  <View style={styles.loadingState}>
+                    <ActivityIndicator size="large" color={colors.primary[500]} />
+                  </View>
+                ) : (
+                  renderEmptyState
+                )
+              }
               refreshControl={
                 <RefreshControl
                   refreshing={isRefetching}
@@ -238,12 +258,21 @@ export default function HistoryScreen() {
             />
           ) : (
             <FlatList
+              style={styles.list}
               data={predictions}
               keyExtractor={(item) => item.id}
               renderItem={renderPredictionItem}
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
-              ListEmptyComponent={!isLoadingPredictions ? renderPredictionEmptyState : null}
+              ListEmptyComponent={
+                isLoadingPredictions ? (
+                  <View style={styles.loadingState}>
+                    <ActivityIndicator size="large" color={colors.primary[500]} />
+                  </View>
+                ) : (
+                  renderPredictionEmptyState
+                )
+              }
               refreshControl={
                 <RefreshControl
                   refreshing={isRefetchingPredictions}
@@ -253,9 +282,24 @@ export default function HistoryScreen() {
               }
             />
           )}
+          </>
+          )}
         </View>
       </View>
     </SafeAreaView>
+  );
+}
+
+function GuestHistoryPrompt({ onSignIn }: { onSignIn: () => void }) {
+  return (
+    <View style={styles.guestWrap}>
+      <Ionicons name="time-outline" size={64} color={colors.neutral[300]} />
+      <Text style={styles.emptyTitle}>Sign in to see your history</Text>
+      <Text style={styles.emptySubtitle}>
+        Analyses and forecasts are saved to your account. Create a free account to keep them.
+      </Text>
+      <Button title="Create a free account" onPress={onSignIn} size="lg" fullWidth />
+    </View>
   );
 }
 
@@ -263,22 +307,25 @@ const WEB_MAX_WIDTH = 1100;
 
 const styles = StyleSheet.create({
   container: {
-    ...(Platform.OS !== 'web' && { flex: 1 }),
-    ...(Platform.OS === 'web' && { height: '100vh', overflow: 'auto' }),
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
     backgroundColor: colors.background,
   },
   webWrapper: {
-    ...(Platform.OS !== 'web' && { flex: 1 }),
+    flex: 1,
     ...(Platform.OS === 'web' && {
+      width: '100%',
       alignItems: 'center',
       backgroundColor: colors.neutral[100],
     }),
   },
   webInner: {
-    ...(Platform.OS !== 'web' && { flex: 1 }),
+    flex: 1,
     width: '100%',
     ...(Platform.OS === 'web' && {
       maxWidth: WEB_MAX_WIDTH,
+      minHeight: 0,
       backgroundColor: colors.background,
       borderLeftWidth: 1,
       borderRightWidth: 1,
@@ -323,6 +370,10 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: colors.white,
+  },
+  list: {
+    flex: 1,
+    minHeight: 0,
   },
   listContent: {
     paddingHorizontal: spacing.lg,
@@ -432,6 +483,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.xxl * 3,
+  },
+  guestWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xxl,
+  },
+  loadingState: {
+    paddingVertical: spacing.xxl * 2,
+    alignItems: 'center',
   },
   emptyTitle: {
     ...typography.headingLg,

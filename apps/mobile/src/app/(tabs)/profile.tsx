@@ -6,9 +6,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card, Button, EmailVerificationBanner } from '../../components';
 import { useAuthStore } from '../../store/authStore';
 import { getCurrentUser, getUsage } from '../../lib/api';
-import { getWeeklyAtlasUsed } from '../../lib/usage';
+import { getWeeklyAtlasLimit, getWeeklyAtlasUsed } from '../../lib/usage';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
-import { FREE_ANALYSIS_LIMIT, TRADING_STYLE_OPTIONS } from '@chartsignl/core';
+import { TRADING_STYLE_OPTIONS } from '@chartsignl/core';
 import { useEffect, useCallback, useState } from 'react';
 import { API_URL } from '../../lib/apiConfig';
 import { getExpoPushToken, unregisterPushToken, usePushNotifications } from '../../lib/usePushNotifications';
@@ -24,20 +24,22 @@ export default function ProfileScreen() {
   const { data: profileData } = useQuery({
     queryKey: ['profile'],
     queryFn: getCurrentUser,
+    enabled: !!user,
   });
 
   const { data: usageData } = useQuery({
     queryKey: ['usage'],
     queryFn: getUsage,
+    enabled: !!user,
   });
 
   const profile = profileData?.user;
   const usage = usageData;
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Unified Atlas runs (min of analysis + prediction counters)
-  const weeklyAtlasUsed = getWeeklyAtlasUsed(usage);
-  const weeklyAtlasLimit = usage?.freeAnalysesLimit || FREE_ANALYSIS_LIMIT;
+  // Higher of the two counters, so a partial run still counts as used.
+  const weeklyAtlasUsed = Math.min(getWeeklyAtlasUsed(usage), getWeeklyAtlasLimit(usage));
+  const weeklyAtlasLimit = getWeeklyAtlasLimit(usage);
   const remainingAtlasRuns = usage?.isPro
     ? Infinity
     : weeklyAtlasLimit - weeklyAtlasUsed;
@@ -366,8 +368,33 @@ export default function ProfileScreen() {
     );
   };
 
+  if (!user) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.webWrapper}>
+          <View style={styles.webInner}>
+            <View style={styles.guestWrap}>
+              <Ionicons name="person-circle-outline" size={72} color={colors.neutral[300]} />
+              <Text style={styles.guestTitle}>Sign in to your account</Text>
+              <Text style={styles.guestSubtitle}>
+                Profile, weekly usage, and settings are available after you create a free account.
+              </Text>
+              <Button
+                title="Create a free account"
+                onPress={() => router.push('/(onboarding)/account')}
+                size="lg"
+                fullWidth
+                style={styles.guestButton}
+              />
+            </View>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.webWrapper}>
         <View style={styles.webInner}>
           <ScrollView
@@ -579,26 +606,57 @@ const WEB_MAX_WIDTH = 900;
 
 const styles = StyleSheet.create({
   container: {
-    ...(Platform.OS !== 'web' && { flex: 1 }),
-    ...(Platform.OS === 'web' && { height: '100vh' as any, overflow: 'auto' }),
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
     backgroundColor: colors.background,
   },
   webWrapper: {
-    ...(Platform.OS !== 'web' && { flex: 1 }),
-    ...(Platform.OS === 'web' && { alignItems: 'center' }),
+    flex: 1,
+    ...(Platform.OS === 'web' && { width: '100%', alignItems: 'center' }),
   },
   webInner: {
-    ...(Platform.OS !== 'web' && { flex: 1 }),
+    flex: 1,
     width: '100%',
-    ...(Platform.OS === 'web' && { maxWidth: WEB_MAX_WIDTH }),
+    ...(Platform.OS === 'web' && {
+      maxWidth: WEB_MAX_WIDTH,
+      minHeight: 0,
+    }),
+  },
+  guestWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xxl,
+  },
+  guestTitle: {
+    ...typography.headingLg,
+    color: colors.neutral[900],
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  guestSubtitle: {
+    ...typography.bodyMd,
+    color: colors.neutral[500],
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: spacing.lg,
+    maxWidth: 360,
+  },
+  guestButton: {
+    width: '100%',
+    maxWidth: 360,
   },
   scrollView: {
     flex: 1,
+    minHeight: 0,
   },
   scrollContent: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
-    paddingBottom: Platform.OS === 'web' ? 100 : spacing.xxl,
+    paddingBottom: spacing.xxl,
   },
   pushBanner: {
     flexDirection: 'row',

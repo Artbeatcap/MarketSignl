@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   Alert,
   ActivityIndicator,
@@ -11,6 +10,7 @@ import {
   Linking,
   TouchableOpacity,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useRootNavigationState } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import type { PurchasesOffering, PurchasesPackage } from 'react-native-purchases';

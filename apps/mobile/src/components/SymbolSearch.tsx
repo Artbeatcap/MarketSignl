@@ -8,10 +8,10 @@ import {
   FlatList,
   ActivityIndicator,
   Modal,
-  SafeAreaView,
 } from 'react-native';
 import { colors, typography, spacing, borderRadius, shadows } from '../theme';
 import { API_URL } from '../lib/apiConfig';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Popular symbols for quick access
 const POPULAR_SYMBOLS = [

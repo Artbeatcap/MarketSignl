@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, Platform, Dimensions } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import Svg, { Rect, Line as SvgLine, G, Path } from 'react-native-svg';
 import type {
   MarketDataPoint,
@@ -203,8 +203,54 @@ function formatCompact5DLabel(timestamp: number, data: MarketDataPoint[], tickIn
   return `${hour}:${m}${ampm}`;
 }
 
-function getTickCount(interval: ChartInterval, dataLength: number): number {
-  return Math.min(6, dataLength);
+function getTickCount(dataLength: number, chartWidth: number): number {
+  const maxTicks = chartWidth < 520 ? 4 : 6;
+  return Math.min(maxTicks, dataLength);
+}
+
+const X_AXIS_LABEL_MIN = 44;
+
+function xAxisLabelWidth(chartWidth: number): number {
+  return Math.min(64, Math.max(X_AXIS_LABEL_MIN, Math.floor(chartWidth / 7)));
+}
+
+/** Keep a horizontal label centered on its tick and inside the chart. */
+function xAxisLabelLeft(tickX: number, labelWidth: number, chartWidth: number): number {
+  const maxLeft = Math.max(0, chartWidth - labelWidth);
+  return Math.max(0, Math.min(tickX - labelWidth / 2, maxLeft));
+}
+
+function ChartXLabels({
+  width,
+  indices,
+  xForIndex,
+  labelFor,
+}: {
+  width: number;
+  indices: number[];
+  xForIndex: (index: number) => number;
+  labelFor: (index: number, tickIdx: number) => string;
+}) {
+  const labelWidth = xAxisLabelWidth(width);
+  return (
+    <View style={[styles.xAxis, { width }]} pointerEvents="none">
+      {indices.map((index, tickIdx) => (
+        <Text
+          key={index}
+          style={[
+            styles.xAxisLabel,
+            {
+              position: 'absolute',
+              left: xAxisLabelLeft(xForIndex(index), labelWidth, width),
+              width: labelWidth,
+            },
+          ]}
+        >
+          {labelFor(index, tickIdx)}
+        </Text>
+      ))}
+    </View>
+  );
 }
 
 function getXAxisTicks(data: MarketDataPoint[], tickCount: number): number[] {
@@ -297,7 +343,7 @@ export function StockChart({
 
   // Determine axis type and ticks
   const useCategorical = shouldUseCategoricalAxis(interval);
-  const tickCount = getTickCount(interval, data.length);
+  const tickCount = getTickCount(data.length, 480);
   
   const xAxisConfig = useMemo(() => {
     if (useCategorical) {
@@ -386,66 +432,44 @@ export function StockChart({
     );
   };
 
-  // Render candlestick chart (works on both native and web via react-native-svg)
-  if (viewType === 'candle') {
-    return (
-      <View style={[styles.container, { height }]}>
-        <SimpleCandlestickChart
-          data={data}
-          interval={interval}
-          minPrice={minPrice}
-          maxPrice={maxPrice}
-          height={height - 85}
-          showEMA={showEMA}
-          showVolume={showVolume}
-          showVolumeProfile={showVolumeProfile}
-          volumeProfile={volumeProfile}
-          supportLevels={supportLevels}
-          resistanceLevels={resistanceLevels}
-          projectedPath={projectedPath}
-          expectedChangePct={expectedChangePct}
-          showPrediction={showPrediction}
-        />
-        <View style={styles.legend}>
-          <LegendItem color={CHART_COLORS.candleUp} label="Bullish" />
-          <LegendItem color={CHART_COLORS.candleDown} label="Bearish" />
-          {showEMA && (
-            <>
-              <LegendItem color={CHART_COLORS.ema9} label="EMA 9" />
-              <LegendItem color={CHART_COLORS.ema21} label="EMA 21" />
-            </>
-          )}
-          {supportLevels.length > 0 && <LegendItem color={CHART_COLORS.support} label="Support" />}
-          {resistanceLevels.length > 0 && (
-            <LegendItem color={CHART_COLORS.resistance} label="Resistance" />
-          )}
-          {showPrediction && projectedPath.length > 0 && (
-            <LegendItem color={CHART_COLORS.prediction} label="Atlas forecast" />
-          )}
-        </View>
-      </View>
-    );
-  }
+  const plotHeight = height - 85;
+  const sharedPlot = {
+    data,
+    interval,
+    minPrice,
+    maxPrice,
+    height: plotHeight,
+    showEMA,
+    showVolume,
+    showVolumeProfile,
+    volumeProfile,
+    supportLevels,
+    resistanceLevels,
+    projectedPath,
+    expectedChangePct,
+    showPrediction,
+  };
 
-  // Line chart (pure react-native-svg, no Recharts)
-  return (
-    <View style={[styles.container, { height }]}>
-      <SimpleLineChart
-        data={data}
-        interval={interval}
-        minPrice={minPrice}
-        maxPrice={maxPrice}
-        height={height - 85}
-        showEMA={showEMA}
-        showVolume={showVolume}
-        showVolumeProfile={showVolumeProfile}
-        volumeProfile={volumeProfile}
-        supportLevels={supportLevels}
-        resistanceLevels={resistanceLevels}
-        projectedPath={projectedPath}
-        expectedChangePct={expectedChangePct}
-        showPrediction={showPrediction}
-      />
+  const legend =
+    viewType === 'candle' ? (
+      <View style={styles.legend}>
+        <LegendItem color={CHART_COLORS.candleUp} label="Bullish" />
+        <LegendItem color={CHART_COLORS.candleDown} label="Bearish" />
+        {showEMA && (
+          <>
+            <LegendItem color={CHART_COLORS.ema9} label="EMA 9" />
+            <LegendItem color={CHART_COLORS.ema21} label="EMA 21" />
+          </>
+        )}
+        {supportLevels.length > 0 && <LegendItem color={CHART_COLORS.support} label="Support" />}
+        {resistanceLevels.length > 0 && (
+          <LegendItem color={CHART_COLORS.resistance} label="Resistance" />
+        )}
+        {showPrediction && projectedPath.length > 0 && (
+          <LegendItem color={CHART_COLORS.prediction} label="Atlas forecast" />
+        )}
+      </View>
+    ) : (
       <View style={styles.legend}>
         <LegendItem color={CHART_COLORS.lineStroke} label="Price" />
         {showEMA && (
@@ -462,6 +486,44 @@ export function StockChart({
           <LegendItem color={CHART_COLORS.prediction} label="Atlas forecast" />
         )}
       </View>
+    );
+
+  return (
+    <ChartFrame height={height} legend={legend}>
+      {(plotWidth) =>
+        viewType === 'candle' ? (
+          <SimpleCandlestickChart {...sharedPlot} width={plotWidth} />
+        ) : (
+          <SimpleLineChart {...sharedPlot} width={plotWidth} />
+        )
+      }
+    </ChartFrame>
+  );
+}
+
+function ChartFrame({
+  height,
+  legend,
+  children,
+}: {
+  height: number;
+  legend: React.ReactNode;
+  children: (plotWidth: number) => React.ReactNode;
+}) {
+  const [plotWidth, setPlotWidth] = useState(0);
+
+  return (
+    <View style={[styles.container, { height }]}>
+      <View
+        style={styles.plotSlot}
+        onLayout={(event) => {
+          const next = Math.floor(event.nativeEvent.layout.width);
+          setPlotWidth((current) => (current === next ? current : next));
+        }}
+      >
+        {plotWidth > 0 ? children(plotWidth) : null}
+      </View>
+      {legend}
     </View>
   );
 }
@@ -472,6 +534,7 @@ interface SimpleCandlestickChartProps {
   interval: ChartInterval;
   minPrice: number;
   maxPrice: number;
+  width: number;
   height: number;
   showEMA?: boolean;
   showVolume?: boolean;
@@ -489,6 +552,7 @@ function SimpleCandlestickChart({
   interval,
   minPrice,
   maxPrice,
+  width,
   height,
   showEMA = true,
   showVolume = false,
@@ -500,7 +564,6 @@ function SimpleCandlestickChart({
   expectedChangePct,
   showPrediction = false,
 }: SimpleCandlestickChartProps) {
-  const width = Dimensions.get('window').width - 40;
   const svgHeight = height - X_AXIS_HEIGHT;
   const chartHeight = svgHeight - 10;
 
@@ -525,7 +588,7 @@ function SimpleCandlestickChart({
   };
 
   // Calculate which labels to show on x-axis
-  const tickCount = getTickCount(interval, data.length);
+  const tickCount = getTickCount(data.length, width);
   const xAxisIndices = useMemo(() => {
     if (data.length === 0) return [];
     if (data.length <= tickCount) return data.map((_, i) => i);
@@ -774,35 +837,21 @@ function SimpleCandlestickChart({
       </Svg>
 
       {/* X-axis outside and below SVG */}
-      <View style={[styles.xAxis, { paddingLeft: 0, paddingRight: 0, width }]}>
-        {xAxisIndices.map((index, tickIdx) => {
-          const pixelX = xForIndex(index);
-          const label = interval === '5d'
+      <ChartXLabels
+        width={width}
+        indices={xAxisIndices}
+        xForIndex={xForIndex}
+        labelFor={(index, tickIdx) =>
+          interval === '5d'
             ? formatCompact5DLabel(
                 data[index]?.timestamp ?? 0,
                 data,
                 tickIdx,
                 xAxisIndices.map((i) => data[i]?.timestamp ?? 0)
               )
-            : formatCompactDate(data[index]?.timestamp ?? 0, interval);
-          return (
-            <Text
-              key={index}
-              style={[
-                styles.xAxisLabel,
-                {
-                  position: 'absolute',
-                  left: pixelX - 15,
-                  transform: [{ rotate: '-45deg' }],
-                },
-              ]}
-              numberOfLines={1}
-            >
-              {label}
-            </Text>
-          );
-        })}
-      </View>
+            : formatCompactDate(data[index]?.timestamp ?? 0, interval)
+        }
+      />
     </View>
   );
 }
@@ -813,6 +862,7 @@ interface SimpleLineChartProps {
   interval: ChartInterval;
   minPrice: number;
   maxPrice: number;
+  width: number;
   height: number;
   showEMA?: boolean;
   showVolume?: boolean;
@@ -825,7 +875,7 @@ interface SimpleLineChartProps {
   showPrediction?: boolean;
 }
 
-const X_AXIS_HEIGHT = 45;
+const X_AXIS_HEIGHT = 22;
 const CHART_LEFT_MARGIN = 50;
 const CHART_RIGHT_MARGIN = 15; // Space for Y-axis labels (min 60px) — used by SimpleCandlestickChart only
 
@@ -834,6 +884,7 @@ function SimpleLineChart({
   interval,
   minPrice,
   maxPrice,
+  width,
   height,
   showEMA = true,
   showVolume = false,
@@ -845,7 +896,6 @@ function SimpleLineChart({
   expectedChangePct,
   showPrediction = false,
 }: SimpleLineChartProps) {
-  const width = Dimensions.get('window').width - 40;
   const chartSvgHeight = height - X_AXIS_HEIGHT;
   const rightEdge = width - 30;
   const chartDrawableWidth = width - CHART_LEFT_MARGIN - 30;
@@ -867,7 +917,7 @@ function SimpleLineChart({
       ? layout.xForHistoricalIndex(i, data.length)
       : CHART_LEFT_MARGIN + i * stepX;
 
-  const tickCount = getTickCount(interval, data.length);
+  const tickCount = getTickCount(data.length, width);
   const xAxisIndices = useMemo(() => {
     if (data.length === 0) return [];
     if (data.length <= tickCount) return data.map((_, i) => i);
@@ -1085,38 +1135,21 @@ function SimpleLineChart({
       </View>
 
       {/* X-axis labels - outside and below SVG */}
-      <View style={styles.xAxis}>
-        {xAxisIndices.map((index, tickIdx) => {
-          const position = data.length > 1
-            ? (index / (data.length - 1)) * 100
-            : 50;
-          const label =
-            interval === '5d'
-              ? formatCompact5DLabel(
-                  data[index]?.timestamp ?? 0,
-                  data,
-                  tickIdx,
-                  xAxisIndices.map((i) => data[i]?.timestamp ?? 0)
-                )
-              : formatCompactDate(data[index]?.timestamp ?? 0, interval);
-          return (
-            <Text
-              key={index}
-              style={[
-                styles.xAxisLabel,
-                {
-                  position: 'absolute',
-                  left: `${position}%`,
-                  transform: [{ rotate: '-45deg' }],
-                },
-              ]}
-              numberOfLines={1}
-            >
-              {label}
-            </Text>
-          );
-        })}
-      </View>
+      <ChartXLabels
+        width={width}
+        indices={xAxisIndices}
+        xForIndex={xForIndex}
+        labelFor={(index, tickIdx) =>
+          interval === '5d'
+            ? formatCompact5DLabel(
+                data[index]?.timestamp ?? 0,
+                data,
+                tickIdx,
+                xAxisIndices.map((i) => data[i]?.timestamp ?? 0)
+              )
+            : formatCompactDate(data[index]?.timestamp ?? 0, interval)
+        }
+      />
     </View>
   );
 }
@@ -1149,6 +1182,9 @@ function LegendItem({ color, label }: { color: string; label: string }) {
 }
 
 const styles = StyleSheet.create({
+  plotSlot: {
+    width: '100%',
+  },
   container: {
     backgroundColor: CHART_COLORS.background,
     borderRadius: borderRadius.xl,
@@ -1233,17 +1269,15 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   xAxis: {
-    flexDirection: 'row',
     position: 'relative',
-    height: 45,
+    height: 18,
     marginTop: 2,
-    paddingLeft: 50,
-    paddingRight: 30,
   },
   xAxisLabel: {
-    fontSize: 9,
+    fontSize: 11,
+    lineHeight: 14,
     color: colors.neutral[500],
-    textAlign: 'left',
+    textAlign: 'center',
   },
   axisLabel: {
     ...typography.labelSm,

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Linking } from 'react-native';
 import { supabase } from '../../lib/supabase';
@@ -33,27 +34,28 @@ export default function AuthCallbackScreen() {
   useEffect(() => {
     let subscription: ReturnType<typeof Linking.addEventListener> | null = null;
     
-    const parseTokensFromUrl = (url: string): { accessToken: string | null; refreshToken: string | null; type: string | null } => {
+    const parseTokensFromUrl = (url: string): {
+        accessToken: string | null;
+        refreshToken: string | null;
+        type: string | null;
+        code: string | null;
+        error: string | null;
+        errorDescription: string | null;
+      } => {
         const hashStart = url.indexOf('#');
         const queryStart = url.indexOf('?');
         const hashPart = hashStart >= 0 ? url.slice(hashStart + 1) : '';
         const queryPart = queryStart >= 0 && (hashStart < 0 || queryStart < hashStart) ? url.slice(queryStart + 1).split('#')[0] : '';
-        let accessToken: string | null = null;
-        let refreshToken: string | null = null;
-        let type: string | null = null;
-        if (hashPart) {
-          const p = new URLSearchParams(hashPart);
-          accessToken = p.get('access_token');
-          refreshToken = p.get('refresh_token');
-          type = p.get('type');
-        }
-        if (!accessToken && queryPart) {
-          const p = new URLSearchParams(queryPart);
-          accessToken = p.get('access_token');
-          refreshToken = p.get('refresh_token');
-          if (!type) type = p.get('type');
-        }
-        return { accessToken, refreshToken, type };
+        const hashParams = hashPart ? new URLSearchParams(hashPart) : null;
+        const queryParams = queryPart ? new URLSearchParams(queryPart) : null;
+        return {
+          accessToken: hashParams?.get('access_token') || queryParams?.get('access_token') || null,
+          refreshToken: hashParams?.get('refresh_token') || queryParams?.get('refresh_token') || null,
+          type: hashParams?.get('type') || queryParams?.get('type') || null,
+          code: queryParams?.get('code') || hashParams?.get('code') || null,
+          error: queryParams?.get('error') || hashParams?.get('error') || null,
+          errorDescription: queryParams?.get('error_description') || hashParams?.get('error_description') || null,
+        };
       };
 
     const handleCallback = async (deepLinkUrl?: string) => {
@@ -62,34 +64,48 @@ export default function AuthCallbackScreen() {
         let callbackType: 'oauth' | 'email_verification' | 'recovery' | 'unknown' = 'unknown';
         let accessToken: string | null = null;
         let refreshToken: string | null = null;
+        let authCode: string | null = null;
 
         // Prefer URL from deep link event (mobile) or current page (web)
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          const hash = window.location.hash.substring(1);
-          if (hash) {
-            const p = new URLSearchParams(hash);
-            accessToken = p.get('access_token');
-            refreshToken = p.get('refresh_token');
-            const type = p.get('type');
-            if (type === 'signup' || type === 'email_change') {
-              callbackType = 'email_verification';
-              setMessage('Verifying your email...');
-            } else if (type === 'recovery') {
-              callbackType = 'recovery';
-              setMessage('Processing password reset...');
-            } else if (accessToken) {
-              callbackType = 'oauth';
-              setMessage('Completing sign in...');
-            }
+          const parsed = parseTokensFromUrl(window.location.href);
+          accessToken = parsed.accessToken;
+          refreshToken = parsed.refreshToken;
+          authCode = parsed.code;
+          if (parsed.error) {
+            throw new Error(
+              parsed.errorDescription
+                ? decodeURIComponent(parsed.errorDescription.replace(/\+/g, ' '))
+                : parsed.error
+            );
+          }
+          const type = parsed.type;
+          if (type === 'signup' || type === 'email_change') {
+            callbackType = 'email_verification';
+            setMessage('Verifying your email...');
+          } else if (type === 'recovery') {
+            callbackType = 'recovery';
+            setMessage('Processing password reset...');
+          } else if (accessToken || authCode) {
+            callbackType = 'oauth';
+            setMessage('Completing sign in...');
           }
         } else if (deepLinkUrl) {
           const parsed = parseTokensFromUrl(deepLinkUrl);
           accessToken = parsed.accessToken;
           refreshToken = parsed.refreshToken;
+          authCode = parsed.code;
+          if (parsed.error) {
+            throw new Error(
+              parsed.errorDescription
+                ? decodeURIComponent(parsed.errorDescription.replace(/\+/g, ' '))
+                : parsed.error
+            );
+          }
           const type = parsed.type;
           if (type === 'recovery') callbackType = 'recovery';
           else if (type === 'signup' || type === 'email_change') callbackType = 'email_verification';
-          else if (accessToken) callbackType = 'oauth';
+          else if (accessToken || authCode) callbackType = 'oauth';
           if (callbackType === 'oauth') setMessage('Completing sign in...');
         } else {
           const url = await Linking.getInitialURL();
@@ -97,10 +113,18 @@ export default function AuthCallbackScreen() {
             const parsed = parseTokensFromUrl(url);
             accessToken = parsed.accessToken;
             refreshToken = parsed.refreshToken;
+            authCode = parsed.code;
+            if (parsed.error) {
+              throw new Error(
+                parsed.errorDescription
+                  ? decodeURIComponent(parsed.errorDescription.replace(/\+/g, ' '))
+                  : parsed.error
+              );
+            }
             const type = parsed.type;
             if (type === 'recovery') callbackType = 'recovery';
             else if (type === 'signup' || type === 'email_change') callbackType = 'email_verification';
-            else if (accessToken) callbackType = 'oauth';
+            else if (accessToken || authCode) callbackType = 'oauth';
             if (callbackType === 'oauth') setMessage('Completing sign in...');
           }
         }
@@ -109,13 +133,22 @@ export default function AuthCallbackScreen() {
         if (!accessToken && params) {
           accessToken = (params.access_token as string) ?? null;
           refreshToken = (params.refresh_token as string) ?? null;
+          authCode = authCode || (params.code as string) || null;
           const type = params.type as string;
           if (type === 'recovery') callbackType = 'recovery';
           else if (type === 'signup' || type === 'email_change') callbackType = 'email_verification';
-          else if (accessToken) callbackType = 'oauth';
+          else if (accessToken || authCode) callbackType = 'oauth';
         }
 
         if (callbackType === 'oauth') setMessage('Completing sign in...');
+
+        if (authCode && !accessToken) {
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(authCode);
+          if (exchangeError) {
+            console.error('Callback exchangeCodeForSession error:', exchangeError);
+            throw exchangeError;
+          }
+        }
 
         // Set session from URL tokens (required when detectSessionInUrl is false)
         if (accessToken) {
@@ -235,16 +268,16 @@ export default function AuthCallbackScreen() {
 
   if (status === 'processing') {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <ActivityIndicator size="large" color={colors.primary[500]} />
         <Text style={styles.processingText}>{message}</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (status === 'success') {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <View style={styles.successIcon}>
           <Text style={styles.successIconText}>✓</Text>
         </View>
@@ -252,13 +285,13 @@ export default function AuthCallbackScreen() {
         <Text style={styles.description}>
           Redirecting you to the app...
         </Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   // Error state
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.errorIcon}>
         <Text style={styles.errorIconText}>!</Text>
       </View>
@@ -279,7 +312,7 @@ export default function AuthCallbackScreen() {
         size="lg"
         style={styles.secondaryButton}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 

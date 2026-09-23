@@ -268,7 +268,7 @@ export default function AlertsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.webWrapper}>
         <View style={styles.webInner}>
           <View style={styles.header}>

@@ -3,15 +3,15 @@ import {
   View, 
   Text, 
   StyleSheet, 
-  SafeAreaView, 
-  ScrollView, 
-  TouchableOpacity, 
+  ScrollView,
+  TouchableOpacity,
   TextInput, 
   Alert, 
   Platform,
   KeyboardAvoidingView,
   Linking,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
@@ -34,6 +34,28 @@ const ENABLE_APPLE_AUTH = true;
 let AppleAuthentication: typeof import('expo-apple-authentication') | null = null;
 if (Platform.OS === 'ios') {
   AppleAuthentication = require('expo-apple-authentication');
+}
+
+WebBrowser.maybeCompleteAuthSession();
+
+function parseOAuthCallback(url: string) {
+  const hashStart = url.indexOf('#');
+  const queryStart = url.indexOf('?');
+  const hashPart = hashStart >= 0 ? url.slice(hashStart + 1) : '';
+  const queryPart =
+    queryStart >= 0 && (hashStart < 0 || queryStart < hashStart)
+      ? url.slice(queryStart + 1).split('#')[0]
+      : '';
+  const hashParams = new URLSearchParams(hashPart);
+  const queryParams = new URLSearchParams(queryPart);
+  return {
+    accessToken: hashParams.get('access_token') || queryParams.get('access_token'),
+    refreshToken: hashParams.get('refresh_token') || queryParams.get('refresh_token'),
+    code: queryParams.get('code') || hashParams.get('code'),
+    error: queryParams.get('error') || hashParams.get('error'),
+    errorDescription:
+      queryParams.get('error_description') || hashParams.get('error_description'),
+  };
 }
 
 export default function AccountScreen() {
@@ -422,64 +444,54 @@ export default function AccountScreen() {
       if (error) throw error;
       if (!data?.url) throw new Error('No OAuth URL returned');
 
-      const tokenPromise = new Promise<string | null>((resolve) => {
-        const timeout = setTimeout(() => resolve(null), 120000);
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
 
-        const sub = Linking.addEventListener('url', (event: { url: string }) => {
-          if (event.url.includes('auth/callback') || event.url.includes('access_token')) {
-            clearTimeout(timeout);
-            sub.remove();
-            resolve(event.url);
-          }
-        });
-
-        Linking.getInitialURL().then((url) => {
-          if (url && (url.includes('auth/callback') || url.includes('access_token'))) {
-            clearTimeout(timeout);
-            sub.remove();
-            resolve(url);
-          }
-        });
-      });
-
-      void WebBrowser.openBrowserAsync(data.url, { showInRecents: true });
-
-      const callbackUrl = await tokenPromise;
-
-      if (!callbackUrl) {
+      if (result.type === 'cancel' || result.type === 'dismiss') {
         setIsLoading(false);
         return;
       }
-
-      const hashStart = callbackUrl.indexOf('#');
-      const queryStart = callbackUrl.indexOf('?');
-      const hashPart = hashStart >= 0 ? callbackUrl.slice(hashStart + 1) : '';
-      const queryPart =
-        queryStart >= 0 && (hashStart < 0 || queryStart < hashStart)
-          ? callbackUrl.slice(queryStart + 1).split('#')[0]
-          : '';
-
-      let accessToken: string | null = null;
-      let refreshToken: string | null = null;
-
-      if (hashPart) {
-        const p = new URLSearchParams(hashPart);
-        accessToken = p.get('access_token');
-        refreshToken = p.get('refresh_token');
-      }
-      if (!accessToken && queryPart) {
-        const p = new URLSearchParams(queryPart);
-        accessToken = p.get('access_token');
-        refreshToken = p.get('refresh_token');
+      if (result.type !== 'success' || !('url' in result) || !result.url) {
+        throw new Error('Sign-in was not completed. Please try again.');
       }
 
-      if (!accessToken) {
+      const parsed = parseOAuthCallback(result.url);
+      if (parsed.error) {
+        throw new Error(
+          parsed.errorDescription
+            ? decodeURIComponent(parsed.errorDescription.replace(/\+/g, ' '))
+            : parsed.error
+        );
+      }
+
+      if (parsed.code) {
+        const { data: sessionData, error: exchangeError } =
+          await supabase.auth.exchangeCodeForSession(parsed.code);
+        if (exchangeError) throw exchangeError;
+        if (!sessionData.session) throw new Error('Session not established');
+        setSession(sessionData.session);
+
+        if (answers.tradingStyle) {
+          try {
+            await updateProfile({
+              tradingStyle: answers.tradingStyle,
+              experienceLevel: answers.experienceLevel,
+            });
+          } catch (e) {
+            console.warn('Failed to save onboarding preferences:', e);
+          }
+        }
+
+        router.replace('/(tabs)/analyze');
+        return;
+      }
+
+      if (!parsed.accessToken) {
         throw new Error('No access token found in callback');
       }
 
       const { error: sessionError } = await supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken || '',
+        access_token: parsed.accessToken,
+        refresh_token: parsed.refreshToken || '',
       });
       if (sessionError) throw sessionError;
 
@@ -501,7 +513,6 @@ export default function AccountScreen() {
           }
         }
 
-        void WebBrowser.dismissBrowser();
         router.replace('/(tabs)/analyze');
       } else {
         throw new Error('Session not established');

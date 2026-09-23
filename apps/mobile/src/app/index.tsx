@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet, ActivityIndicator, Image, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, typography } from '../theme';
 
 export default function IndexScreen() {
@@ -6,7 +7,7 @@ export default function IndexScreen() {
   // This screen just shows branding while that happens
   
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.webWrapper}>
         <View style={styles.webInner}>
           {/* Soft gradient background */}
@@ -31,7 +32,7 @@ export default function IndexScreen() {
           </View>
         </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 

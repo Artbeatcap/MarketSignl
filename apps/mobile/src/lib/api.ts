@@ -8,6 +8,10 @@ import type {
   GetPredictionsResponse,
   GetPredictionResponse,
   GetPredictionStatsResponse,
+  EnhancedAIAnalysis,
+  AIPrediction,
+  MarketDataPoint,
+  DataFreshness,
 } from '@chartsignl/core';
 
 import { API_URL } from './apiConfig';
@@ -205,9 +209,55 @@ export async function getPrediction(id: string): Promise<GetPredictionResponse> 
   return apiFetch(`/api/predictions/${id}`);
 }
 
+export async function runGuestAnalyze(
+  symbol: string,
+  interval: string,
+  data: MarketDataPoint[],
+  freshness?: DataFreshness,
+): Promise<{
+  success: boolean;
+  remaining?: 0 | 1;
+  analysis?: EnhancedAIAnalysis;
+  prediction?: AIPrediction;
+  error?: string;
+}> {
+  const response = await fetch(`${API_URL}/api/analyze-guest`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      symbol,
+      interval,
+      data: data.slice(-100),
+      ...(freshness ? { freshness } : {}),
+    }),
+  });
+  const result = await response.json().catch(() => ({ success: false, error: 'Analysis failed' }));
+  if (!response.ok) {
+    return {
+      success: false,
+      remaining: result.remaining,
+      error: result.error || 'Failed to analyze chart',
+    };
+  }
+  return result;
+}
+
+export async function getGuestAnalyzeStatus(): Promise<{ remaining: 0 | 1 }> {
+  const response = await fetch(`${API_URL}/api/analyze-guest`, {
+    method: 'GET',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    return { remaining: 1 };
+  }
+  const result = await response.json().catch(() => ({ remaining: 1 }));
+  return { remaining: result.remaining === 0 ? 0 : 1 };
+}
+
 export async function subscribeToNewsletter(input: {
   email: string;
-  source: 'landing_hero' | 'landing_footer';
+  source: 'landing_hero' | 'landing_footer' | 'landing_mid';
   website?: string;
 }): Promise<{ ok: boolean; invalid?: boolean }> {
   const response = await fetch(`${API_URL}/api/newsletter/subscribe`, {

@@ -4,14 +4,16 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
   Alert,
   Platform,
   Image,
+  Linking,
+  useWindowDimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, SymbolSearch, StockChart, EmailVerificationBanner, PredictionSummary, DataFreshnessBadge, DataFreshnessSheet } from '../../components';
@@ -25,23 +27,34 @@ import { useAuthStore } from '../../store/authStore';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { fetchMarketDataWithIndicators, formatPrice, calculatePriceChange } from '../../lib/marketData';
 import { findLocalLevels, detectTrend, analyzeChartData } from '../../lib/chartAnalysis';
-import { getUsage, getAnalysis, getPrediction, createPrediction, getCurrentUser } from '../../lib/api';
-import { getWeeklyAtlasUsed } from '../../lib/usage';
+import { getUsage, getAnalysis, getPrediction, createPrediction, getCurrentUser, runGuestAnalyze, getGuestAnalyzeStatus } from '../../lib/api';
+import { getWeeklyAtlasLimit, getWeeklyAtlasUsed, isWeeklyAtlasLocked } from '../../lib/usage';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import { API_URL } from '../../lib/apiConfig';
 import { Ionicons } from '@expo/vector-icons';
-import { FREE_ANALYSIS_LIMIT, FREE_PREDICTION_LIMIT, CHART_INTERVAL_OPTIONS, CHART_COLORS } from '@chartsignl/core';
+import { CHART_INTERVAL_OPTIONS, CHART_COLORS } from '@chartsignl/core';
 import type { ChartViewType, ChartInterval, AILevel, EnhancedAIAnalysis, ScoredLevel, AIPrediction, DataFreshness } from '@chartsignl/core';
 import * as SecureStore from 'expo-secure-store';
 import * as Haptics from 'expo-haptics';
 
 import { useActiveAlerts, useCreateAlert, useDeleteAlert } from '../../hooks/useAlerts';
 
+const APP_STORE_URL = 'https://apps.apple.com/us/app/chartsignl/id6757512423';
+const PLAY_STORE_URL =
+  'https://play.google.com/store/apps/details?id=com.optionsplungellc.chartsignl&pcampaignid=web_share';
+const APP_STORE_BADGE =
+  'https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg';
+const PLAY_STORE_BADGE =
+  'https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png';
+
 export default function AnalyzeScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user, isEmailVerified, showEmailVerificationModal, setShowEmailVerificationModal, pendingEmailVerification, setPendingEmailVerification } = useAuthStore();
+  const isGuest = Platform.OS === 'web' && !user;
   const onboardingExperience = useOnboardingStore((s) => s.answers.experienceLevel);
+  const { height: windowHeight } = useWindowDimensions();
+  const chartHeight = windowHeight < 900 ? 250 : 320;
 
   const { data: profileData } = useQuery({
     queryKey: ['profile'],
@@ -123,7 +136,10 @@ export default function AnalyzeScreen() {
         if (analysisData?.success && analysisData.analysis) {
           const saved = analysisData.analysis as unknown as EnhancedAIAnalysis;
           setAiAnalysis(saved);
-          if (saved.symbol) setSelectedSymbol(saved.symbol);
+          if (saved.symbol) {
+            setSelectedSymbol(saved.symbol);
+            setSelectedName(saved.symbol);
+          }
           if (saved.timeframe) setSelectedInterval(saved.timeframe as ChartInterval);
         }
 
@@ -132,6 +148,7 @@ export default function AnalyzeScreen() {
           setShowPredictionOverlay(true);
           if (predictionData.prediction.symbol) {
             setSelectedSymbol(predictionData.prediction.symbol);
+            setSelectedName(predictionData.prediction.symbol);
           }
           if (predictionData.prediction.interval) {
             setSelectedInterval(predictionData.prediction.interval as ChartInterval);
@@ -148,17 +165,18 @@ export default function AnalyzeScreen() {
     };
   }, [analysisId, predictionId]);
 
-  // When navigated from a push notification, preselect the symbol.
+  // When navigated from a push notification or history, preselect the symbol.
+  // History also passes an analysis id; don't clear the run that's about to load.
   useEffect(() => {
     if (!symbol) return;
+
+    setSelectedSymbol(String(symbol));
+    setSelectedName(String(symbol));
+
     if (analysisId || predictionId) return;
 
     setAiAnalysis(null);
     setErrorMessage(null);
-
-    // Keep the name simple; we can enhance with a search later if needed.
-    setSelectedSymbol(String(symbol));
-    setSelectedName(String(symbol));
   }, [symbol, analysisId, predictionId]);
 
   // Clear push-alert feedback after a short delay.
@@ -252,6 +270,14 @@ export default function AnalyzeScreen() {
     queryKey: ['usage'],
     queryFn: getUsage,
     staleTime: 1000 * 60,
+    enabled: !!user,
+  });
+
+  const { data: guestStatus, refetch: refetchGuestStatus } = useQuery({
+    queryKey: ['guestAnalyzeStatus'],
+    queryFn: getGuestAnalyzeStatus,
+    staleTime: 1000 * 30,
+    enabled: isGuest,
   });
 
   // Fetch market data
@@ -299,14 +325,14 @@ export default function AnalyzeScreen() {
   }, [safeChartData]);
 
   const weeklyAtlasUsed = getWeeklyAtlasUsed(usage);
+  const weeklyAtlasLimit = getWeeklyAtlasLimit(usage);
+  const atlasRunsShown = Math.min(weeklyAtlasUsed, weeklyAtlasLimit);
+  const guestLocked = isGuest && guestStatus?.remaining === 0;
 
   // The unified analysis consumes one prediction + one analysis per tap, so it
-  // is locked once either weekly free counter is exhausted (they move in lockstep).
-  const analyzeLocked =
-    !usage?.isPro && !!usage
-      ? (usage.freePredictionsUsed ?? 0) >= FREE_PREDICTION_LIMIT ||
-        (usage.freeAnalysesUsed ?? 0) >= FREE_ANALYSIS_LIMIT
-      : false;
+  // is locked once either weekly free counter is exhausted (they move in lockstep
+  // unless one of the two requests fails).
+  const analyzeLocked = isGuest ? guestLocked : isWeeklyAtlasLocked(usage);
 
   // Handle symbol selection
   const handleSelectSymbol = (symbol: string, name: string) => {
@@ -320,6 +346,39 @@ export default function AnalyzeScreen() {
   // Unified analysis: forecast first, then levels/setups conditioned on the
   // forecast lean so the two outputs stay consistent and never contradict.
   const handleAnalyze = async () => {
+    if (isGuest) {
+      if (analyzeLocked) {
+        router.push('/(onboarding)/account');
+        return;
+      }
+
+      setIsAnalyzing(true);
+      setErrorMessage(null);
+
+      try {
+        const result = await runGuestAnalyze(
+          selectedSymbol,
+          selectedInterval,
+          safeChartData,
+          chartFreshness,
+        );
+        if (!result.success || !result.prediction || !result.analysis) {
+          throw new Error(result.error || 'Analysis failed');
+        }
+        setPrediction(result.prediction);
+        setShowPredictionOverlay(true);
+        setAiAnalysis(result.analysis);
+        await refetchGuestStatus();
+      } catch (err) {
+        console.error('Guest analyze error:', err);
+        const errorMsg = err instanceof Error ? err.message : 'Please try again';
+        setErrorMessage(errorMsg);
+      } finally {
+        setIsAnalyzing(false);
+      }
+      return;
+    }
+
     if (!usage) {
       Alert.alert('Please Wait', 'Loading your account information...');
       return;
@@ -387,11 +446,11 @@ export default function AnalyzeScreen() {
     : [];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.webWrapper} pointerEvents="box-none">
         <View style={styles.webInner} pointerEvents="box-none">
           {/* Email Verification Modal - shows once after signup */}
-          {showEmailVerificationModal && (
+          {!!user && showEmailVerificationModal && (
             <EmailVerificationBanner 
               variant="modal" 
               onDismiss={() => setShowEmailVerificationModal(false)}
@@ -404,7 +463,7 @@ export default function AnalyzeScreen() {
             showsVerticalScrollIndicator={false}
           >
         {/* Email Verification Banner - persistent reminder */}
-        {!isEmailVerified && <EmailVerificationBanner variant="banner" />}
+        {!!user && !isEmailVerified && <EmailVerificationBanner variant="banner" />}
         
         {/* Header */}
         <View style={styles.header}>
@@ -420,25 +479,50 @@ export default function AnalyzeScreen() {
           
           {/* Right side - Usage Badge */}
           <View style={styles.headerRight}>
-            <View style={[
-              styles.usageBadge,
-              !usage?.isPro && usage && weeklyAtlasUsed >= FREE_ANALYSIS_LIMIT && styles.usageBadgeWarning
-            ]}>
-              <Text style={[
-                styles.usageText,
-                !usage?.isPro && usage && weeklyAtlasUsed >= FREE_ANALYSIS_LIMIT && styles.usageTextWarning
-              ]}>
-                {usage?.isPro ? '✨ Pro' : usage ? `${weeklyAtlasUsed}/${FREE_ANALYSIS_LIMIT} free` : '—'}
-              </Text>
-            </View>
-            {!usage?.isPro && (
-              <TouchableOpacity
-                style={styles.upgradeButton}
-                onPress={() => router.push('/premium')}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.upgradeButtonText}>Upgrade</Text>
-              </TouchableOpacity>
+            {isGuest ? (
+              <>
+                <View style={[
+                  styles.usageBadge,
+                  guestLocked && styles.usageBadgeWarning,
+                ]}>
+                  <Text style={[
+                    styles.usageText,
+                    guestLocked && styles.usageTextWarning,
+                  ]}>
+                    {guestLocked ? 'Free try used' : '1 free try'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.upgradeButton}
+                  onPress={() => router.push('/(onboarding)/account')}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.upgradeButtonText}>Sign up</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <View style={[
+                  styles.usageBadge,
+                  isWeeklyAtlasLocked(usage) && styles.usageBadgeWarning
+                ]}>
+                  <Text style={[
+                    styles.usageText,
+                    isWeeklyAtlasLocked(usage) && styles.usageTextWarning
+                  ]}>
+                    {usage?.isPro ? '✨ Pro' : usage ? `${atlasRunsShown}/${weeklyAtlasLimit} free` : '—'}
+                  </Text>
+                </View>
+                {!usage?.isPro && (
+                  <TouchableOpacity
+                    style={styles.upgradeButton}
+                    onPress={() => router.push('/premium')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.upgradeButtonText}>Upgrade</Text>
+                  </TouchableOpacity>
+                )}
+              </>
             )}
           </View>
         </View>
@@ -453,16 +537,22 @@ export default function AnalyzeScreen() {
             <Text style={styles.symbolName}>{selectedName}</Text>
           </View>
           <View style={styles.priceInfo}>
-            <Text style={styles.priceText}>${formatPrice(currentPrice)}</Text>
-            <Text
-              style={[
-                styles.priceChange,
-                { color: priceChange.isPositive ? CHART_COLORS.support : CHART_COLORS.resistance },
-              ]}
-            >
-              {priceChange.isPositive ? '+' : ''}
-              {priceChange.changePercent.toFixed(2)}%
-            </Text>
+            {safeChartData.length > 0 ? (
+              <>
+                <Text style={styles.priceText}>${formatPrice(currentPrice)}</Text>
+                <Text
+                  style={[
+                    styles.priceChange,
+                    { color: priceChange.isPositive ? CHART_COLORS.support : CHART_COLORS.resistance },
+                  ]}
+                >
+                  {priceChange.isPositive ? '+' : ''}
+                  {priceChange.changePercent.toFixed(2)}%
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.priceText}>—</Text>
+            )}
           </View>
           <Text style={styles.selectorArrow}>▼</Text>
         </TouchableOpacity>
@@ -541,12 +631,12 @@ export default function AnalyzeScreen() {
         {/* Chart */}
         <Card style={styles.chartCard} padding="none">
           {isLoadingData ? (
-            <View style={styles.loadingContainer}>
+            <View style={[styles.loadingContainer, { height: chartHeight }]}>
               <ActivityIndicator size="large" color={colors.primary[500]} />
               <Text style={styles.loadingText}>Loading chart...</Text>
             </View>
           ) : dataError ? (
-            <View style={styles.errorContainer}>
+            <View style={[styles.errorContainer, { height: chartHeight }]}>
               <Text style={styles.errorEmoji}>📊</Text>
               <Text style={styles.chartErrorText}>Failed to load chart data</Text>
               {dataError instanceof Error && dataError.message ? (
@@ -566,7 +656,7 @@ export default function AnalyzeScreen() {
               volumeProfile={volumeProfile}
               supportLevels={chartSupportLevels}
               resistanceLevels={chartResistanceLevels}
-              height={320}
+              height={chartHeight}
               projectedPath={prediction?.projectedPath}
               expectedChangePct={prediction?.expectedChangePct}
               showPrediction={showPredictionOverlay && !!prediction}
@@ -575,6 +665,7 @@ export default function AnalyzeScreen() {
         </Card>
 
         {/* Trend / Atlas summary */}
+        {safeChartData.length > 0 && (
         <View style={[styles.trendCard, prediction ? styles.trendCardStacked : null]}>
           {!prediction ? (
             <>
@@ -629,6 +720,7 @@ export default function AnalyzeScreen() {
             </>
           )}
         </View>
+        )}
 
         {/* Unified AI Analysis CTA */}
         <View style={styles.aiSection}>
@@ -638,14 +730,21 @@ export default function AnalyzeScreen() {
                 isAnalyzing
                   ? 'Atlas is analyzing…'
                   : analyzeLocked
-                  ? '🔒 Upgrade for More'
+                  ? isGuest
+                    ? 'Create a free account'
+                    : '🔒 Upgrade for More'
                   : `✨ Ask Atlas · ${selectedSymbol}`
               }
               onPress={handleAnalyze}
               size="lg"
               fullWidth
               loading={isAnalyzing}
-              disabled={isLoadingData || safeChartData.length === 0 || !usage}
+              disabled={
+                isLoadingData ||
+                safeChartData.length === 0 ||
+                (!isGuest && !usage) ||
+                (isGuest && guestStatus === undefined)
+              }
               variant={analyzeLocked ? 'secondary' : 'primary'}
               testID="atlas-analyze-cta"
             />
@@ -655,10 +754,13 @@ export default function AnalyzeScreen() {
               <Text style={styles.errorText}>⚠️ {errorMessage}</Text>
               {(errorMessage.toLowerCase().includes('limit') ||
                 errorMessage.toLowerCase().includes('upgrade') ||
-                errorMessage.toLowerCase().includes('free tier')) && (
+                errorMessage.toLowerCase().includes('free tier') ||
+                errorMessage.toLowerCase().includes('free analysis')) && (
                 <Button
-                  title="Upgrade for More"
-                  onPress={() => router.push('/premium')}
+                  title={isGuest ? 'Create a free account' : 'Upgrade for More'}
+                  onPress={() =>
+                    router.push(isGuest ? '/(onboarding)/account' : '/premium')
+                  }
                   variant="primary"
                   size="sm"
                   fullWidth
@@ -668,10 +770,14 @@ export default function AnalyzeScreen() {
             </View>
           )}
           <Text style={[styles.aiHint, analyzeLocked && styles.aiHintWarning]}>
-            {!usage?.isPro && usage
+            {isGuest
               ? analyzeLocked
-                ? `🔓 You've used all ${FREE_ANALYSIS_LIMIT} free Atlas runs this week. Tap to upgrade!`
-                : `${weeklyAtlasUsed}/${FREE_ANALYSIS_LIMIT} free Atlas runs this week`
+                ? "You've used your free analysis. Create an account for 3 Atlas runs per week."
+                : 'No account needed. One analysis on any ticker.'
+              : !usage?.isPro && usage
+              ? analyzeLocked
+                ? `🔓 You've used all ${weeklyAtlasLimit} free Atlas runs this week. Tap to upgrade!`
+                : `${atlasRunsShown}/${weeklyAtlasLimit} free Atlas runs this week`
               : 'Atlas forecast + key levels — in one tap'}
           </Text>
         </View>
@@ -860,6 +966,12 @@ export default function AnalyzeScreen() {
           </Card>
         )}
 
+        {isGuest && (aiAnalysis || analyzeLocked) && (
+          <GuestConversionCard
+            onSignup={() => router.push('/(onboarding)/account')}
+          />
+        )}
+
           </ScrollView>
 
           {/* Symbol Search Modal */}
@@ -881,7 +993,36 @@ export default function AnalyzeScreen() {
   );
 }
 
-// Helper function to convert ScoredLevel to AILevel for the chart component
+// Guest conversion after a free Atlas run
+function GuestConversionCard({ onSignup }: { onSignup: () => void }) {
+  return (
+    <Card style={styles.guestCard}>
+      <Text style={styles.guestTitle}>Keep using Atlas</Text>
+      <Text style={styles.guestBody}>
+        Create a free account for 3 analyses per week, then download the app for
+        the full ChartSignl experience.
+      </Text>
+      <Button title="Create a free account" onPress={onSignup} size="lg" fullWidth />
+      <View style={styles.guestStoreRow}>
+        <TouchableOpacity
+          onPress={() => Linking.openURL(APP_STORE_URL)}
+          accessibilityRole="link"
+          accessibilityLabel="Download on the App Store"
+        >
+          <Image source={{ uri: APP_STORE_BADGE }} style={styles.storeBadgeIos} resizeMode="contain" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => Linking.openURL(PLAY_STORE_URL)}
+          accessibilityRole="link"
+          accessibilityLabel="Get it on Google Play"
+        >
+          <Image source={{ uri: PLAY_STORE_BADGE }} style={styles.storeBadgePlay} resizeMode="contain" />
+        </TouchableOpacity>
+      </View>
+    </Card>
+  );
+}
+
 function trendDirectionColor(direction: 'bullish' | 'bearish' | 'neutral') {
   if (direction === 'bullish') return CHART_COLORS.support;
   if (direction === 'bearish') return CHART_COLORS.resistance;
@@ -1017,25 +1158,40 @@ function EnhancedLevelRow({
   );
 }
 
+const WEB_MAX_WIDTH = 1100;
+
 const styles = StyleSheet.create({
   container: {
-    ...(Platform.OS !== 'web' && { flex: 1 }),
-    ...(Platform.OS === 'web' && { height: '100vh', overflow: 'auto' }),
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
     backgroundColor: colors.background,
   },
   webWrapper: {
-    ...(Platform.OS !== 'web' && { flex: 1 }),
+    flex: 1,
+    minHeight: 0,
+    ...(Platform.OS === 'web' && {
+      width: '100%',
+      alignItems: 'center',
+      backgroundColor: colors.neutral[100],
+    }),
   },
   webInner: {
-    ...(Platform.OS !== 'web' && { flex: 1 }),
+    flex: 1,
+    minHeight: 0,
     width: '100%',
+    ...(Platform.OS === 'web' && {
+      maxWidth: WEB_MAX_WIDTH,
+      backgroundColor: colors.background,
+    }),
   },
   scrollView: {
     flex: 1,
+    minHeight: 0,
   },
   scrollContent: {
     padding: spacing.lg,
-    paddingBottom: Platform.OS === 'web' ? spacing.xxl * 3 : spacing.xxl,
+    paddingBottom: spacing.xxl,
   },
   header: {
     flexDirection: 'row',
@@ -1243,7 +1399,8 @@ const styles = StyleSheet.create({
   trendCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
+    gap: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
@@ -1320,6 +1477,37 @@ const styles = StyleSheet.create({
   aiHintWarning: {
     color: colors.primary[600],
     fontWeight: '600',
+  },
+  guestCard: {
+    marginTop: spacing.lg,
+    marginBottom: spacing.lg,
+    padding: spacing.lg,
+  },
+  guestTitle: {
+    ...typography.headingMd,
+    color: colors.neutral[900],
+    marginBottom: spacing.xs,
+  },
+  guestBody: {
+    ...typography.bodyMd,
+    color: colors.neutral[600],
+    marginBottom: spacing.md,
+    lineHeight: 22,
+  },
+  guestStoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  storeBadgeIos: {
+    height: 40,
+    width: 120,
+  },
+  storeBadgePlay: {
+    height: 40,
+    width: 135,
   },
   errorBanner: {
     backgroundColor: colors.red[50],
