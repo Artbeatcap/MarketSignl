@@ -29,6 +29,7 @@ import { fetchMarketDataWithIndicators, formatPrice, calculatePriceChange } from
 import { findLocalLevels, detectTrend, analyzeChartData } from '../../lib/chartAnalysis';
 import { getUsage, getAnalysis, getPrediction, createPrediction, getCurrentUser, runGuestAnalyze, getGuestAnalyzeStatus } from '../../lib/api';
 import { getWeeklyAtlasLimit, getWeeklyAtlasUsed, isWeeklyAtlasLocked } from '../../lib/usage';
+import { friendlyAtlasError } from '../../lib/atlasError';
 import { colors, typography, spacing, borderRadius, shadows } from '../../theme';
 import { API_URL } from '../../lib/apiConfig';
 import { Ionicons } from '@expo/vector-icons';
@@ -371,7 +372,7 @@ export default function AnalyzeScreen() {
         await refetchGuestStatus();
       } catch (err) {
         console.error('Guest analyze error:', err);
-        const errorMsg = err instanceof Error ? err.message : 'Please try again';
+        const errorMsg = friendlyAtlasError(err instanceof Error ? err.message : 'Please try again');
         setErrorMessage(errorMsg);
       } finally {
         setIsAnalyzing(false);
@@ -411,7 +412,7 @@ export default function AnalyzeScreen() {
       queryClient.invalidateQueries({ queryKey: ['usage'] });
     } catch (err) {
       console.error('Analyze error:', err);
-      const errorMsg = err instanceof Error ? err.message : 'Please try again';
+      const errorMsg = friendlyAtlasError(err instanceof Error ? err.message : 'Please try again');
       const isLimitError =
         errorMsg.toLowerCase().includes('limit') ||
         errorMsg.toLowerCase().includes('upgrade') ||

@@ -1,33 +1,14 @@
 import { Hono } from 'hono';
-import OpenAI from 'openai';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
 import { FREE_PREDICTION_LIMIT } from '@chartsignl/core';
-import type { AIPrediction, PredictRequest } from '@chartsignl/core';
-import { PREDICTION_SYSTEM_PROMPT } from '../prompts/prediction.js';
-import {
-  calculateAllIndicators,
-  type MarketDataPoint,
-  type TechnicalIndicators,
-} from '../lib/technicalCalculator.js';
-import { scoreLevels, type ScoredAnalysis } from '../lib/confluenceScorer.js';
-import { buildVolatilityCone, deriveDriftBias } from '../lib/volatilityCone.js';
+import type { PredictRequest } from '@chartsignl/core';
+import type { MarketDataPoint } from '../lib/technicalCalculator.js';
+import { DEFAULT_HORIZON_BARS, runPrediction } from '../lib/runPrediction.js';
+import { clientMessageForError } from '../lib/openaiGuard.js';
 
-interface AINarrative {
-  headline: string;
-  summary: string;
-  reasoning: string[];
-  riskFactors: string[];
-  direction: 'bullish' | 'bearish' | 'neutral';
-  confidence: number;
-}
-
-const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const predictRoute = new Hono();
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-const DEFAULT_HORIZON_BARS = 10;
 
 function getEffectivePredictionsThisWeek(
   usage: { free_predictions_used: number; last_prediction_at: string | null } | null | undefined
@@ -36,59 +17,6 @@ function getEffectivePredictionsThisWeek(
   if (!usage.last_prediction_at) return 0;
   const elapsed = Date.now() - new Date(usage.last_prediction_at).getTime();
   return elapsed < WEEK_MS ? usage.free_predictions_used : 0;
-}
-
-function barDurationMs(interval: string): number {
-  const map: Record<string, number> = {
-    '1d': 5 * 60 * 1000,
-    '5d': 30 * 60 * 1000,
-    '1mo': 24 * 60 * 60 * 1000,
-    '3mo': 24 * 60 * 60 * 1000,
-    '6mo': 24 * 60 * 60 * 1000,
-    '1y': 24 * 60 * 60 * 1000,
-    '2y': 7 * 24 * 60 * 60 * 1000,
-    '5y': 7 * 24 * 60 * 60 * 1000,
-  };
-  return map[interval] ?? 24 * 60 * 60 * 1000;
-}
-
-function buildPredictionPrompt(
-  symbol: string,
-  interval: string,
-  horizonBars: number,
-  indicators: TechnicalIndicators,
-  scoredAnalysis: ScoredAnalysis
-): string {
-  const { currentPrice, priceChangePercent, trend, ema, atr, bollinger, overextension } = indicators;
-  const { supportLevels, resistanceLevels, confidence } = scoredAnalysis;
-
-  return `Generate an AI price projection for ${symbol} on the ${interval} timeframe.
-
-CURRENT STATE:
-- Price: $${currentPrice.toFixed(2)} (${priceChangePercent > 0 ? '+' : ''}${priceChangePercent.toFixed(2)}%)
-- Trend: ${trend.direction} (${trend.strength.toFixed(0)}% strength)
-- Trading Bias: ${trend.tradingBias}
-
-MOVING AVERAGES:
-- EMA 9: $${(ema.ema9 || 0).toFixed(2)}
-- EMA 21: $${(ema.ema21 || 0).toFixed(2)}
-- EMA 65: $${(ema.ema65 || 0).toFixed(2)}
-- Alignment: ${trend.emaAlignment || 'mixed'}
-
-VOLATILITY:
-- ATR: $${atr.atr.toFixed(2)} (${atr.atrPercent.toFixed(2)}% of price)
-- Bollinger %B: ${(bollinger.percentB * 100).toFixed(1)}%
-- Overextension: ${overextension.status}
-
-KEY SUPPORT (top 3):
-${supportLevels.slice(0, 3).map((l, i) => `${i + 1}. $${l.price.toFixed(2)} (${l.confluenceScore}% confluence)`).join('\n')}
-
-KEY RESISTANCE (top 3):
-${resistanceLevels.slice(0, 3).map((l, i) => `${i + 1}. $${l.price.toFixed(2)} (${l.confluenceScore}% confluence)`).join('\n')}
-
-SETUP CONFIDENCE: ${confidence.overall}% (${confidence.label})
-
-Give your directional read for roughly the next ${horizonBars} bars: direction, confidence, the key drivers, and the main risks. Reference specific indicator values. Do not output any prices or bands.`;
 }
 
 predictRoute.post('/', async (c) => {
@@ -135,59 +63,18 @@ predictRoute.post('/', async (c) => {
       return c.json({ success: false, error: 'Missing required fields' }, 400);
     }
 
-    const indicators = calculateAllIndicators(data as MarketDataPoint[], symbol, interval);
-    if (!indicators) {
-      return c.json({ success: false, error: 'Failed to calculate technical indicators' }, 500);
-    }
-
-    const scoredAnalysis = scoreLevels(indicators);
-    const userPrompt = buildPredictionPrompt(symbol, interval, horizonBars, indicators, scoredAnalysis);
-
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: PREDICTION_SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
-      max_completion_tokens: 1200,
-      temperature: 0.2,
-      response_format: { type: 'json_object' },
-    });
-
-    const aiText = completion.choices[0]?.message?.content;
-    if (!aiText) {
-      throw new Error('No response from AI');
-    }
-
-    const aiResponse = JSON.parse(aiText) as AINarrative;
-    const lastPoint = data[data.length - 1];
-    const stepMs = barDurationMs(interval);
-
-    const driftBias = deriveDriftBias(indicators);
-
-    const { projectedPath, expectedChangePct } = buildVolatilityCone({
-      lastClose: indicators.currentPrice,
-      atr: indicators.atr.atr,
-      driftBias,
+    const result = await runPrediction({
+      symbol,
+      interval,
+      data: data as MarketDataPoint[],
       horizonBars,
-      stepMs,
-      lastTimestamp: lastPoint.timestamp,
     });
 
-    const prediction: AIPrediction = {
-      symbol: symbol.toUpperCase(),
-      interval: interval as AIPrediction['interval'],
-      headline: aiResponse.headline,
-      summary: aiResponse.summary,
-      reasoning: aiResponse.reasoning ?? [],
-      riskFactors: aiResponse.riskFactors ?? [],
-      direction: aiResponse.direction ?? 'neutral',
-      confidence: clampN(aiResponse.confidence ?? 50, 0, 100),
-      expectedChangePct,
-      projectedPath,
-    };
+    if (!result.ok) {
+      return c.json({ success: false, error: result.error }, result.status);
+    }
 
-    const horizonEndMs = projectedPath[projectedPath.length - 1]?.timestamp;
+    const { prediction, currentPrice, horizonEndMs } = result;
 
     const { data: saved, error: saveError } = await supabaseAdmin
       .from('predictions')
@@ -200,7 +87,7 @@ predictRoute.post('/', async (c) => {
         confidence: prediction.confidence,
         direction: prediction.direction,
         prediction_json: prediction,
-        entry_close: indicators.currentPrice,
+        entry_close: currentPrice,
         horizon_end_at: horizonEndMs ? new Date(horizonEndMs).toISOString() : null,
       })
       .select('id, created_at')
@@ -211,7 +98,6 @@ predictRoute.post('/', async (c) => {
       return c.json({ success: false, error: 'Failed to save prediction' }, 500);
     }
 
-    // Update usage counter
     const newUsed = effectiveUsed + 1;
     await supabaseAdmin.from('usage_counters').upsert(
       {
@@ -229,13 +115,8 @@ predictRoute.post('/', async (c) => {
     });
   } catch (error) {
     console.error('[Predict] Error:', error);
-    return c.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Internal server error',
-      },
-      500
-    );
+    const mapped = clientMessageForError(error);
+    return c.json({ success: false, error: mapped.message }, mapped.status);
   }
 });
 

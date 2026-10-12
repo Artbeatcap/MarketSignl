@@ -15,6 +15,7 @@
     "test:drivers": "tsx src/lib/__tests__/indexDrivers.test.ts && tsx src/lib/__tests__/catalyst.test.ts && tsx src/lib/__tests__/breadth.test.ts",
     "test:calendar": "tsx src/lib/__tests__/weekAhead.test.ts && tsx src/services/earnings/__tests__/resolve.test.ts && tsx src/services/earnings/__tests__/providers.test.ts",
     "test:freshness": "tsx src/lib/__tests__/feedFreshness.test.ts",
+    "test:atlas": "tsx src/lib/__tests__/openaiGuard.test.ts",
     "accept:weekly-brief": "tsx scripts/weekly-brief-acceptance.ts",
     "accept:daily-brief": "tsx scripts/daily-brief-acceptance.ts"
   },
