@@ -1,0 +1,464 @@
+{
+  "name": "Structure Alert — Lower High",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "25 16 * * 1-5" }]
+        }
+      },
+      "id": "schedule",
+      "name": "Schedule 4:25pm ET",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const EXPECTED_TZ = 'America/New_York';\nconst wfTz = $workflow.settings?.timezone || $getWorkflowStaticData('global').timezone || EXPECTED_TZ;\n// n8n exposes workflow timezone via settings; also assert GENERIC_TIMEZONE indirectly via explicit var\nconst tz = String($vars.STRUCTURE_ALERT_TIMEZONE || wfTz || EXPECTED_TZ);\nif (tz !== EXPECTED_TZ) {\n  throw Object.assign(new Error(`timezone mismatch: expected ${EXPECTED_TZ}, got ${tz}`), { step: 'timezone' });\n}\nconst tickers = String($vars.STRUCTURE_ALERT_TICKERS || 'SPY').split(/[,\\s]+/).filter(Boolean);\nconst channel = $vars.SLACK_ALERT_CHANNEL;\nconst baseUrl = String($vars.MASSIVE_BASE_URL || 'https://api.massive.com').replace(/\\/$/, '');\nconst healthUrl = String($vars.HEALTHCHECK_URL || '').replace(/\\/$/, '');\nif (!healthUrl) throw Object.assign(new Error('HEALTHCHECK_URL missing'), { step: 'config' });\nif (!channel) throw Object.assign(new Error('SLACK_ALERT_CHANNEL missing'), { step: 'config' });\nconst executionId = String($execution.id);\nreturn [{ json: { tickers, channel, baseUrl, healthUrl, executionId, timezone: tz } }];"
+      },
+      "id": "cfg",
+      "name": "Load Config + TZ",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE structure_alert_runs\nSET status = 'failed',\n    error = 'stale running row (likely crash)',\n    finished_at = NOW()\nWHERE status = 'running'\n  AND run_at < NOW() - INTERVAL '30 minutes'\nRETURNING id, n8n_execution_id, error;",
+        "options": {}
+      },
+      "id": "stale-sweep",
+      "name": "Sweep stale running",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [440, 300],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_STRUCTURE_ALERT_PG_CREDENTIAL_ID",
+          "name": "structure_alert_n8n"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Load Config + TZ').first().json;\nconst stale = $input.all().map(i => i.json).filter(r => r && r.id);\nconst texts = stale.map(r => `STRUCTURE ALERT FAILED - stale_sweeper: stale running row (likely crash) run_id=${r.id}`);\nreturn [{ json: { ...cfg, staleIds: stale.map(r => r.id), staleTexts: texts } }];"
+      },
+      "id": "stale-fmt",
+      "name": "Format stale alerts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nif (!item.staleTexts?.length) return [{ json: item }];\nreturn item.staleTexts.map(text => ({ json: { ...item, text } }));"
+      },
+      "id": "stale-split",
+      "name": "Split stale texts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 200]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": "={{$('Load Config + TZ').first().json.channel}}",
+        "text": "={{$json.text}}",
+        "otherOptions": { "includeLinkToWorkflow": false }
+      },
+      "id": "stale-slack",
+      "name": "Slack stale notify",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1100, 120],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_SLACK_CREDENTIAL_ID",
+          "name": "Slack Bot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: $('Format stale alerts').first().json }];"
+      },
+      "id": "after-stale",
+      "name": "Continue after stale",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO structure_alert_runs (status, n8n_execution_id, alert_count, tickers, run_at)\nVALUES (\n  'running',\n  '{{ $json.executionId }}',\n  0,\n  ARRAY[{{ $json.tickers.map(t => \"'\" + t.replace(/'/g, \"''\") + \"'\").join(',') }}]::text[],\n  NOW()\n)\nRETURNING *;",
+        "options": {}
+      },
+      "id": "insert-run",
+      "name": "Insert Run running",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1320, 300],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_STRUCTURE_ALERT_PG_CREDENTIAL_ID",
+          "name": "structure_alert_n8n"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/auth.test",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [{ "name": "Content-Type", "value": "application/x-www-form-urlencoded" }]
+        },
+        "options": {}
+      },
+      "id": "auth-test",
+      "name": "Slack auth.test",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_SLACK_CREDENTIAL_ID",
+          "name": "Slack Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const auth = $input.first().json;\nif (auth.ok !== true) {\n  return [{ json: { ok: false, step: 'slack_preflight', error: auth.error || 'auth_test_failed', runId: $('Insert Run running').first().json.id, channel: $('Load Config + TZ').first().json.channel, healthUrl: $('Load Config + TZ').first().json.healthUrl } }];\n}\nconst channel = $('Load Config + TZ').first().json.channel;\nconst isUser = /^[UW]/.test(channel);\nreturn [{ json: { ok: true, channel, isUser, runId: $('Insert Run running').first().json.id, cfg: $('Load Config + TZ').first().json } }];"
+      },
+      "id": "auth-check",
+      "name": "Check auth.test",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{$json.ok}}", "value2": true }]
+        }
+      },
+      "id": "if-auth",
+      "name": "Auth OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1980, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$json.isUser ? 'https://slack.com/api/conversations.open' : 'https://slack.com/api/conversations.info'}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "={{$json.isUser ? 'users' : 'channel'}}", "value": "={{$json.channel}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "conv-preflight",
+      "name": "Slack conversations preflight",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, 200],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_SLACK_CREDENTIAL_ID",
+          "name": "Slack Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const dest = $input.first().json;\nconst prev = $('Check auth.test').first().json;\nif (dest.ok !== true) {\n  return [{ json: { ok: false, step: 'slack_preflight', error: dest.error || 'conversations_failed', runId: prev.runId, channel: prev.channel, healthUrl: prev.cfg.healthUrl } }];\n}\nreturn [{ json: { ok: true, runId: prev.runId, cfg: prev.cfg } }];"
+      },
+      "id": "conv-check",
+      "name": "Check conversations",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2420, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{$json.ok}}", "value2": true }]
+        }
+      },
+      "id": "if-conv",
+      "name": "Preflight OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [2640, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $json.cfg;\nconst runId = $json.runId;\nconst FAILURE_PREFIX = 'STRUCTURE ALERT FAILED - ';\nfunction redact(err, maxLen = 500) {\n  let text = err == null ? 'unknown error' : (err.message || String(err));\n  text = text.replace(/\\b(?:xox[baprs]-|xapp-)[A-Za-z0-9-]+/g, '[REDACTED]');\n  return text.replace(/\\s+/g, ' ').trim().slice(0, maxLen);\n}\nfunction emaSeries(values, length) {\n  const out = Array(values.length).fill(null);\n  if (values.length < length) return out;\n  const k = 2 / (length + 1);\n  let sum = 0; for (let i = 0; i < length; i++) sum += values[i];\n  let prev = sum / length; out[length - 1] = prev;\n  for (let i = length; i < values.length; i++) { prev = values[i] * k + prev * (1 - k); out[i] = prev; }\n  return out;\n}\nfunction atrSeries(bars, length = 14) {\n  const out = Array(bars.length).fill(null);\n  if (bars.length < length + 1) return out;\n  const trs = bars.map((b, i) => i === 0 ? b.high - b.low : Math.max(b.high - b.low, Math.abs(b.high - bars[i-1].close), Math.abs(b.low - bars[i-1].close)));\n  let atr = trs.slice(0, length).reduce((a, b) => a + b, 0) / length; out[length - 1] = atr;\n  for (let i = length; i < bars.length; i++) { atr = (atr * (length - 1) + trs[i]) / length; out[i] = atr; }\n  return out;\n}\nfunction msToNyDate(ms) {\n  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));\n}\nfunction formatPrice(n) { return (Math.round(n * 100) / 100).toFixed(2); }\nfunction formatMsg(s) {\n  const gaps = s.gapsAbove?.length ? s.gapsAbove.map(formatPrice).join(', ') : 'none';\n  const atrPart = s.invalidationAtr == null ? 'n/a ATR' : formatPrice(s.invalidationAtr) + ' ATR';\n  const five = s.fiveDayPct == null ? 'n/a' : ((s.fiveDayPct > 0 ? '+' : '') + formatPrice(s.fiveDayPct) + '%');\n  const body = `*LOWER HIGH CONFIRMED: ${s.ticker}* H1 ${s.h1Date} ${formatPrice(s.h1Price)}. Retest ${s.retestDate} high ${formatPrice(s.retestHigh)}. Close ${formatPrice(s.close)}, below retest low ${formatPrice(s.retestLow)}. Invalidation: close above H1 (${formatPrice(s.invalidationAway)} away, ${atrPart}). Price ${s.priceVsEma65} EMA65, Price ${s.priceVsEma200} EMA200. 5d ${five}. Unfilled gaps above: ${gaps}. UNTESTED RULE: awareness only.`;\n  const words = body.split(/\\s+/); return words.length <= 120 ? body : words.slice(0, 120).join(' ');\n}\nfunction isSwingHigh(bars, i, left = 2, right = 2) {\n  if (i < left || i > bars.length - 1 - right) return false;\n  const h = bars[i].high;\n  for (let j = i - left; j <= i + right; j++) if (j !== i && bars[j].high >= h) return false;\n  return true;\n}\nfunction detect(ticker, bars) {\n  if (bars.length < 220) throw Object.assign(new Error('bar count < 220 (' + bars.length + ')'), { step: 'validate_bars' });\n  const closes = bars.map(b => b.close);\n  const ema65 = emaSeries(closes, 65); const ema200 = emaSeries(closes, 200); const atr = atrSeries(bars, 14);\n  const fiveDay = closes.length > 5 ? ((closes.at(-1) - closes.at(-6)) / closes.at(-6)) * 100 : null;\n  const swingIdx = []; for (let i = 0; i < bars.length; i++) if (isSwingHigh(bars, i)) swingIdx.push(i);\n  const setups = [];\n  for (let s = 0; s < swingIdx.length; s++) {\n    const h1i = swingIdx[s]; const h1 = bars[h1i];\n    for (let r = s + 1; r < swingIdx.length; r++) {\n      const ri = swingIdx[r]; const retest = bars[ri]; if (!(retest.high < h1.high)) continue;\n      for (let c = ri + 1; c < bars.length; c++) {\n        if (!(bars[c].close < retest.low)) continue;\n        const conf = bars[c]; const away = h1.high - conf.close; const atrVal = atr[c];\n        const e65 = ema65[c]; const e200 = ema200[c];\n        setups.push({\n          ticker: ticker.toUpperCase(), h1Date: h1.date, h1Price: h1.high, retestDate: retest.date,\n          retestHigh: retest.high, retestLow: retest.low, close: conf.close, confirmDate: conf.date,\n          invalidationAway: away, invalidationAtr: atrVal ? away / atrVal : null,\n          priceVsEma65: e65 == null ? 'n/a' : (conf.close >= e65 ? 'above' : 'below'),\n          priceVsEma200: e200 == null ? 'n/a' : (conf.close >= e200 ? 'above' : 'below'),\n          fiveDayPct: fiveDay, gapsAbove: [], key: `${ticker.toUpperCase()}|${h1.date}|${retest.date}`\n        });\n        break;\n      }\n    }\n  }\n  const lastDate = bars.at(-1).date;\n  const today = setups.filter(s => s.confirmDate === lastDate);\n  return today.length ? [today.at(-1)] : [];\n}\n\nconst alerts = [];\nconst errors = [];\nfor (const ticker of cfg.tickers) {\n  try {\n    const end = new Date(); const start = new Date(); start.setUTCDate(start.getUTCDate() - 420);\n    const from = start.toISOString().slice(0, 10); const to = end.toISOString().slice(0, 10);\n    // Massive API key comes from Header Auth credential on the HTTP helper below via this.helpers —\n    // use credential-backed request: append apiKey from credential is not available in Code;\n    // call HTTP Request node pattern: we use helpers.httpRequest with credential.\n    const res = await this.helpers.httpRequestWithAuthentication.call(this, 'httpHeaderAuth', {\n      method: 'GET',\n      url: `${cfg.baseUrl}/v2/aggs/ticker/${encodeURIComponent(ticker)}/range/1/day/${from}/${to}?adjusted=true&sort=asc&limit=50000`,\n      qs: {}\n    });\n    const results = res?.results;\n    if (!Array.isArray(results) || !results.length) throw Object.assign(new Error('empty bars'), { step: 'fetch_bars' });\n    const bars = results.map(b => ({ date: msToNyDate(b.t), open: b.o, high: b.h, low: b.l, close: b.c, t: b.t }));\n    if (bars.length < 220) throw Object.assign(new Error('bar count < 220 (' + bars.length + ')'), { step: 'validate_bars' });\n    const lastMs = bars.at(-1).t; const ageDays = (Date.now() - lastMs) / 86400000;\n    if (ageDays > 5) throw Object.assign(new Error('freshness fail: last bar ' + bars.at(-1).date), { step: 'freshness' });\n    for (const s of detect(ticker, bars)) alerts.push({ ...s, message: formatMsg(s) });\n  } catch (e) {\n    errors.push({ step: e.step || 'fetch_bars', error: redact(e) });\n  }\n}\nif (errors.length) {\n  return [{ json: { ok: false, runId, cfg, step: errors[0].step, error: errors[0].error, FAILURE_PREFIX, alerts: [] } }];\n}\nreturn [{ json: { ok: true, runId, cfg, alerts, FAILURE_PREFIX } }];"
+      },
+      "id": "scan",
+      "name": "Fetch Detect Format",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2860, 120],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_MASSIVE_HEADER_CREDENTIAL_ID",
+          "name": "Massive API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{$json.ok}}", "value2": true }]
+        }
+      },
+      "id": "if-ok",
+      "name": "Scan OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [3080, 120]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [{ "value1": "={{$json.alerts.length}}", "operation": "larger", "value2": 0 }]
+        }
+      },
+      "id": "if-alerts",
+      "name": "Has Alerts?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [3300, 40]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nreturn (item.alerts || []).map(a => ({ json: { ...item, message: a.message, alert: a } }));"
+      },
+      "id": "split-alerts",
+      "name": "Split Alerts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3520, -40]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": "={{$('Load Config + TZ').first().json.channel}}",
+        "text": "={{$json.message}}",
+        "otherOptions": { "includeLinkToWorkflow": false }
+      },
+      "id": "slack-alert",
+      "name": "Slack Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [3740, -40],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_SLACK_CREDENTIAL_ID",
+          "name": "Slack Bot"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const prev = $('Split Alerts').all();\nconst slackItems = $input.all();\nconst cfg = $('Load Config + TZ').first().json;\nconst runId = $('Fetch Detect Format').first().json.runId;\nconst tsList = [];\nfor (const s of slackItems) {\n  const body = s.json;\n  if (body.ok !== true && body.message?.ok !== true) {\n    const err = body.error || body.message?.error || 'slack_ok_false';\n    return [{ json: { ok: false, runId, cfg, step: 'slack_post', error: String(err), FAILURE_PREFIX: 'STRUCTURE ALERT FAILED - ' } }];\n  }\n  tsList.push(body.ts || body.message?.ts || null);\n}\nreturn [{ json: { ok: true, runId, cfg, alertCount: prev.length, slackTs: tsList[0] || null } }];"
+      },
+      "id": "assert-slack",
+      "name": "Assert Slack ok",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3960, -40]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Load Config + TZ').first().json;\nconst runId = $('Fetch Detect Format').first().json.runId;\nreturn [{ json: { ok: true, runId, cfg, alertCount: 0, slackTs: null } }];"
+      },
+      "id": "zero-alerts",
+      "name": "Zero Alerts OK",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3520, 120]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE structure_alert_runs\nSET status = 'ok',\n    alert_count = {{ $json.alertCount }},\n    slack_ts = {{ $json.slackTs ? \"'\" + $json.slackTs + \"'\" : 'NULL' }},\n    error = NULL,\n    notify_error = NULL,\n    finished_at = NOW()\nWHERE id = '{{ $json.runId }}'::uuid\nRETURNING *;",
+        "options": {}
+      },
+      "id": "patch-ok",
+      "name": "Patch Run ok",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [4180, 40],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_STRUCTURE_ALERT_PG_CREDENTIAL_ID",
+          "name": "structure_alert_n8n"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{$('Load Config + TZ').first().json.healthUrl}}",
+        "options": {}
+      },
+      "id": "hc-ok",
+      "name": "Ping Healthchecks OK",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4400, 40],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $input.first().json;\nconst text = `${j.FAILURE_PREFIX || 'STRUCTURE ALERT FAILED - '}${j.step}: ${j.error}`;\nreturn [{ json: { ...j, failureText: text } }];"
+      },
+      "id": "fmt-fail",
+      "name": "Format Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3080, 360]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": "={{$json.channel || $('Load Config + TZ').first().json.channel}}",
+        "text": "={{$json.failureText}}",
+        "otherOptions": { "includeLinkToWorkflow": false }
+      },
+      "id": "slack-fail",
+      "name": "Slack Failure (once)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [3300, 360],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_SLACK_CREDENTIAL_ID",
+          "name": "Slack Bot"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const base = $('Format Failure').first().json;\nconst slack = $input.first().json;\nlet notify_error = null;\nif (slack.ok !== true && slack.message?.ok !== true) {\n  notify_error = String(slack.error || slack.message?.error || 'slack_notify_failed');\n}\nreturn [{ json: { ...base, notify_error } }];"
+      },
+      "id": "merge-notify",
+      "name": "Keep root error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3520, 360]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE structure_alert_runs\nSET status = 'failed',\n    error = {{ JSON.stringify(($json.step || 'pipeline') + ': ' + ($json.error || 'unknown')) }},\n    notify_error = {{ $json.notify_error ? JSON.stringify($json.notify_error) : 'NULL' }},\n    finished_at = NOW()\nWHERE id = '{{ $json.runId }}'::uuid\nRETURNING *;",
+        "options": {}
+      },
+      "id": "patch-fail",
+      "name": "Patch Run failed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [3740, 360],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_STRUCTURE_ALERT_PG_CREDENTIAL_ID",
+          "name": "structure_alert_n8n"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{($json.healthUrl || $('Load Config + TZ').first().json.healthUrl)}}/fail",
+        "options": {}
+      },
+      "id": "hc-fail",
+      "name": "Ping Healthchecks FAIL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3960, 360],
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Schedule 4:25pm ET": { "main": [[{ "node": "Load Config + TZ", "type": "main", "index": 0 }]] },
+    "Load Config + TZ": { "main": [[{ "node": "Sweep stale running", "type": "main", "index": 0 }]] },
+    "Sweep stale running": { "main": [[{ "node": "Format stale alerts", "type": "main", "index": 0 }]] },
+    "Format stale alerts": { "main": [[{ "node": "Split stale texts", "type": "main", "index": 0 }, { "node": "Continue after stale", "type": "main", "index": 0 }]] },
+    "Split stale texts": { "main": [[{ "node": "Slack stale notify", "type": "main", "index": 0 }]] },
+    "Continue after stale": { "main": [[{ "node": "Insert Run running", "type": "main", "index": 0 }]] },
+    "Insert Run running": { "main": [[{ "node": "Slack auth.test", "type": "main", "index": 0 }]] },
+    "Slack auth.test": { "main": [[{ "node": "Check auth.test", "type": "main", "index": 0 }]] },
+    "Check auth.test": { "main": [[{ "node": "Auth OK?", "type": "main", "index": 0 }]] },
+    "Auth OK?": {
+      "main": [
+        [{ "node": "Slack conversations preflight", "type": "main", "index": 0 }],
+        [{ "node": "Format Failure", "type": "main", "index": 0 }]
+      ]
+    },
+    "Slack conversations preflight": { "main": [[{ "node": "Check conversations", "type": "main", "index": 0 }]] },
+    "Check conversations": { "main": [[{ "node": "Preflight OK?", "type": "main", "index": 0 }]] },
+    "Preflight OK?": {
+      "main": [
+        [{ "node": "Fetch Detect Format", "type": "main", "index": 0 }],
+        [{ "node": "Format Failure", "type": "main", "index": 0 }]
+      ]
+    },
+    "Fetch Detect Format": { "main": [[{ "node": "Scan OK?", "type": "main", "index": 0 }]] },
+    "Scan OK?": {
+      "main": [
+        [{ "node": "Has Alerts?", "type": "main", "index": 0 }],
+        [{ "node": "Format Failure", "type": "main", "index": 0 }]
+      ]
+    },
+    "Has Alerts?": {
+      "main": [
+        [{ "node": "Split Alerts", "type": "main", "index": 0 }],
+        [{ "node": "Zero Alerts OK", "type": "main", "index": 0 }]
+      ]
+    },
+    "Split Alerts": { "main": [[{ "node": "Slack Alert", "type": "main", "index": 0 }]] },
+    "Slack Alert": {
+      "main": [
+        [{ "node": "Assert Slack ok", "type": "main", "index": 0 }],
+        [{ "node": "Format Failure", "type": "main", "index": 0 }]
+      ]
+    },
+    "Assert Slack ok": { "main": [[{ "node": "Patch Run ok", "type": "main", "index": 0 }]] },
+    "Zero Alerts OK": { "main": [[{ "node": "Patch Run ok", "type": "main", "index": 0 }]] },
+    "Patch Run ok": { "main": [[{ "node": "Ping Healthchecks OK", "type": "main", "index": 0 }]] },
+    "Format Failure": { "main": [[{ "node": "Slack Failure (once)", "type": "main", "index": 0 }]] },
+    "Slack Failure (once)": {
+      "main": [
+        [{ "node": "Keep root error", "type": "main", "index": 0 }],
+        [{ "node": "Keep root error", "type": "main", "index": 0 }]
+      ]
+    },
+    "Keep root error": { "main": [[{ "node": "Patch Run failed", "type": "main", "index": 0 }]] },
+    "Patch Run failed": { "main": [[{ "node": "Ping Healthchecks FAIL", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "notes": "Credentials: Slack Bot (chat:write + im:write for DM / channels:read or groups:read for channel preflight), Header Auth Massive (name apiKey, value YOUR_KEY — query or header per Massive docs), Postgres structure_alert_n8n. n8n Variables: SLACK_ALERT_CHANNEL, HEALTHCHECK_URL, MASSIVE_BASE_URL, STRUCTURE_ALERT_TICKERS. Do NOT enable N8N_BLOCK_ENV_ACCESS_IN_NODE=false. Error Workflow → Structure Alert — Error Handler. Schedule 4:25pm ET."
+  }
+}

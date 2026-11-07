@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+  <title>Example channel</title>
+  <entry>
+    <id>yt:video:jzpi6KNr0Dg</id>
+    <yt:videoId>jzpi6KNr0Dg</yt:videoId>
+    <yt:channelId>UCNeBCizpA1NbX7A9_ia6jYg</yt:channelId>
+    <title>These Sectors Are Setting Up For Big Moves!</title>
+    <link rel="alternate" href="https://www.youtube.com/watch?v=jzpi6KNr0Dg"/>
+    <published>2026-11-04T15:00:00+00:00</published>
+    <media:group>
+      <media:title>These Sectors Are Setting Up For Big Moves!</media:title>
+      <media:description>Ignored</media:description>
+    </media:group>
+  </entry>
+  <entry>
+    <id>yt:video:abcdefghijk</id>
+    <yt:videoId>abcdefghijk</yt:videoId>
+    <title>Older video</title>
+    <link rel="alternate" href="https://www.youtube.com/watch?v=abcdefghijk"/>
+    <published>2026-11-03T15:00:00+00:00</published>
+  </entry>
+</feed>

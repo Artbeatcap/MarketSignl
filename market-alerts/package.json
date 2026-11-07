@@ -1,0 +1,16 @@
+{
+  "name": "market-alerts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "test": "node --test",
+    "fetch-fixture": "node scripts/fetch-fixture.mjs",
+    "backtest": "node scripts/backtest-lower-high.mjs",
+    "verify": "node scripts/fetch-fixture.mjs && node --test && node scripts/backtest-lower-high.mjs",
+    "verify:delivery": "node --test test/delivery.test.mjs"
+  }
+}

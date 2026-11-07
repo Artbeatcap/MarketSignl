@@ -1,0 +1,10 @@
+{
+  "content": [
+    {"text": "Hello there", "offset": 0, "duration": 2000, "lang": "en"},
+    {"text": "Hello there", "offset": 1500, "duration": 2000, "lang": "en"},
+    {"text": "Second line", "offset": 10000, "duration": 2000, "lang": "en"},
+    {"text": "After thirty seconds", "offset": 31500, "duration": 2000, "lang": "en"}
+  ],
+  "lang": "en",
+  "availableLangs": ["en"]
+}

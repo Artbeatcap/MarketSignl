@@ -1,0 +1,5 @@
+.env
+deploy/.env
+node_modules/
+fixtures/*.json
+!fixtures/.gitkeep

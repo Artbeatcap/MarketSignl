@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:podcast="https://podcastindex.org/namespace/1.0">
+  <channel>
+    <title>Market Mondays</title>
+    <item>
+      <title>ANTHROPIC: BIGGEST IPO EVER? &#127988; NOVEMBER RALLY &amp; 2 TOP CHIP STOCKS</title>
+      <enclosure url="https://example.com/oct27.mp3" length="10" type="audio/mpeg"/>
+      <guid isPermaLink="false">dc7b25ff-f033-45be-8c1d-3fcc70e118db</guid>
+      <pubDate>Tue, 27 Oct 2026 02:15:21 &#43;0000</pubDate>
+      <itunes:duration>7350</itunes:duration>
+      <podcast:transcript url="https://example.com/oct27.vtt" type="text/vtt" language="en" />
+      <description><![CDATA[<p>Show notes mentioning an item but not closing the tag.</p>]]></description>
+    </item>
+  </channel>
+</rss>

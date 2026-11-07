@@ -1,0 +1,90 @@
+{
+  "name": "Structure Alert — Error Handler",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "err-trigger",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ex = $input.first().json;\nconst executionId = String(ex.execution?.id || ex.id || '');\nconst step = ex.node?.name || 'error_trigger';\nconst raw = ex.execution?.error?.message || ex.message || JSON.stringify(ex).slice(0, 400);\nconst FAILURE_PREFIX = 'STRUCTURE ALERT FAILED - ';\nconst channel = $vars.SLACK_ALERT_CHANNEL;\nconst healthUrl = String($vars.HEALTHCHECK_URL || '').replace(/\\/$/, '');\nconst failureText = `${FAILURE_PREFIX}${step}: ${String(raw).replace(/\\b(?:xox[baprs]-|xapp-)[A-Za-z0-9-]+/g, '[REDACTED]').slice(0, 500)}`;\nreturn [{ json: { executionId, step, raw: String(raw).slice(0, 500), failureText, channel, healthUrl } }];"
+      },
+      "id": "fmt",
+      "name": "Format Crash Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": "={{$json.channel}}",
+        "text": "={{$json.failureText}}",
+        "otherOptions": { "includeLinkToWorkflow": false }
+      },
+      "id": "slack",
+      "name": "Slack Crash Notify",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [480, 220],
+      "credentials": {
+        "slackApi": {
+          "id": "REPLACE_SLACK_CREDENTIAL_ID",
+          "name": "Slack Bot"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE structure_alert_runs\nSET status = 'failed',\n    error = {{ JSON.stringify($('Format Crash Failure').item.json.step + ': ' + $('Format Crash Failure').item.json.raw) }},\n    finished_at = NOW()\nWHERE n8n_execution_id = '{{ $('Format Crash Failure').item.json.executionId }}'\n  AND status = 'running'\nRETURNING id;",
+        "options": {}
+      },
+      "id": "patch-running",
+      "name": "Mark leftover running failed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [720, 300],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE_STRUCTURE_ALERT_PG_CREDENTIAL_ID",
+          "name": "structure_alert_n8n"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "url": "={{$('Format Crash Failure').first().json.healthUrl}}/fail",
+        "options": {}
+      },
+      "id": "hc-fail",
+      "name": "Ping Healthchecks FAIL",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, 300],
+      "onError": "continueRegularOutput"
+    }
+  ],
+  "connections": {
+    "Error Trigger": { "main": [[{ "node": "Format Crash Failure", "type": "main", "index": 0 }]] },
+    "Format Crash Failure": { "main": [[{ "node": "Slack Crash Notify", "type": "main", "index": 0 }]] },
+    "Slack Crash Notify": {
+      "main": [
+        [{ "node": "Mark leftover running failed", "type": "main", "index": 0 }],
+        [{ "node": "Mark leftover running failed", "type": "main", "index": 0 }]
+      ]
+    },
+    "Mark leftover running failed": { "main": [[{ "node": "Ping Healthchecks FAIL", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York"
+  },
+  "staticData": null
+}

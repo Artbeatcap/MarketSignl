@@ -1,0 +1,40 @@
+# Personal automations only. Run this on the ChartSignl VPS, not on a laptop.
+# It does not modify the ChartSignl n8n service (container "n8n", https://n8n.chartsignl.com).
+# The editor listens on the server's loopback only. Open it with an SSH tunnel,
+# or point nginx at 127.0.0.1:5679 after automations.chartsignl.com has DNS.
+
+name: market-alerts-personal
+
+services:
+  n8n-personal:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: market-alerts-n8n-personal:2026.10.26
+    container_name: n8n-personal
+    restart: unless-stopped
+    env_file:
+      - .env
+      - ../transcripts/.env
+    ports:
+      - "127.0.0.1:5679:5678"
+    environment:
+      N8N_HOST: ${N8N_HOST:-localhost}
+      N8N_PORT: 5678
+      N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
+      # The editor is reached over HTTP through the SSH tunnel. The default
+      # secure cookie makes credential tests fail with "Can't connect to n8n."
+      N8N_SECURE_COOKIE: "false"
+      # Free-plan n8n cannot use Variables. Code nodes read $env from the env files above.
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      # Execute Command is off by default. The yt-dlp version check needs it.
+      NODES_EXCLUDE: '["n8n-nodes-base.localFileTrigger"]'
+      WEBHOOK_URL: ${WEBHOOK_URL:-http://localhost:5679/}
+      GENERIC_TIMEZONE: America/New_York
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+    volumes:
+      - n8n_personal_data:/home/node/.n8n
+      - ../transcripts:/opt/transcripts:ro
+
+volumes:
+  n8n_personal_data:
