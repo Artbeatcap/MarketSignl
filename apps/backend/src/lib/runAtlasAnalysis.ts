@@ -458,7 +458,7 @@ export async function runAtlasAnalysis(input: {
     analyzedAt: new Date().toISOString(),
     ...(freshness ? { freshness } : {}),
     marketContext,
-    guide: buildAnalysisGuide(indicators, scoredAnalysis, marketContext),
+    guide: buildAnalysisGuide(indicators, scoredAnalysis, contextApplies ? marketContext : undefined, interval),
 
     currentPrice: indicators.currentPrice,
     priceChange: indicators.priceChange,

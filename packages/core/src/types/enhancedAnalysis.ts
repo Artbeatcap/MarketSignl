@@ -227,7 +227,8 @@ export type MarketContext = {
 
 export interface AnalysisGuide {
   whatIsHappening: string;
-  marketContext: string;
+  /** Only present for symbols the sector rule covers. */
+  marketContext?: string;
   whatToWatch: string[];
   whatWouldChange: string;
   whenToReassess: string;

@@ -92,11 +92,19 @@ await test('provider failure is visible and never becomes neutral', async () => 
 });
 await test('customer guide contains concrete levels, invalidation, return reason and score meaning', () => {
   const indicators = calculateAllIndicators(series(-0.5), 'MU', '3mo', 'factor_breakdown')!;
-  const guide = buildAnalysisGuide(indicators, scoreLevels(indicators), breakdown);
+  const guide = buildAnalysisGuide(indicators, scoreLevels(indicators), breakdown, '3mo');
   assert.ok(guide.whatIsHappening && guide.marketContext && guide.whatToWatch.length);
-  assert.match(guide.whenToReassess, /completed chart bar/);
-  assert.match(guide.scoreMeaning, /not the probability/);
-  assert.match(guide.marketContext, /experimental/);
+  assert.match(guide.whenToReassess, /next daily close/);
+  assert.match(guide.scoreMeaning, /not the odds/);
+  assert.match(guide.marketContext!, /^Semis lagging: SMH\/QQQ falling/);
+  assert.match(guide.marketContext!, /Experimental filter, daily data through [A-Z][a-z]{2} \d{1,2}\./);
+  assert.match(guide.whatIsHappening, /\d\.\d ATR (above|below) the 21 EMA/);
+  for (const text of [guide.whatIsHappening, guide.marketContext!, guide.whatWouldChange, guide.whenToReassess, ...guide.whatToWatch]) {
+    assert.match(text, /^[A-Z]/, `starts with a capital: ${text}`);
+    assert.doesNotMatch(text, /\d{4}-\d{2}-\d{2}|_/, `no ISO dates or raw enum names: ${text}`);
+  }
+  assert.equal(buildAnalysisGuide(indicators, scoreLevels(indicators), undefined, '1d').marketContext, undefined);
+  assert.match(buildAnalysisGuide(indicators, scoreLevels(indicators), undefined, '1d').whenToReassess, /5-minute bar/);
 });
 
 await test('Atlas wiring guards model prose and long ideas, includes context, and keys cache by bars', async () => {

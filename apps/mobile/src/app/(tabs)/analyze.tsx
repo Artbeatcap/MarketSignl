@@ -812,20 +812,31 @@ export default function AnalyzeScreen() {
             </View>
 
             {aiAnalysis.guide && (
-              <View style={styles.observationsSection} testID="analysis-plain-language-guide">
-                <Text style={styles.observationsTitle}>What is happening</Text>
-                <Text style={styles.observationText}>{aiAnalysis.guide.whatIsHappening}</Text>
-                <Text style={styles.observationsTitle}>Market context</Text>
-                <Text style={styles.observationText}>{aiAnalysis.guide.marketContext}</Text>
-                <Text style={styles.observationsTitle}>What to watch</Text>
-                {aiAnalysis.guide.whatToWatch.map((item, i) => (
-                  <Text key={i} style={styles.observationText}>{item}</Text>
-                ))}
-                <Text style={styles.observationsTitle}>What would change the picture</Text>
-                <Text style={styles.observationText}>{aiAnalysis.guide.whatWouldChange}</Text>
-                <Text style={styles.observationsTitle}>When to reassess</Text>
-                <Text style={styles.observationText}>{aiAnalysis.guide.whenToReassess}</Text>
-                <Text style={styles.observationText}>{aiAnalysis.guide.scoreMeaning}</Text>
+              <View style={styles.guideSection} testID="analysis-plain-language-guide">
+                <View style={styles.guideBlock}>
+                  <Text style={styles.guideLabel}>The read</Text>
+                  <Text style={styles.guideText}>{aiAnalysis.guide.whatIsHappening}</Text>
+                </View>
+                {aiAnalysis.guide.marketContext ? (
+                  <View style={styles.guideBlock}>
+                    <Text style={styles.guideLabel}>Sector</Text>
+                    <Text style={styles.guideText}>{aiAnalysis.guide.marketContext}</Text>
+                  </View>
+                ) : null}
+                <View style={styles.guideBlock}>
+                  <Text style={styles.guideLabel}>Levels in play</Text>
+                  {aiAnalysis.guide.whatToWatch.map((item, i) => (
+                    <View key={i} style={styles.guideBulletRow}>
+                      <Text style={styles.guideBullet}>•</Text>
+                      <Text style={[styles.guideText, styles.guideBulletText]}>{item}</Text>
+                    </View>
+                  ))}
+                </View>
+                <View style={styles.guideBlock}>
+                  <Text style={styles.guideLabel}>What changes the view</Text>
+                  <Text style={styles.guideText}>{aiAnalysis.guide.whatWouldChange}</Text>
+                  <Text style={styles.guideFootnote}>{aiAnalysis.guide.whenToReassess}</Text>
+                </View>
               </View>
             )}
 
@@ -1719,6 +1730,46 @@ const styles = StyleSheet.create({
     color: colors.neutral[700],
     marginBottom: spacing.xs,
     lineHeight: 22,
+  },
+  guideSection: {
+    marginTop: spacing.md,
+    marginBottom: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.neutral[100],
+  },
+  guideBlock: {
+    marginBottom: spacing.md,
+  },
+  guideLabel: {
+    ...typography.labelSm,
+    color: colors.neutral[500],
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: spacing.xs,
+  },
+  guideText: {
+    ...typography.bodyMd,
+    color: colors.neutral[800],
+    lineHeight: 22,
+  },
+  guideBulletRow: {
+    flexDirection: 'row',
+    marginBottom: 2,
+  },
+  guideBullet: {
+    ...typography.bodyMd,
+    color: colors.neutral[400],
+    width: 14,
+    lineHeight: 22,
+  },
+  guideBulletText: {
+    flex: 1,
+  },
+  guideFootnote: {
+    ...typography.bodySm,
+    color: colors.neutral[500],
+    marginTop: spacing.xs,
   },
   ideasSection: {
     marginTop: spacing.md,
