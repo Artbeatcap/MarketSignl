@@ -62,6 +62,8 @@ import { internalDailyBriefRoute, publicDailyBriefRoute } from './routes/dailyBr
 import newsletterRoute from './routes/newsletter.js';
 import { startResolverSchedule } from './lib/resolverSchedule.js';
 import { startCalendarSchedule } from './lib/calendarSchedule.js';
+import { startBriefQaSchedule } from './lib/briefQaLive.js';
+import { briefQaAdminRoute, referenceNotesRoute } from './routes/briefQaAdmin.js';
 
 const app = new Hono();
 
@@ -135,6 +137,8 @@ app.route('/api/test-alert', testAlertRoute);
 app.route('/api/internal/weekly-brief', internalWeeklyBriefRoute);
 app.route('/api/weekly-brief', publicWeeklyBriefRoute);
 app.route('/api/internal/daily-brief', internalDailyBriefRoute);
+app.route('/api/internal/reference-notes', referenceNotesRoute);
+app.route('/api/internal/brief-qa', briefQaAdminRoute);
 app.route('/api/daily-brief', publicDailyBriefRoute);
 app.route('/api/newsletter', newsletterRoute);
 
@@ -205,5 +209,6 @@ serve({
 
 startResolverSchedule();
 startCalendarSchedule();
+startBriefQaSchedule();
 
 export default app;

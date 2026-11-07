@@ -1,12 +1,21 @@
 import type { WeeklyBrand, WeeklyContent } from './types.js';
 import { CHARTSIGNL_BRAND } from './brand.js';
 
+export interface LevelScorecardView {
+  met: number;
+  failed: number;
+  expired: number;
+  calls: string[];
+}
+
 export interface RenderEmailOptions {
   content: WeeklyContent;
   brand?: WeeklyBrand;
   preheader?: string;
   unsubscribeUrl: string;
   preferencesUrl?: string;
+  /** This week's own level calls. Omitted when there is nothing to grade. */
+  levelScorecard?: LevelScorecardView | null;
 }
 
 function pctColor(pct: number | null, brand: WeeklyBrand): string {
@@ -203,6 +212,24 @@ function renderWeekAhead(content: WeeklyContent, brand: WeeklyBrand): string {
         </tr>`;
 }
 
+function renderScorecard(card: LevelScorecardView | null | undefined): string {
+  if (!card || card.met + card.failed + card.expired === 0) return '';
+  const calls = card.calls
+    .map(
+      (line) => `
+            <div style="font-size:15px;line-height:1.55;color:#1f2733;margin-top:6px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">${escapeHtml(line)}</div>`
+    )
+    .join('');
+  return `
+        <tr>
+          <td class="px" style="padding-top:28px;">
+            <div class="sec-title" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;border-bottom:2px solid #eef1f6;padding-bottom:8px;margin-bottom:14px;">This week's levels: scorecard</div>
+            <div style="font-size:15px;line-height:1.55;color:#1f2733;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">${card.met} met · ${card.failed} failed · ${card.expired} expired</div>
+            ${calls}
+          </td>
+        </tr>`;
+}
+
 export function buildPreheader(content: WeeklyContent, maxLen = 120): string {
   const text = content.sections.major_driver || '';
   if (text.length <= maxLen) return text;
@@ -316,6 +343,7 @@ export function renderWeeklyBriefEmail(options: RenderEmailOptions): string {
 
         ${renderTape(content, brand)}
         ${majorDriver}
+        ${renderScorecard(options.levelScorecard)}
         ${weekInReview}
         ${renderSectors(content, brand)}
         ${renderMovers(content, brand)}

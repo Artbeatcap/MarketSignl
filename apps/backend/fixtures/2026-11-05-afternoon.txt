@@ -1,0 +1,9 @@
+Now I have everything I need. Here is the full structured output:
+SPY closed down -4.57% (-$35.06) as the tape broke.
+QQQ closed down -6.68% with the Nasdaq leading lower.
+AMD fell -17.1% after the open and finished AMD -17.26% on the day.
+The SOX fell ≈9% from the mid-session print.
+SPY volume 125,897,878.
+Support established over Oct 31–Nov 1.
+---
+Comment "chart" below to pull the levels.

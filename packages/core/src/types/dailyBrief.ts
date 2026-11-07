@@ -1,4 +1,6 @@
 import type {
+  BriefLevelCall,
+  BriefScenario,
   LevelSet,
   MoverItem,
   SectorItem,
@@ -13,6 +15,8 @@ export type CatalystBullet = WeekAheadBullet;
 export interface HeadlineItem {
   headline: string;
   summary: string;
+  /** Set when the headline was added from our own news feed. */
+  url?: string;
 }
 
 export interface DailySections {
@@ -42,6 +46,11 @@ export interface DailyContent {
   levels: Record<string, LevelSet>;
   catalyst_bullets: CatalystBullet[];
   headlines: HeadlineItem[];
+  /** Model-supplied level calls. The support/resistance card stays in `levels`. */
+  level_calls?: BriefLevelCall[];
+  scenarios?: BriefScenario[];
+  /** Hash of the Atlas prompt Options Plunge used. Missing or old raises BRIEF PROMPT STALE. */
+  promptVersion?: string;
   sections: DailySections;
 }
 

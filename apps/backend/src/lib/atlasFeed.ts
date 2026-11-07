@@ -53,8 +53,14 @@ export function buildAtlasMarketContext(opts: {
   regime?: BreadthRegime | string;
   calendar?: CalendarRow[];
   headlines?: string;
+  /** Code-computed FACTS block. The model may not invent figures outside it. */
+  factsBlock?: string;
+  priorCallsBlock?: string;
 }): string {
-  const parts = [buildMarketDriversBlock(opts.drivers, opts.regime ?? 'unknown')];
+  const parts: string[] = [];
+  if (opts.factsBlock) parts.push(opts.factsBlock);
+  if (opts.priorCallsBlock) parts.push(opts.priorCallsBlock);
+  parts.push(buildMarketDriversBlock(opts.drivers, opts.regime ?? 'unknown'));
   const week = buildThisWeekBlock(opts.calendar ?? []);
   if (week) parts.push(week);
   return opts.headlines ? `${parts.join('\n\n')}\n\n${opts.headlines}` : parts.join('\n\n');

@@ -5,6 +5,7 @@
  * and in the logs. It never reaches the email or the Atlas prompt.
  */
 import type { EarningsCalendarRow, EarningsSession } from './fmpEarningsAdapter.js';
+import { ATLAS_FACTS_RULES } from './briefAtlasRules.js';
 
 export type { EarningsCalendarRow, EarningsSession } from './fmpEarningsAdapter.js';
 
@@ -471,7 +472,10 @@ export function buildWeekAhead(input: WeekAheadInput): WeekAheadResult {
 const BANNED_PROMPT_LEAKS = ['distinctAnalysts', 'score', 'weightPct'] as const;
 
 export const ATLAS_HARD_RULE =
-  'Base everything only on the market context provided below — index drivers, market breadth, the calendar, and headlines. Do not invent tickers, prices, or events beyond what appears there.';
+  'Base everything only on the market context provided below — index drivers, market breadth, the calendar, and headlines. Do not invent tickers, prices, or events beyond what appears there.\n' +
+  ATLAS_FACTS_RULES;
+
+export { ATLAS_FACTS_RULES };
 
 export const ATLAS_CALENDAR_OUTPUT_RULES = [
   'If THIS WEEK is non-empty, `the biggest risk` MUST name the nearest high-impact scheduled event and say plainly what it could do to positioning. A scheduled event the reader can prepare for outranks a speculative risk you inferred from the tape.',

@@ -6,6 +6,7 @@ import {
   buildPreheader,
   buildSubject,
   renderWeeklyBriefEmail,
+  type LevelScorecardView,
 } from './renderEmail.js';
 
 const apiKey = process.env.SENDGRID_API_KEY?.trim();
@@ -34,13 +35,15 @@ function buildUnsubscribeUrl(token: string): string {
 
 export function renderForRecipient(
   content: WeeklyContent,
-  unsubscribeToken: string
+  unsubscribeToken: string,
+  levelScorecard?: LevelScorecardView | null
 ): { html: string; subject: string; preheader: string } {
   const preheader = buildPreheader(content);
   const html = renderWeeklyBriefEmail({
     content,
     preheader,
     unsubscribeUrl: buildUnsubscribeUrl(unsubscribeToken),
+    levelScorecard,
   });
 
   return {
@@ -53,9 +56,10 @@ export function renderForRecipient(
 export async function sendToRecipient(
   content: WeeklyContent,
   to: string,
-  unsubscribeToken: string
+  unsubscribeToken: string,
+  levelScorecard?: LevelScorecardView | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { html, subject, preheader } = renderForRecipient(content, unsubscribeToken);
+  const { html, subject, preheader } = renderForRecipient(content, unsubscribeToken, levelScorecard);
 
   try {
     await sgMail.send({
@@ -79,7 +83,8 @@ export async function sendToRecipient(
 
 export async function sendBatchInBackground(
   content: WeeklyContent,
-  recipients: WeeklyBriefRecipient[]
+  recipients: WeeklyBriefRecipient[],
+  levelScorecard?: LevelScorecardView | null
 ): Promise<void> {
   let sent = 0;
   let failed = 0;
@@ -91,7 +96,8 @@ export async function sendBatchInBackground(
         const result = await sendToRecipient(
           content,
           recipient.email,
-          recipient.unsubscribe_token
+          recipient.unsubscribe_token,
+          levelScorecard
         );
         if (result.ok) {
           sent += 1;
@@ -112,8 +118,9 @@ export async function sendBatchInBackground(
 
 export async function sendTestEmail(
   content: WeeklyContent,
-  testEmail: string
+  testEmail: string,
+  levelScorecard?: LevelScorecardView | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const testToken = '00000000-0000-0000-0000-000000000000';
-  return sendToRecipient(content, testEmail, testToken);
+  return sendToRecipient(content, testEmail, testToken, levelScorecard);
 }

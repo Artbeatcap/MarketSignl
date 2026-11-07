@@ -17,7 +17,8 @@
     "test:freshness": "tsx src/lib/__tests__/feedFreshness.test.ts",
     "test:atlas": "tsx src/lib/__tests__/openaiGuard.test.ts",
     "accept:weekly-brief": "tsx scripts/weekly-brief-acceptance.ts",
-    "accept:daily-brief": "tsx scripts/daily-brief-acceptance.ts"
+    "accept:daily-brief": "tsx scripts/daily-brief-acceptance.ts",
+    "test": "tsx scripts/run-named-test.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.8.0",

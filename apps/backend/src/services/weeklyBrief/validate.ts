@@ -27,6 +27,18 @@ const levelSetSchema = z.object({
   resistance2: z.string().optional(),
 });
 
+const levelCallSchema = z.object({
+  ticker: z.string().min(1),
+  level: z.number(),
+  condition: z.enum(['hold', 'reclaim', 'break', 'close_above', 'close_below']),
+  horizonSessions: z.number().int().positive().optional().default(1),
+});
+
+const scenarioSchema = z.object({
+  name: z.string().min(1),
+  condition: z.string().min(1),
+});
+
 const weekAheadBulletSchema = z.object({
   date: z.string(),
   event: z.string(),
@@ -51,6 +63,9 @@ export const weeklyContentSchema = z.object({
   movers: z.array(moverItemSchema).default([]),
   levels: z.record(levelSetSchema).default({}),
   week_ahead_bullets: z.array(weekAheadBulletSchema).default([]),
+  level_calls: z.array(levelCallSchema).optional().default([]),
+  scenarios: z.array(scenarioSchema).optional().default([]),
+  promptVersion: z.string().optional(),
   sections: sectionsSchema,
 });
 

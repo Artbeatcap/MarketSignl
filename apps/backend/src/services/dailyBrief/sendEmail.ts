@@ -36,7 +36,8 @@ function buildUnsubscribeUrl(token: string): string {
 export function renderForRecipient(
   content: DailyContent,
   unsubscribeToken: string,
-  calendar?: CalendarRow[]
+  calendar?: CalendarRow[],
+  priorLevels?: string[]
 ): { html: string; subject: string; preheader: string } {
   const preheader = buildPreheader(content);
   const html = renderDailyBriefEmail({
@@ -44,6 +45,7 @@ export function renderForRecipient(
     preheader,
     unsubscribeUrl: buildUnsubscribeUrl(unsubscribeToken),
     calendar,
+    priorLevels,
   });
 
   return {
@@ -57,9 +59,15 @@ export async function sendToRecipient(
   content: DailyContent,
   to: string,
   unsubscribeToken: string,
-  calendar?: CalendarRow[]
+  calendar?: CalendarRow[],
+  priorLevels?: string[]
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { html, subject, preheader } = renderForRecipient(content, unsubscribeToken, calendar);
+  const { html, subject, preheader } = renderForRecipient(
+    content,
+    unsubscribeToken,
+    calendar,
+    priorLevels
+  );
 
   try {
     await sgMail.send({
@@ -84,7 +92,8 @@ export async function sendToRecipient(
 export async function sendBatchInBackground(
   content: DailyContent,
   recipients: DailyBriefRecipient[],
-  calendar?: CalendarRow[]
+  calendar?: CalendarRow[],
+  priorLevels?: string[]
 ): Promise<void> {
   let sent = 0;
   let failed = 0;
@@ -97,7 +106,8 @@ export async function sendBatchInBackground(
           content,
           recipient.email,
           recipient.unsubscribe_token,
-          calendar
+          calendar,
+          priorLevels
         );
         if (result.ok) {
           sent += 1;
@@ -119,8 +129,9 @@ export async function sendBatchInBackground(
 export async function sendTestEmail(
   content: DailyContent,
   testEmail: string,
-  calendar?: CalendarRow[]
+  calendar?: CalendarRow[],
+  priorLevels?: string[]
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const testToken = '00000000-0000-0000-0000-000000000000';
-  return sendToRecipient(content, testEmail, testToken, calendar);
+  return sendToRecipient(content, testEmail, testToken, calendar, priorLevels);
 }

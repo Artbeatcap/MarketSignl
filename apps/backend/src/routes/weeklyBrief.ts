@@ -19,6 +19,7 @@ import {
 } from '../services/weeklyBrief/sendEmail.js';
 import { getApiBaseUrl } from '../services/weeklyBrief/brand.js';
 import { ZodError } from 'zod';
+import { flagStalePrompt, prepareWeeklyContent } from '../lib/briefQaLive.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -53,6 +54,7 @@ internalWeeklyBriefRoute.post('/ingest', async (c) => {
 
   try {
     const content = parseWeeklyContent(body);
+    await flagStalePrompt(content.promptVersion);
     const { id } = await saveArtifact(supabaseAdmin, content);
     console.log(`[weekly-brief] Ingested artifact ${id} for ${content.week_label}`);
     return c.json({ success: true, id });
@@ -91,7 +93,12 @@ internalWeeklyBriefRoute.post('/send', async (c) => {
     return c.json({ success: false, error: freshness.reason, skipped: true }, 409);
   }
 
-  const content = stored!.artifact;
+  const prepared = await prepareWeeklyContent({
+    content: stored!.artifact,
+    notify: !dryRun,
+    persist: !dryRun && !testEmail,
+  });
+  const content = prepared.content;
   const placeholderUnsub = `${getApiBaseUrl()}/api/weekly-brief/unsubscribe?token=preview`;
 
   if (dryRun) {
@@ -99,6 +106,7 @@ internalWeeklyBriefRoute.post('/send', async (c) => {
       content,
       preheader: buildPreheader(content),
       unsubscribeUrl: placeholderUnsub,
+      levelScorecard: prepared.scorecard,
     });
 
     await mkdir(resolve(__dirname, '../../tmp'), { recursive: true });
@@ -112,11 +120,12 @@ internalWeeklyBriefRoute.post('/send', async (c) => {
       htmlPath: DRY_RUN_PATH,
       subject: buildSubject(content),
       preheader: buildPreheader(content),
+      qa: prepared.qa,
     });
   }
 
   if (testEmail) {
-    const result = await sendTestEmail(content, testEmail);
+    const result = await sendTestEmail(content, testEmail, prepared.scorecard);
     if (!result.ok) {
       await postWeeklyBriefAlert(`Test send failed to ${testEmail}: ${result.error}`);
       return c.json({ success: false, error: result.error }, 500);
@@ -135,7 +144,7 @@ internalWeeklyBriefRoute.post('/send', async (c) => {
     return c.json({ success: false, error: 'No recipients', skipped: true }, 409);
   }
 
-  void sendBatchInBackground(content, recipients).catch(async (err) => {
+  void sendBatchInBackground(content, recipients, prepared.scorecard).catch(async (err) => {
     console.error('[weekly-brief] Background send failed:', err);
     await postWeeklyBriefAlert(
       `Background send failed: ${err instanceof Error ? err.message : String(err)}`
@@ -147,6 +156,7 @@ internalWeeklyBriefRoute.post('/send', async (c) => {
     status: 'sending',
     recipientCount: recipients.length,
     week_label: content.week_label,
+    qa: prepared.qa,
   });
 });
 

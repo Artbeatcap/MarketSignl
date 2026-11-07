@@ -19,6 +19,8 @@ export interface RenderEmailOptions {
   preferencesUrl?: string;
   /** Structured calendar rows. Empty/omitted → section is skipped. */
   calendar?: CalendarRow[];
+  /** Graded calls from the previous brief. Omitted when empty. */
+  priorLevels?: string[];
 }
 
 function pctColor(pct: number | null, brand: DailyBrand): string {
@@ -324,6 +326,23 @@ function renderCatalysts(content: DailyContent, brand: DailyBrand): string {
         </tr>`;
 }
 
+function renderPriorLevels(lines: string[] | undefined): string {
+  if (!lines?.length) return '';
+  const cards = lines
+    .map(
+      (line) => `
+            <div style="font-size:15px;line-height:1.55;color:#1f2733;margin-top:6px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">${escapeHtml(line)}</div>`
+    )
+    .join('');
+  return `
+        <tr>
+          <td class="px" style="padding-top:28px;">
+            <div class="sec-title" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;border-bottom:2px solid #eef1f6;padding-bottom:8px;margin-bottom:14px;">How yesterday's levels held</div>
+            ${cards}
+          </td>
+        </tr>`;
+}
+
 function renderHeadlines(content: DailyContent): string {
   if (!content.headlines?.length) return '';
 
@@ -470,6 +489,7 @@ export function renderDailyBriefEmail(options: RenderEmailOptions): string {
         ${renderTape(content, brand)}
         ${greeting}
         ${openingBias}
+        ${renderPriorLevels(options.priorLevels)}
         ${sessionSetup}
         ${renderSectors(content, brand)}
         ${renderMovers(content, brand)}

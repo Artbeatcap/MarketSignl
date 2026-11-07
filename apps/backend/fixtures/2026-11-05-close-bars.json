@@ -1,0 +1,10 @@
+{
+  "_source": "Massive /v2/aggs daily bars for 2026-11-05 (prevClose is the 2026-11-04 bar close), fetched 2026-11-07",
+  "SPY": { "open": 765.47, "high": 765.97, "low": 732.71, "close": 733.0, "prevClose": 766.81, "volume": 125892776.842827 },
+  "QQQ": { "open": 683.12, "high": 683.65, "low": 647.05, "close": 647.05, "prevClose": 691.95, "volume": 130677395.615459 },
+  "AMD": { "open": 452.5, "high": 456.2, "low": 402.1, "close": 404.4, "prevClose": 488.78, "volume": 71237435.057345 },
+  "NVDA": { "open": 196.07, "high": 196.25, "low": 181.462, "close": 181.6, "prevClose": 200.13, "volume": 306127783.91599 },
+  "SMH": { "open": 482.14, "high": 483.93, "low": 445.59, "close": 447.73, "prevClose": 504.27, "volume": 28960553.393497 },
+  "XLP": { "open": 92.94, "high": 93.4, "low": 91.22, "close": 91.25, "prevClose": 91.94, "volume": 37114501.288658 },
+  "TLT": { "open": 81.545, "high": 82.21, "low": 81.54, "close": 81.93, "prevClose": 81.76, "volume": 50265648.278516 }
+}

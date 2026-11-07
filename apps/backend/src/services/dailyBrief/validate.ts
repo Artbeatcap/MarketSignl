@@ -48,9 +48,22 @@ const catalystBulletSchema = z.object({
   why: z.string().optional(),
 });
 
+const levelCallSchema = z.object({
+  ticker: z.string().min(1),
+  level: z.number(),
+  condition: z.enum(['hold', 'reclaim', 'break', 'close_above', 'close_below']),
+  horizonSessions: z.number().int().positive().optional().default(1),
+});
+
+const scenarioSchema = z.object({
+  name: z.string().min(1),
+  condition: z.string().min(1),
+});
+
 const headlineItemSchema = z.object({
   headline: z.string(),
   summary: z.string().optional().default(''),
+  url: z.string().optional(),
 });
 
 const sectionsSchema = z.object({
@@ -75,6 +88,9 @@ export const dailyContentSchema = z.object({
   levels: z.record(levelSetSchema).default({}),
   catalyst_bullets: z.array(catalystBulletSchema).default([]),
   headlines: z.array(headlineItemSchema).default([]),
+  level_calls: z.array(levelCallSchema).optional().default([]),
+  scenarios: z.array(scenarioSchema).optional().default([]),
+  promptVersion: z.string().optional(),
   sections: sectionsSchema,
 });
 

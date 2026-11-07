@@ -111,3 +111,34 @@ n8n must have `OPENAI_API_KEY` available so `{{ $env.OPENAI_API_KEY }}` works in
 ```
 
 Expected style of output: direct, no fluff, risk-aware where relevant, and strictly within the character and format rules for each platform.
+
+If the previous node supplies a `FACTS` block, use only numbers that appear in it. Do not compute a change. Never write "Comment chart".
+
+---
+
+## Email brief prompt
+
+The subscriber email is not this social post. Options Plunge / the brief workflow should call `GET /api/internal/daily-brief/atlas-prompt` (header `x-cron-secret` or `x-ingest-secret`) and use the returned `prompt` as the user message. That string already contains `FACTS`, `PRIOR CALLS`, and these rules:
+
+- Use only numbers that appear in FACTS. Do not compute, round differently, or restate a change with a different value. If a number is not in FACTS, do not write it.
+- Every level you give must include a condition and a timeframe: "a daily close above 745", not "745 is resistance".
+- The first sentence of the Opening Bias states how yesterday's main level played out, using the PRIOR CALLS block. Do not skip a failed call.
+- If a level differs from the one in PRIOR CALLS for the same ticker, say why in one clause.
+- No greetings, no sign-offs, no narration about your process, no "Comment chart".
+- Return `level_calls` as `[{ticker, level, condition, horizonSessions}]`. Do not put that array in `levels` — `levels` is the support/resistance card.
+- Return an optional `scenarios` array of 2–3 named, condition-based scenarios. Do not forecast a number for a scheduled macro event.
+- Follow the served prompt's "How to explain a move" order: what happened, why and when, the one-link chain, the contrast from RANK, then the level or event that decides the next session. Plain words, 20 words or fewer per sentence.
+- Copy `promptVersion` from that response into the ingest payload. A missing or old hash emails `BRIEF PROMPT STALE` and the brief still sends.
+
+---
+
+## Reference transcripts → internal notes
+
+The workflow that writes transcripts into Drive folder `1InBLV4SvbDj4_mhsNk_D7VZR3un-Bp5q` (chartsignl1 only; the clarencebellwork copy is a duplicate) adds one HTTP Request after the Drive write:
+
+- Method: POST
+- URL: `http://chartsignl-api:4000/api/internal/reference-notes`
+- Header: `x-internal-token` = `INTERNAL_INGEST_TOKEN`
+- JSON body: `source`, `published_date`, `title`, `url`, `transcript`
+
+Those notes are internal. They are not rendered, and they are not placed in the Atlas prompt. The QA gate may only use them to name a possible missed driver, and only our own news article is allowed into the brief.

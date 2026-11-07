@@ -59,6 +59,21 @@ export interface WeekAheadBullet {
   why?: string;
 }
 
+export type BriefLevelCondition = 'hold' | 'reclaim' | 'break' | 'close_above' | 'close_below';
+
+/** Ledger row the model returns. Not parsed out of the prose. */
+export interface BriefLevelCall {
+  ticker: string;
+  level: number;
+  condition: BriefLevelCondition;
+  horizonSessions?: number;
+}
+
+export interface BriefScenario {
+  name: string;
+  condition: string;
+}
+
 export interface WeeklySections {
   major_driver: string;
   week_in_review_html: string;
@@ -77,6 +92,11 @@ export interface WeeklyContent {
   movers: MoverItem[];
   levels: Record<string, LevelSet>;
   week_ahead_bullets: WeekAheadBullet[];
+  /** Model-supplied level calls. The support/resistance card stays in `levels`. */
+  level_calls?: BriefLevelCall[];
+  scenarios?: BriefScenario[];
+  /** Hash of the Atlas prompt Options Plunge used. Missing or old raises BRIEF PROMPT STALE. */
+  promptVersion?: string;
   sections: WeeklySections;
 }
 

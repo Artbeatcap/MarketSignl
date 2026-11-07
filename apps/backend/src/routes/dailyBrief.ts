@@ -24,6 +24,7 @@ import { ZodError } from 'zod';
 import { loadWeekAhead } from '../lib/weekAheadLoad.js';
 import { buildThisWeekBlock, ATLAS_HARD_RULE, ATLAS_CALENDAR_OUTPUT_RULES } from '../lib/weekAhead.js';
 import { refreshEarningsCalendar } from '../lib/earningsCalendarRefresh.js';
+import { buildLiveAtlasPrompt, flagStalePrompt, prepareDailyContent } from '../lib/briefQaLive.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -60,6 +61,7 @@ internalDailyBriefRoute.post('/ingest', async (c) => {
 
   try {
     const content = parseDailyContent(body);
+    await flagStalePrompt(content.promptVersion);
     content.sections = sanitizeDailySections(content.sections);
     if (content.preheader) content.preheader = sanitizeAiField(content.preheader);
     const before = content.movers.length;
@@ -112,7 +114,14 @@ internalDailyBriefRoute.post('/send', async (c) => {
     return c.json({ success: false, error: freshness.reason, skipped: true }, 409);
   }
 
-  const content = stored!.artifact;
+  const storedContent = stored!.artifact;
+  const prepared = await prepareDailyContent({
+    content: storedContent,
+    edition: 'morning',
+    notify: !dryRun,
+    persist: !dryRun && !testEmail,
+  });
+  const content = prepared.content;
   const placeholderUnsub = `${getApiBaseUrl()}/api/daily-brief/unsubscribe?token=preview`;
   const weekAhead = await loadWeekAhead();
   const calendar = weekAhead.rows;
@@ -123,6 +132,7 @@ internalDailyBriefRoute.post('/send', async (c) => {
       preheader: buildPreheader(content),
       unsubscribeUrl: placeholderUnsub,
       calendar,
+      priorLevels: prepared.gradedLines,
     });
 
     await mkdir(resolve(__dirname, '../../tmp'), { recursive: true });
@@ -136,11 +146,12 @@ internalDailyBriefRoute.post('/send', async (c) => {
       htmlPath: DRY_RUN_PATH,
       subject: buildSubject(content),
       preheader: buildPreheader(content),
+      qa: prepared.qa,
     });
   }
 
   if (testEmail) {
-    const result = await sendTestEmail(content, testEmail, calendar);
+    const result = await sendTestEmail(content, testEmail, calendar, prepared.gradedLines);
     if (!result.ok) {
       await postDailyBriefAlert(`Test send failed to ${testEmail}: ${result.error}`);
       return c.json({ success: false, error: result.error }, 500);
@@ -159,7 +170,7 @@ internalDailyBriefRoute.post('/send', async (c) => {
     return c.json({ success: false, error: 'No recipients', skipped: true }, 409);
   }
 
-  void sendBatchInBackground(content, recipients, calendar).catch(async (err) => {
+  void sendBatchInBackground(content, recipients, calendar, prepared.gradedLines).catch(async (err) => {
     console.error('[daily-brief] Background send failed:', err);
     await postDailyBriefAlert(
       `Background send failed: ${err instanceof Error ? err.message : String(err)}`
@@ -171,7 +182,28 @@ internalDailyBriefRoute.post('/send', async (c) => {
     status: 'sending',
     recipientCount: recipients.length,
     date_label: content.date_label,
+    qa: prepared.qa,
   });
+});
+
+/** FACTS + PRIOR CALLS + hard rules for Options Plunge / n8n. No reference-note text. */
+internalDailyBriefRoute.get('/atlas-prompt', async (c) => {
+  if (!checkCronSecret(c) && !checkIngestSecret(c)) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+  const edition = c.req.query('edition') === 'close' ? 'close' : 'morning';
+  const movers = (c.req.query('tickers') ?? '')
+    .split(',')
+    .map((ticker) => ticker.trim().toUpperCase())
+    .filter((ticker) => /^[A-Z.]{1,6}$/.test(ticker))
+    .slice(0, 12);
+  try {
+    const prompt = await buildLiveAtlasPrompt(edition, movers);
+    return c.json({ success: true, edition, ...prompt });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return c.json({ success: false, error: message }, 503);
+  }
 });
 
 /** Nightly FMP cache refresh. Never called from the 8:30 send path. */
