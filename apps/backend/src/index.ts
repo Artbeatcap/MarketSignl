@@ -1,3 +1,5 @@
+// Load dotenv FIRST before any other imports (ESM hoisting-safe)
+import 'dotenv/config';
 import { config } from 'dotenv';
 import { resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -55,6 +57,7 @@ import historyRoute from './routes/history.js';
 import userRoute from './routes/user.js';
 import marketDataRoute from './routes/marketData.js';
 import subscriptionRoute from './routes/subscription.js';
+import internalSignalsRoute from './routes/internalSignals.js';
 
 const app = new Hono();
 
@@ -89,10 +92,12 @@ app.use('*', cors({
 // Health check
 app.get('/health', (c) => {
   console.log('[HEALTH] Health check endpoint hit');
+  const polygonKey = (process.env.MASSIVE_API_KEY || process.env.POLYGON_API_KEY || process.env.AICHARTS_POLYGON_KEY || '').trim();
   return c.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
+    polygonKeyPresent: Boolean(polygonKey),
   });
 });
 
@@ -112,6 +117,7 @@ app.route('/api/analyses', historyRoute);
 app.route('/api/user', userRoute);
 app.route('/api/market-data', marketDataRoute);
 app.route('/api/subscription', subscriptionRoute);
+app.route('/api/internal', internalSignalsRoute);
 
 // #region agent log
 try{const logPath='c:\\Users\\Art\\VScode\\chartsignl\\.cursor\\debug.log';appendFileSync(logPath,JSON.stringify({location:'index.ts:94',message:'routes registered',data:{routes:['analyze-data','analyses','user','market-data','subscription']},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n');}catch(e){console.error('Log error:',e.message);}

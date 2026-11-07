@@ -30,14 +30,18 @@ marketDataRoute.get('/:symbol', async (c) => {
   const symbol = c.req.param('symbol');
   
   try {
-    const MASSIVE_API_KEY = 'RcnenBuGTzPs3aaunhpWW6FpaAzs60Ug';
-    console.log('[ROUTE] Market data route hit for symbol:', symbol, 'API key available:', !!MASSIVE_API_KEY);
+    // Read API key from environment with fallback support
+    const key = (process.env.MASSIVE_API_KEY || process.env.POLYGON_API_KEY || process.env.AICHARTS_POLYGON_KEY || '').trim();
+    
+    // Diagnostic logging (before error check)
+    console.warn('[marketData] polygonKeyPresent=', Boolean(key), 'len=', key.length);
+    console.log('[ROUTE] Market data route hit for symbol:', symbol, 'API key available:', !!key);
     
     const symbolUpper = c.req.param('symbol').toUpperCase();
     const chartInterval = c.req.query('interval') || '3mo';
     
-    if (!MASSIVE_API_KEY || MASSIVE_API_KEY.trim() === '') {
-      console.error('[ROUTE ERROR] MASSIVE_API_KEY is not set or empty');
+    if (!key || key === '') {
+      console.error('[ROUTE ERROR] API key is not set or empty');
       return c.json({ 
         error: 'Massive API key not configured. Please set MASSIVE_API_KEY in apps/backend/.env file.',
         details: 'Get your free API key at https://massive.com'
@@ -53,7 +57,7 @@ marketDataRoute.get('/:symbol', async (c) => {
 
     // Build Massive URL
     // Format: /v2/aggs/ticker/{ticker}/range/{multiplier}/{timespan}/{from}/{to}
-    const url = `${MASSIVE_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbolUpper)}/range/${config.multiplier}/${config.timespan}/${formatDate(startDate)}/${formatDate(endDate)}?adjusted=true&sort=asc&limit=5000&apiKey=${MASSIVE_API_KEY}`;
+    const url = `${MASSIVE_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbolUpper)}/range/${config.multiplier}/${config.timespan}/${formatDate(startDate)}/${formatDate(endDate)}?adjusted=true&sort=asc&limit=5000&apiKey=${key}`;
 
     const response = await fetch(url);
 

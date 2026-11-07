@@ -1,5 +1,9 @@
 version: '3.8'
 
+# Secrets come from apps/backend/deploy/.env (gitignored). Never commit real values.
+# n8n: Slack bot token, Massive API key, and structure_alert_n8n DB password live in
+# n8n Credentials UI — not in container env.
+
 services:
   chartsignl-api:
     build:
@@ -7,6 +11,8 @@ services:
       dockerfile: apps/backend/Dockerfile
     container_name: chartsignl-api
     restart: unless-stopped
+    env_file:
+      - .env
     ports:
       - "4000:4000"
     environment:
@@ -40,6 +46,8 @@ services:
     image: docker.n8n.io/n8nio/n8n
     container_name: n8n
     restart: unless-stopped
+    env_file:
+      - .env
     ports:
       - "5678:5678"
     environment:
@@ -48,10 +56,18 @@ services:
       - N8N_PROTOCOL=https
       - WEBHOOK_URL=https://n8n.chartsignl.com/
       - GENERIC_TIMEZONE=America/New_York
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - POLYGON_API_KEY=${POLYGON_API_KEY:-}
       - N8N_USER_MANAGEMENT_JWT_SECRET=${N8N_USER_MANAGEMENT_JWT_SECRET}
+      # Non-secret workflow config (also settable as n8n Variables / $vars):
+      - MASSIVE_BASE_URL=${MASSIVE_BASE_URL:-https://api.massive.com}
+      - SLACK_ALERT_CHANNEL=${SLACK_ALERT_CHANNEL:-}
+      - HEALTHCHECK_URL=${HEALTHCHECK_URL:-}
+      - STRUCTURE_ALERT_TICKERS=${STRUCTURE_ALERT_TICKERS:-SPY,QQQ,IWM}
+      - STRUCTURE_ALERT_PGHOST=${STRUCTURE_ALERT_PGHOST:-}
+      - STRUCTURE_ALERT_PGPORT=${STRUCTURE_ALERT_PGPORT:-5432}
+      - STRUCTURE_ALERT_PGDATABASE=${STRUCTURE_ALERT_PGDATABASE:-postgres}
+      - STRUCTURE_ALERT_PGUSER=${STRUCTURE_ALERT_PGUSER:-structure_alert_n8n}
+      # Secrets (MASSIVE_API_KEY, Slack bot token, STRUCTURE_ALERT_PGPASSWORD) → n8n Credentials only.
+      # Do NOT set N8N_BLOCK_ENV_ACCESS_IN_NODE=false; Code nodes must not read secret env.
     volumes:
       - n8n_data:/home/node/.n8n
     networks:
