@@ -1,4 +1,8 @@
 import OpenAI from 'openai';
+import { createHash } from 'node:crypto';
+import { z } from 'zod';
+import { loadMarketContext } from './marketContext.js';
+import { buildAnalysisGuide, describeOverextension, formatMarketContext } from './analysisGuide.js';
 import {
   calculateAllIndicators,
   type MarketDataPoint,
@@ -14,6 +18,7 @@ import type {
   TechnicalDetails,
   TradeIdea,
   DataFreshness,
+  MarketContext,
 } from '@chartsignl/core';
 import {
   FreshnessValidationError,
@@ -35,14 +40,41 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export const PROMPT_VERSION = '2026-08-29-delayed';
+export const PROMPT_VERSION = '2026-11-07-context-and-clarity';
+
+export function atlasAnalysisCacheKey(input: {
+  symbol: string; interval: string; data: MarketDataPoint[];
+  forecast?: { direction: string; confidence: number } | null; rawFreshness?: unknown;
+}): string {
+  const fingerprint = createHash('sha256').update(JSON.stringify({ data: input.data, freshness: input.rawFreshness })).digest('hex');
+  return `${atlasCacheKey({ kind: 'analysis', ...input })}|${PROMPT_VERSION}|${fingerprint}`;
+}
+
+// Omitted fields default to empty, matching the previous `|| []` tolerance; wrong types still fail.
+const narrativeSchema = z.object({
+  headline: z.string().default(''), summary: z.string().default(''), keyObservations: z.array(z.string()).default([]),
+  tradeIdeas: z.array(z.object({
+    direction: z.enum(['long', 'short']), scenario: z.string(),
+    confidence: z.number().finite().min(0).max(100), invalidation: z.string(),
+  })).default([]),
+  riskFactors: z.array(z.string()).default([]),
+});
+
+function safeText(text: string, fallback: string): string {
+  return /high[- ]probability|mean reversion is likely|strong reversal|guaranteed|confirmed reversal/i.test(text) ? fallback : text;
+}
+
+// Explicit scope: a semiconductor benchmark is not a regime for every asset.
+const SEMICONDUCTOR_CONTEXT_SYMBOLS = new Set([
+  'SMH', 'SOXX', 'QQQ', 'MU', 'NVDA', 'AMD', 'AVGO', 'INTC', 'TSM', 'ARM', 'QCOM', 'AMAT', 'LRCX', 'KLAC', 'ASML',
+]);
 
 function buildSystemPrompt(asOfFormatted: string): string {
   return `You are a technical analysis expert for ChartSignl. You receive pre-calculated technical indicators and scored support/resistance levels. Your job is to:
 
 1. INTERPRET the data - explain what it means in plain English
 2. SYNTHESIZE - connect the indicators to form a cohesive market view
-3. IDENTIFY the highest-probability trade setups based on the scored levels
+3. DESCRIBE conditional scenarios based on the scored levels, without claiming measured odds
 4. PROVIDE context using the pre-calculated entry/exit zones
 
 IMPORTANT: You are NOT calculating indicators - they are provided. Focus on interpretation and actionable insights.
@@ -57,9 +89,8 @@ Price data is delayed and is timestamped ${asOfFormatted}. Never state where pri
 - Anchor every price statement to the timestamp or to a completed candle.
   Write "as of the 10:42 print, price sits just under the 452.30 shelf,"
   not "price is currently testing 452.30."
-- Levels, zones, structure and invalidation points are STRUCTURAL. They are
-  not affected by the delay. Describe them with full confidence and without
-  hedging — that is what the user is paying for.
+- Levels and zones are estimates from the supplied observations. They may already
+  have been crossed since the data timestamp. Never claim they are unaffected by delay.
 - Trade ideas are conditional by nature. Phrase entries as conditions to be
   met ("a reclaim of 452.30 on a closing basis opens..."), never as
   instructions to act at this instant.
@@ -73,6 +104,12 @@ Rules:
 - Be concise and actionable
 - Lead with the most important insight
 - Always include risk context
+- A stretched price alone never establishes a likely or confirmed reversal.
+- Confluence and model confidence are scores, not calibrated probabilities.
+- Respect the supplied reversal guard. Do not recommend buying a decline when it is active.
+- Treat the market context as a dated, experimental semiconductor-leadership rule.
+- Never invent earnings, flows, options positioning, or portfolio exposures.
+- Explain what is happening, what level matters, and what would invalidate the scenario.
 - Use the provided zones and levels, don't make up new numbers
 - Reference specific indicator values to support your analysis
 - If signals conflict, acknowledge the uncertainty
@@ -147,13 +184,14 @@ function formatLevelLine(l: {
   return `- $${l.price.toFixed(2)} — confluence ${l.confluenceScore}% — ${atrPart} — ${formatLevelFactors(l.factors)}`;
 }
 
-function buildUserPrompt(
+export function buildUserPrompt(
   symbol: string,
   timeframe: string,
   indicators: TechnicalIndicators,
   scoredAnalysis: ScoredAnalysis,
   forecast?: { direction: string; confidence: number } | null,
   asOfFormatted?: string,
+  marketContext?: MarketContext,
 ): string {
   const { currentPrice, priceChangePercent, trend, ema, atr, bollinger, overextension, fibonacci } =
     indicators;
@@ -175,7 +213,7 @@ function buildUserPrompt(
 ${asOfFormatted ? `\nPRICE TIMESTAMP: as of ${asOfFormatted}. Anchor every price statement to this time. Do not say where price is right now.\n` : ''}
 CURRENT STATE:
 - Price: $${currentPrice.toFixed(2)} (${priceChangePercent > 0 ? '+' : ''}${priceChangePercent.toFixed(2)}%)
-- Trend: ${trend.direction} (${(trend.strength * 100).toFixed(0)}% strength)
+- Trend: ${trend.direction} (${trend.strength.toFixed(0)}% strength)
 - Trading Bias: ${trend.tradingBias} - ${trend.biasReason}
 
 MOVING AVERAGES:
@@ -189,6 +227,10 @@ VOLATILITY & MOMENTUM:
 - Bollinger Bands: Lower $${bollinger.lowerBand.toFixed(2)} | Middle $${bollinger.middleBand.toFixed(2)} | Upper $${bollinger.upperBand.toFixed(2)}
 - Band Position: ${(bollinger.percentB * 100).toFixed(1)}% (0% = lower band, 100% = upper band)
 - Overextension: ${overextension.status} (${overextension.direction} EMA21, signal: ${overextension.signalType})
+- Interpretation: ${describeOverextension(overextension)}
+- Reversal guard: ${overextension.signalType === 'extended_in_downtrend' || overextension.signalType === 'context_unavailable' ? 'ACTIVE. Do not frame this decline as a dip-buy or reversal setup.' : 'No guard triggered. This does not confirm a reversal.'}
+
+${marketContext ? formatMarketContext(marketContext) : 'MARKET CONTEXT: unavailable; do not infer broader conditions.'}
 
 ${fibonacci ? `FIBONACCI LEVELS (${fibonacci.swingDirection === 'up' ? 'retracement' : 'extension'} from ${fibonacci.swingHighDate} to ${fibonacci.swingLowDate}${fibonacci.swingSource ? `, source=${fibonacci.swingSource}` : ''}):
 - 0%: $${(fibonacci.swingDirection === 'up' ? fibonacci.swingLow : fibonacci.swingHigh).toFixed(2)}
@@ -228,7 +270,7 @@ export async function runAtlasAnalysis(input: {
 }): Promise<RunAtlasResult> {
   const { symbol, interval, data, forecast, rawFreshness } = input;
 
-  const cacheKey = atlasCacheKey({ kind: 'analysis', symbol, interval, forecast });
+  const cacheKey = atlasAnalysisCacheKey(input);
   const cached = readAtlasCache<Extract<RunAtlasResult, { ok: true }>>(cacheKey);
   if (cached) {
     console.log(`[Atlas] Reusing recent analysis for ${symbol} ${interval}`);
@@ -258,7 +300,14 @@ export async function runAtlasAnalysis(input: {
     asOf: freshness?.asOf ?? null,
   });
 
-  const indicators = calculateAllIndicators(data, symbol, interval);
+  // Never use benchmark observations later than the chart data (or the feed as-of).
+  const chartAsOf = data[data.length - 1]?.timestamp;
+  const contextAsOf = Math.min(chartAsOf, freshness ? Date.parse(freshness.asOf) : chartAsOf, Date.now());
+  const marketContext = await loadMarketContext(contextAsOf);
+  const contextApplies = SEMICONDUCTOR_CONTEXT_SYMBOLS.has(symbol.toUpperCase());
+  const regime = !contextApplies ? undefined
+    : marketContext.status === 'unavailable' ? 'unavailable' : marketContext.regime;
+  const indicators = calculateAllIndicators(data, symbol, interval, regime);
   if (!indicators) {
     return { ok: false, error: 'Failed to calculate technical indicators', status: 500 };
   }
@@ -273,6 +322,7 @@ export async function runAtlasAnalysis(input: {
     scoredAnalysis,
     forecast,
     asOfFormatted || undefined,
+    marketContext,
   );
 
   let completion;
@@ -300,18 +350,28 @@ export async function runAtlasAnalysis(input: {
     return { ok: false, error: 'No response from AI', status: 500 };
   }
 
-  const aiResponse = JSON.parse(aiResponseText) as {
-    headline: string;
-    summary: string;
-    keyObservations: string[];
-    tradeIdeas: Array<{
-      direction: 'long' | 'short';
-      scenario: string;
-      confidence: number;
-      invalidation: string;
-    }>;
-    riskFactors: string[];
-  };
+  let aiResponse: z.infer<typeof narrativeSchema>;
+  try {
+    aiResponse = narrativeSchema.parse(JSON.parse(aiResponseText));
+  } catch (error) {
+    console.warn(`[Atlas] Rejected malformed model response for ${symbol}: ${error instanceof Error ? error.name : typeof error}`);
+    return { ok: false, error: 'Atlas returned an unreadable response. Please try again.', status: 500 };
+  }
+  const guarded = ['extended_in_downtrend', 'context_unavailable'].includes(indicators.overextension.signalType);
+  const guardExplanation = describeOverextension(indicators.overextension);
+  aiResponse.headline = safeText(aiResponse.headline, `${symbol}: review the trend and key levels`);
+  aiResponse.summary = safeText(aiResponse.summary, guardExplanation);
+  aiResponse.keyObservations = aiResponse.keyObservations.map((text) => safeText(text, guardExplanation));
+  aiResponse.riskFactors = aiResponse.riskFactors.map((text) => safeText(text, guardExplanation));
+  aiResponse.tradeIdeas = aiResponse.tradeIdeas
+    .filter((idea) => !(guarded && idea.direction === 'long'))
+    .map((idea) => ({ ...idea, scenario: safeText(idea.scenario, 'Review the supplied levels as a conditional scenario.'), invalidation: safeText(idea.invalidation, 'Reassess after a completed bar beyond the watched level.') }));
+  if (guarded) {
+    aiResponse.headline = `${symbol}: stretched decline, reversal unconfirmed`;
+    aiResponse.summary = guardExplanation;
+    // Avoid allowing unvalidated model prose to contradict the deterministic guard.
+    aiResponse.keyObservations = [guardExplanation];
+  }
 
   const tradeIdeas: TradeIdea[] = aiResponse.tradeIdeas.map((idea) => {
     const isLong = idea.direction === 'long';
@@ -361,7 +421,7 @@ export async function runAtlasAnalysis(input: {
     summary: [
       {
         indicator: 'Trend',
-        value: `${indicators.trend.direction} (${(indicators.trend.strength * 100).toFixed(0)}%)`,
+        value: `${indicators.trend.direction} (${indicators.trend.strength.toFixed(0)}%)`,
         status: indicators.trend.tradingBias === 'long' ? 'bullish' : indicators.trend.tradingBias === 'short' ? 'bearish' : 'neutral',
         statusLabel: indicators.trend.biasReason,
       },
@@ -394,22 +454,15 @@ export async function runAtlasAnalysis(input: {
     },
   };
 
-  let overextensionDescription: string;
-  if (indicators.overextension.status === 'normal') {
-    overextensionDescription = 'Price is trading near the 21 EMA. No overextension detected.';
-  } else if (indicators.overextension.status === 'moderately_extended') {
-    overextensionDescription = `Price is moderately extended ${indicators.overextension.direction} the 21 EMA. A pullback may be healthy.`;
-  } else if (indicators.overextension.status === 'overextended') {
-    overextensionDescription = `Price is overextended ${indicators.overextension.direction} the 21 EMA. Mean reversion is likely.`;
-  } else {
-    overextensionDescription = `Price is extremely extended ${indicators.overextension.direction} the 21 EMA. High probability of reversal.`;
-  }
+  const overextensionDescription = describeOverextension(indicators.overextension);
 
   const analysis: EnhancedAIAnalysis = {
     symbol,
     timeframe: interval,
     analyzedAt: new Date().toISOString(),
     ...(freshness ? { freshness } : {}),
+    marketContext,
+    guide: buildAnalysisGuide(indicators, scoredAnalysis, marketContext),
 
     currentPrice: indicators.currentPrice,
     priceChange: indicators.priceChange,
@@ -442,7 +495,7 @@ export async function runAtlasAnalysis(input: {
     keyObservations: aiResponse.keyObservations || [],
 
     tradeIdeas,
-    riskFactors: aiResponse.riskFactors || [],
+    riskFactors: [...aiResponse.riskFactors, ...(contextApplies && marketContext.status === 'unavailable' ? [marketContext.reason] : [])],
 
     technicalDetails,
   };
@@ -461,6 +514,6 @@ export async function runAtlasAnalysis(input: {
   }
 
   const result: Extract<RunAtlasResult, { ok: true }> = { ok: true, analysis };
-  writeAtlasCache(cacheKey, result);
+  if (marketContext.status === 'available' || !contextApplies) writeAtlasCache(cacheKey, result);
   return result;
 }

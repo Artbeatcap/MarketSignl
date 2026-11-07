@@ -126,7 +126,7 @@ export interface OverextensionData {
   status: 'normal' | 'moderately_extended' | 'overextended' | 'extremely_extended';
   direction: 'above' | 'below';
   meanReversionSignal: boolean;
-  signalType: 'none' | 'pullback_expected' | 'reversal_candidate' | 'strong_reversal';
+  signalType: 'none' | 'pullback_expected' | 'reversal_candidate' | 'strong_reversal' | 'extended_in_downtrend' | 'context_unavailable';
 }
 
 export interface TechnicalIndicators {
@@ -918,7 +918,8 @@ export function calculateVolumeProfile(
 export function calculateOverextension(
   currentPrice: number,
   ema21: number,
-  atr: number
+  atr: number,
+  context?: { trendDirection?: TrendState['direction']; regime?: 'risk_on' | 'neutral' | 'factor_breakdown' | 'unavailable' },
 ): OverextensionData {
   const distance = currentPrice - ema21;
   const distancePercent = (distance / ema21) * 100;
@@ -948,6 +949,17 @@ export function calculateOverextension(
     meanReversionSignal = true;
   }
 
+  // A stretched decline is not evidence that the decline has ended.
+  if (status !== 'normal' && direction === 'below') {
+    if (context?.trendDirection?.includes('downtrend') || context?.regime === 'factor_breakdown') {
+      signalType = 'extended_in_downtrend';
+      meanReversionSignal = false;
+    } else if (context?.regime === 'unavailable') {
+      signalType = 'context_unavailable';
+      meanReversionSignal = false;
+    }
+  }
+
   return {
     distanceFromEma21: distance,
     distanceFromEma21Percent: distancePercent,
@@ -966,7 +978,8 @@ export function calculateOverextension(
 export function calculateAllIndicators(
   data: MarketDataPoint[],
   symbol: string,
-  timeframe: string
+  timeframe: string,
+  regime?: 'risk_on' | 'neutral' | 'factor_breakdown' | 'unavailable',
 ): TechnicalIndicators | null {
   if (!data || data.length < 20) {
     console.error('Insufficient data for analysis:', data?.length || 0);
@@ -999,7 +1012,7 @@ export function calculateAllIndicators(
     return null;
   }
 
-  const overextension = calculateOverextension(currentPrice, ema.ema21, atr.atr);
+  const overextension = calculateOverextension(currentPrice, ema.ema21, atr.atr, { trendDirection: trend.direction, regime });
 
   const fibonacci = calculateFibonacci(data, timeframe, { atr: atr.atr });
 

@@ -66,7 +66,7 @@ export interface OverextensionData {
   status: 'normal' | 'moderately_extended' | 'overextended' | 'extremely_extended';
   direction: 'above' | 'below';
   meanReversionSignal: boolean;
-  signalType: 'none' | 'pullback_expected' | 'reversal_candidate' | 'strong_reversal';
+  signalType: 'none' | 'pullback_expected' | 'reversal_candidate' | 'strong_reversal' | 'extended_in_downtrend' | 'context_unavailable';
 }
 
 export interface FibonacciLevel {
@@ -205,7 +205,39 @@ export interface TradeIdea {
 // MAIN ANALYSIS RESPONSE
 // ============================================================================
 
+export type MarketContext = {
+  status: 'available';
+  version: string;
+  scope: 'semiconductor_leadership';
+  asOfSession: string;
+  regime: 'risk_on' | 'neutral' | 'factor_breakdown';
+  /** OLS ratio slope as percent of starting ratio per session. */
+  smhQqqSlope20: number;
+  rspQqqSlope20: number;
+  smhAbove200: boolean;
+  qqqAbove200: boolean;
+  qqqDistributionDay: boolean;
+  qqqVolumeMultiple: number;
+} | {
+  status: 'unavailable';
+  version: string;
+  scope: 'semiconductor_leadership';
+  reason: string;
+};
+
+export interface AnalysisGuide {
+  whatIsHappening: string;
+  marketContext: string;
+  whatToWatch: string[];
+  whatWouldChange: string;
+  whenToReassess: string;
+  scoreMeaning: string;
+}
+
 export interface EnhancedAIAnalysis {
+  /** Optional for compatibility with previously saved analyses. */
+  marketContext?: MarketContext;
+  guide?: AnalysisGuide;
   // Metadata
   symbol: string;
   timeframe: string;

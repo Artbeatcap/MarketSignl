@@ -811,6 +811,24 @@ export default function AnalyzeScreen() {
               />
             </View>
 
+            {aiAnalysis.guide && (
+              <View style={styles.observationsSection} testID="analysis-plain-language-guide">
+                <Text style={styles.observationsTitle}>What is happening</Text>
+                <Text style={styles.observationText}>{aiAnalysis.guide.whatIsHappening}</Text>
+                <Text style={styles.observationsTitle}>Market context</Text>
+                <Text style={styles.observationText}>{aiAnalysis.guide.marketContext}</Text>
+                <Text style={styles.observationsTitle}>What to watch</Text>
+                {aiAnalysis.guide.whatToWatch.map((item, i) => (
+                  <Text key={i} style={styles.observationText}>{item}</Text>
+                ))}
+                <Text style={styles.observationsTitle}>What would change the picture</Text>
+                <Text style={styles.observationText}>{aiAnalysis.guide.whatWouldChange}</Text>
+                <Text style={styles.observationsTitle}>When to reassess</Text>
+                <Text style={styles.observationText}>{aiAnalysis.guide.whenToReassess}</Text>
+                <Text style={styles.observationText}>{aiAnalysis.guide.scoreMeaning}</Text>
+              </View>
+            )}
+
             {/* Lightweight confirmation after setting/removing alerts */}
             {alertFeedback && isNative && (
               <View
