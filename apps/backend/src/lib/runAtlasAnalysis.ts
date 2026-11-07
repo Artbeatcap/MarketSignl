@@ -29,9 +29,8 @@ import {
 import {
   atlasCacheKey,
   atlasUnavailable,
+  handleOpenAIAccountFailure,
   isAtlasPaused,
-  isInsufficientQuota,
-  noteQuotaExhausted,
   readAtlasCache,
   writeAtlasCache,
 } from './openaiGuard.js';
@@ -338,10 +337,7 @@ export async function runAtlasAnalysis(input: {
       response_format: { type: 'json_object' },
     });
   } catch (error) {
-    if (isInsufficientQuota(error)) {
-      noteQuotaExhausted();
-      return atlasUnavailable();
-    }
+    if (handleOpenAIAccountFailure(error)) return atlasUnavailable();
     throw error;
   }
 
