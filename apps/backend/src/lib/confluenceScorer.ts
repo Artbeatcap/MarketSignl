@@ -107,12 +107,17 @@ function getStrengthLevel(score: number, volatilityRegime: VolatilityRegime): St
   return 'weak';
 }
 
-function findNearestRoundNumber(price: number): number | null {
-  const divisors = ANALYSIS_CONFIG.ROUND_NUMBER_DIVISORS;
+/** Nearest psychological price, or null when none of the usable steps is within tolerance. */
+export function findNearestRoundNumber(price: number): number | null {
+  if (!(price > 0)) return null;
+  const tolerance = ANALYSIS_CONFIG.TOLERANCE_BAND_PERCENT;
+  // Steps at or below this leave no price outside a tolerance band.
+  const minStep = (2 * price * tolerance) / 100;
 
-  for (const divisor of divisors) {
+  for (const divisor of ANALYSIS_CONFIG.ROUND_NUMBER_DIVISORS) {
+    if (divisor <= minStep) continue;
     const rounded = Math.round(price / divisor) * divisor;
-    if (isWithinTolerance(price, rounded)) {
+    if (rounded > 0 && isWithinTolerance(price, rounded, tolerance)) {
       return rounded;
     }
   }

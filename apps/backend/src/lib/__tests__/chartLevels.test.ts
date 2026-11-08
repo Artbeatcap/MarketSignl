@@ -13,7 +13,7 @@ import {
   LEVEL_WINDOW_BARS,
 } from '../chartLevels.js';
 import { calculateAllIndicators, type MarketDataPoint } from '../technicalCalculator.js';
-import type { ScoredLevel } from '../confluenceScorer.js';
+import { findNearestRoundNumber, type ScoredLevel } from '../confluenceScorer.js';
 
 let passed = 0;
 function test(name: string, fn: () => void) {
@@ -96,6 +96,18 @@ test('pickTradeLevel prefers the highest-ranked level that is drawn', () => {
 test('withReferencedLevels adds missing referenced levels once, sorted by price', () => {
   const out = withReferencedLevels([lvl('b', 95)], [lvl('a', 90), lvl('b', 95), undefined, lvl('a', 90)]);
   assert.deepEqual(out.map((l) => l.id), ['a', 'b']);
+});
+
+test('round-number points skip a step whose bands cover every price', () => {
+  // $5 steps are 1.5% apart near $340, inside the 1% band, so they used to hit every level.
+  assert.equal(findNearestRoundNumber(340.09), 340);
+  assert.equal(findNearestRoundNumber(346.44), null);
+  assert.equal(findNearestRoundNumber(351.73), 350);
+  assert.equal(findNearestRoundNumber(343.5), null);
+  // On a $20 stock the $5 step still leaves a gap.
+  assert.equal(findNearestRoundNumber(20.05), 20);
+  assert.equal(findNearestRoundNumber(22.5), null);
+  assert.equal(findNearestRoundNumber(0), null);
 });
 
 console.log(`\n${passed} passed`);

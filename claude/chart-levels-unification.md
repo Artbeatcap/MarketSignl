@@ -38,8 +38,10 @@ Mobile
 - The selection is by level id, so the panel stays on the same level if Atlas finishes while it is open.
 - Product line: the panel describes; Atlas says what to do.
 
-## Scoring observations (not fixed)
-On AAPL 3M, every level near price got the volume-node points: one high-volume node covered about $330–350 with roughly 55% of volume. Every level also got the round-number points. The scorer checks divisors `[100, 50, 25, 10, 5]` inside a 1% band (`analysisConstants.ts`). On a $340 stock the farthest point from a multiple of $5 is $2.50, about 0.7%, so the $5 divisor awards those points to every price. These two factors add the same points to almost every level, so they push all scores up without telling levels apart. Touch counts are the most bars whose high or low came within tolerance of a single swing point (for example, 33 of 98 bars), so they read high.
+## Scoring observations
+Round-number points skip a step when it is at most 2% of price. The 1% band around each multiple would otherwise cover every price, which is why multiples of $5 used to score every level near $340. Coarser steps ($10, $25, $50, $100) still count. $340.09 is the $340 round number. $346.44 is not, because $345 was only a $5 step.
+
+Still not fixed: on AAPL 3M, every level near price got the volume-node points. One high-volume node covered about $332–$349 and held about 54% of volume. Touch counts are the most bars whose high or low came within tolerance of a single swing point (for example, 33 of 100 bars), while the score stops adding after 5 touches. Dropping the volume points would not change the Strong label on those three levels. Strong starts at 60, and touches, Fibonacci, and the moving average already clear it.
 
 ## Invariants
 - `ANALYSIS_WINDOW_BARS` (mobile) must equal `LEVEL_WINDOW_BARS` (backend).

@@ -129,7 +129,10 @@ export const ANALYSIS_CONFIG = {
   },
 
   // === ROUND NUMBER DETECTION ===
-  ROUND_NUMBER_DIVISORS: [100, 50, 25, 10, 5] as const, // Check in order of significance
+  // Coarse to fine. A step is skipped when it is at most 2% of price: the 1%
+  // band around each multiple then covers every price, so the points cannot
+  // tell levels apart. That is why $5 counts near $340 and does not near $20.
+  ROUND_NUMBER_DIVISORS: [100, 50, 25, 10, 5] as const,
 } as const;
 
 // Timeframe classification helper
