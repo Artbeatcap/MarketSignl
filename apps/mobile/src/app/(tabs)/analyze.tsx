@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, SymbolSearch, StockChart, EmailVerificationBanner, PredictionSummary, DataFreshnessBadge, DataFreshnessSheet } from '../../components';
+import { Button, Card, SymbolSearch, StockChart, EmailVerificationBanner, PredictionSummary, DataFreshnessBadge, DataFreshnessSheet, LevelDetailSheet } from '../../components';
 import {
   InfoButton,
   AnalysisEducationFooter,
@@ -89,6 +89,7 @@ export default function AnalyzeScreen() {
   // Atlas Analysis state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<EnhancedAIAnalysis | null>(null);
+  const [selectedLevelId, setSelectedLevelId] = useState<string | null>(null);
   const [freshnessSheet, setFreshnessSheet] = useState<{
     freshness?: DataFreshness;
     historical?: boolean;
@@ -455,6 +456,46 @@ export default function AnalyzeScreen() {
       : preAtlasLevels
         ? convertToAILevels(nearestLevel(preAtlasLevels.resistanceLevels, 'resistance'))
         : [];
+  // Tap-a-level panel. Ids are shared by the pre-Atlas levels and Atlas, so a
+  // selection survives Atlas finishing while the panel is open.
+  const selectedLevel: ScoredLevel | null = useMemo(() => {
+    if (!selectedLevelId) return null;
+    const pool: ScoredLevel[] = aiAnalysis
+      ? [
+          ...aiAnalysis.supportLevels,
+          ...aiAnalysis.resistanceLevels,
+          ...(aiAnalysis.allSupportLevels ?? []),
+          ...(aiAnalysis.allResistanceLevels ?? []),
+        ]
+      : preAtlasLevels
+        ? [
+            ...preAtlasLevels.supportLevels,
+            ...preAtlasLevels.resistanceLevels,
+            ...preAtlasLevels.allSupportLevels,
+            ...preAtlasLevels.allResistanceLevels,
+          ]
+        : [];
+    return pool.find((l) => l.id === selectedLevelId) ?? null;
+  }, [selectedLevelId, aiAnalysis, preAtlasLevels]);
+  const selectedLevelIdeas = useMemo(
+    () =>
+      selectedLevel && aiAnalysis
+        ? (aiAnalysis.tradeIdeas ?? []).filter(
+            (idea) =>
+              idea.entryLevelId === selectedLevel.id || idea.targetLevelId === selectedLevel.id
+          )
+        : [],
+    [selectedLevel, aiAnalysis]
+  );
+  const selectedLevelAlertActive =
+    !!selectedLevel &&
+    activeAlerts.some(
+      (a) =>
+        a.symbol === (aiAnalysis?.symbol ?? selectedSymbol) &&
+        a.level_type === selectedLevel.type &&
+        isPriceWithinTolerance(selectedLevel.price, a.level_price)
+    );
+
   const levelsUnavailable =
     chartLayers.levels && !aiAnalysis && safeChartData.length > 0 && levelsQuery.isError;
 
@@ -673,6 +714,7 @@ export default function AnalyzeScreen() {
               projectedPath={prediction?.projectedPath}
               expectedChangePct={prediction?.expectedChangePct}
               showPrediction={showPredictionOverlay && !!prediction}
+              onLevelPress={setSelectedLevelId}
             />
           )}
           {levelsUnavailable ? (
@@ -685,6 +727,9 @@ export default function AnalyzeScreen() {
               <Ionicons name="alert-circle-outline" size={14} color={colors.neutral[500]} />
               <Text style={styles.levelsUnavailableText}>Levels unavailable · tap to retry</Text>
             </TouchableOpacity>
+          ) : chartLayers.levels &&
+            (chartSupportLevels.length > 0 || chartResistanceLevels.length > 0) ? (
+            <Text style={styles.levelHint}>Tap a line or its price tag for details</Text>
           ) : null}
         </Card>
 
@@ -1039,6 +1084,27 @@ export default function AnalyzeScreen() {
             historical={freshnessSheet?.historical}
             visible={!!freshnessSheet}
             onClose={() => setFreshnessSheet(null)}
+          />
+          <LevelDetailSheet
+            visible={!!selectedLevel}
+            onClose={() => setSelectedLevelId(null)}
+            level={selectedLevel}
+            symbol={aiAnalysis?.symbol ?? selectedSymbol}
+            currentPrice={currentPrice}
+            hasAtlas={!!aiAnalysis}
+            tradeIdeas={selectedLevelIdeas}
+            onAskAtlas={handleAnalyze}
+            isAnalyzing={isAnalyzing}
+            askAtlasLocked={analyzeLocked}
+            alert={
+              isNative && aiAnalysis && selectedLevel
+                ? {
+                    active: selectedLevelAlertActive,
+                    busy: createAlertMutation.isPending || deleteAlertMutation.isPending,
+                    onToggle: () => handleToggleLevelAlert(selectedLevel, selectedLevel.type),
+                  }
+                : undefined
+            }
           />
         </View>
       </View>
@@ -1485,6 +1551,13 @@ const styles = StyleSheet.create({
   levelsUnavailableText: {
     ...typography.bodySm,
     color: colors.neutral[500],
+  },
+  levelHint: {
+    ...typography.labelSm,
+    color: colors.neutral[500],
+    textAlign: 'center',
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
   },
   chartErrorDetail: {
     ...typography.bodySm,

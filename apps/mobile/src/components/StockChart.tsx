@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import Svg, { Rect, Line as SvgLine, G, Path, Text as SvgText } from 'react-native-svg';
 import type {
   MarketDataPoint,
@@ -36,6 +36,8 @@ interface StockChartProps {
   projectedPath?: ProjectedPoint[];
   expectedChangePct?: number;
   showPrediction?: boolean;
+  /** Called with the level id when a level line or its price tag is tapped. */
+  onLevelPress?: (levelId: string) => void;
 }
 
 // Improved date formatting functions
@@ -314,6 +316,7 @@ export function StockChart({
   projectedPath = [],
   expectedChangePct,
   showPrediction = false,
+  onLevelPress,
 }: StockChartProps) {
   // Calculate domain for Y axis
   const { minPrice, maxPrice } = useMemo(() => {
@@ -448,6 +451,7 @@ export function StockChart({
     projectedPath,
     expectedChangePct,
     showPrediction,
+    onLevelPress,
   };
 
   const legend =
@@ -528,6 +532,31 @@ function ChartFrame({
   );
 }
 
+/** Dotted and lighter than the solid price line, on both chart types. */
+const LEVEL_LINE_DASH = '2,4';
+const LEVEL_LINE_WIDTH = 1.5;
+const LEVEL_LINE_OPACITY = 0.45;
+const LEVEL_TAG_CHAR_WIDTH = 5.4;
+const LEVEL_TAG_GAP = 4;
+
+function levelTagText(level: AILevel, prefix: 'S' | 'R'): string {
+  return `${prefix} $${formatPrice(level.price)}${level.role ? ` · ${level.role}` : ''}`;
+}
+
+function levelTagWidth(text: string): number {
+  return Math.ceil(text.length * LEVEL_TAG_CHAR_WIDTH) + 10;
+}
+
+/** Space kept clear of the last bars so a price tag can sit to their right. */
+function levelTagGutter(supportLevels: AILevel[], resistanceLevels: AILevel[]): number {
+  const widths = [
+    ...supportLevels.map((level) => levelTagWidth(levelTagText(level, 'S'))),
+    ...resistanceLevels.map((level) => levelTagWidth(levelTagText(level, 'R'))),
+  ];
+  if (widths.length === 0) return 0;
+  return Math.max(...widths) + LEVEL_TAG_GAP;
+}
+
 // Simple candlestick chart using SVG for native
 interface SimpleCandlestickChartProps {
   data: MarketDataPoint[];
@@ -545,6 +574,8 @@ interface SimpleCandlestickChartProps {
   projectedPath?: ProjectedPoint[];
   expectedChangePct?: number;
   showPrediction?: boolean;
+  /** Called with the level id when a level line or its price tag is tapped. */
+  onLevelPress?: (levelId: string) => void;
 }
 
 function SimpleCandlestickChart({
@@ -563,13 +594,15 @@ function SimpleCandlestickChart({
   projectedPath = [],
   expectedChangePct,
   showPrediction = false,
+  onLevelPress,
 }: SimpleCandlestickChartProps) {
   const svgHeight = height - X_AXIS_HEIGHT;
   const chartHeight = svgHeight - 10;
 
-  // Right edge of drawn content (leave CHART_RIGHT_MARGIN for Y-axis labels)
-  const rightEdge = width - CHART_RIGHT_MARGIN;
-  const chartDrawableWidth = width - CHART_LEFT_MARGIN - CHART_RIGHT_MARGIN;
+  // Price ends before the level tags so the last bars stay visible.
+  const tagGutter = levelTagGutter(supportLevels, resistanceLevels);
+  const rightEdge = width - CHART_RIGHT_MARGIN - tagGutter;
+  const chartDrawableWidth = width - CHART_LEFT_MARGIN - CHART_RIGHT_MARGIN - tagGutter;
   // When a forecast is shown, candles only occupy the historical zone so the
   // prediction cone has dedicated room on the right (mirrors the line chart).
   const hasPrediction = showPrediction && projectedPath.length > 0;
@@ -795,9 +828,9 @@ function SimpleCandlestickChart({
               x2={rightEdge}
               y2={y}
               stroke={CHART_COLORS.support}
-              strokeWidth={level.strength === 'strong' ? 2 : 1.5}
-              strokeDasharray={level.strength === 'strong' ? '0' : '5,5'}
-              strokeOpacity={level.strength === 'weak' ? 0.6 : 1}
+              strokeWidth={LEVEL_LINE_WIDTH}
+              strokeDasharray={LEVEL_LINE_DASH}
+              strokeOpacity={LEVEL_LINE_OPACITY}
             />
           );
         })}
@@ -811,9 +844,9 @@ function SimpleCandlestickChart({
               x2={rightEdge}
               y2={y}
               stroke={CHART_COLORS.resistance}
-              strokeWidth={level.strength === 'strong' ? 2 : 1.5}
-              strokeDasharray={level.strength === 'strong' ? '0' : '5,5'}
-              strokeOpacity={level.strength === 'weak' ? 0.6 : 1}
+              strokeWidth={LEVEL_LINE_WIDTH}
+              strokeDasharray={LEVEL_LINE_DASH}
+              strokeOpacity={LEVEL_LINE_OPACITY}
             />
           );
         })}
@@ -824,6 +857,8 @@ function SimpleCandlestickChart({
           resistanceLevels={resistanceLevels}
           priceToY={priceToY}
           rightEdge={rightEdge}
+          leftEdge={CHART_LEFT_MARGIN}
+          onLevelPress={onLevelPress}
         />
 
         {/* 7 — prediction overlay */}
@@ -881,6 +916,8 @@ interface SimpleLineChartProps {
   projectedPath?: ProjectedPoint[];
   expectedChangePct?: number;
   showPrediction?: boolean;
+  /** Called with the level id when a level line or its price tag is tapped. */
+  onLevelPress?: (levelId: string) => void;
 }
 
 const X_AXIS_HEIGHT = 22;
@@ -903,10 +940,12 @@ function SimpleLineChart({
   projectedPath = [],
   expectedChangePct,
   showPrediction = false,
+  onLevelPress,
 }: SimpleLineChartProps) {
   const chartSvgHeight = height - X_AXIS_HEIGHT;
-  const rightEdge = width - 30;
-  const chartDrawableWidth = width - CHART_LEFT_MARGIN - 30;
+  const tagGutter = levelTagGutter(supportLevels, resistanceLevels);
+  const rightEdge = width - 30 - tagGutter;
+  const chartDrawableWidth = width - CHART_LEFT_MARGIN - 30 - tagGutter;
 
   const layout = getPredictionLayout(CHART_LEFT_MARGIN, chartDrawableWidth);
   const hasPrediction = showPrediction && projectedPath.length > 0;
@@ -1074,9 +1113,9 @@ function SimpleLineChart({
               x2={rightEdge}
               y2={priceToY(level.price)}
               stroke={CHART_COLORS.support}
-              strokeWidth={level.strength === 'strong' ? 2 : 1.5}
-              strokeDasharray={level.strength === 'strong' ? '0' : '5,5'}
-              strokeOpacity={level.strength === 'weak' ? 0.6 : 1}
+              strokeWidth={LEVEL_LINE_WIDTH}
+              strokeDasharray={LEVEL_LINE_DASH}
+              strokeOpacity={LEVEL_LINE_OPACITY}
             />
           ))}
 
@@ -1088,9 +1127,9 @@ function SimpleLineChart({
               x2={rightEdge}
               y2={priceToY(level.price)}
               stroke={CHART_COLORS.resistance}
-              strokeWidth={level.strength === 'strong' ? 2 : 1.5}
-              strokeDasharray={level.strength === 'strong' ? '0' : '5,5'}
-              strokeOpacity={level.strength === 'weak' ? 0.6 : 1}
+              strokeWidth={LEVEL_LINE_WIDTH}
+              strokeDasharray={LEVEL_LINE_DASH}
+              strokeOpacity={LEVEL_LINE_OPACITY}
             />
           ))}
 
@@ -1099,6 +1138,8 @@ function SimpleLineChart({
             resistanceLevels={resistanceLevels}
             priceToY={priceToY}
             rightEdge={rightEdge}
+            leftEdge={CHART_LEFT_MARGIN}
+            onLevelPress={onLevelPress}
           />
 
           {hasPrediction && (() => {
@@ -1171,7 +1212,10 @@ function SimpleLineChart({
 
 // Helper components
 const LEVEL_TAG_HEIGHT = 14;
-const LEVEL_TAG_CHAR_WIDTH = 5.4;
+/** Half the height of the invisible tap strip on each level line (24px total). */
+const LEVEL_HIT_HALF_HEIGHT = 12;
+/** Web-only. Native ignores unknown cursor styles. */
+const LEVEL_PRESS_STYLE = Platform.OS === 'web' ? { cursor: 'pointer' as const } : undefined;
 
 /**
  * Small price tag on the right end of each level line ("R $352.10", "S $305.20 · entry"),
@@ -1183,11 +1227,15 @@ function LevelTags({
   resistanceLevels,
   priceToY,
   rightEdge,
+  leftEdge,
+  onLevelPress,
 }: {
   supportLevels: AILevel[];
   resistanceLevels: AILevel[];
   priceToY: (price: number) => number;
   rightEdge: number;
+  leftEdge: number;
+  onLevelPress?: (levelId: string) => void;
 }) {
   const candidates = [
     ...supportLevels.map((level) => ({ level, color: CHART_COLORS.support, prefix: 'S' })),
@@ -1196,7 +1244,7 @@ function LevelTags({
     .map((t) => ({
       ...t,
       y: priceToY(t.level.price),
-      text: `${t.prefix} $${formatPrice(t.level.price)}${t.level.role ? ` · ${t.level.role}` : ''}`,
+      text: levelTagText(t.level, t.prefix),
     }))
     .sort((a, b) => Number(!!b.level.role) - Number(!!a.level.role));
 
@@ -1209,11 +1257,33 @@ function LevelTags({
 
   return (
     <G>
+      {/* Invisible tap strips along every line (tags can be skipped; lines cannot). */}
+      {onLevelPress
+        ? candidates.map((tag) =>
+            Number.isFinite(tag.y) ? (
+              <Rect
+                key={`hit-${tag.prefix}-${tag.level.id}`}
+                x={leftEdge}
+                y={tag.y - LEVEL_HIT_HALF_HEIGHT}
+                width={Math.max(0, rightEdge - leftEdge)}
+                height={LEVEL_HIT_HALF_HEIGHT * 2}
+                fill="#000000"
+                fillOpacity={0.001}
+                style={LEVEL_PRESS_STYLE}
+                onPress={() => onLevelPress(tag.level.id)}
+              />
+            ) : null
+          )
+        : null}
       {placed.map((tag) => {
-        const width = Math.ceil(tag.text.length * LEVEL_TAG_CHAR_WIDTH) + 10;
-        const x = rightEdge - width;
+        const width = levelTagWidth(tag.text);
+        const x = rightEdge + LEVEL_TAG_GAP;
         return (
-          <G key={`tag-${tag.prefix}-${tag.level.id}`}>
+          <G
+            key={`tag-${tag.prefix}-${tag.level.id}`}
+            onPress={onLevelPress ? () => onLevelPress(tag.level.id) : undefined}
+            style={onLevelPress ? LEVEL_PRESS_STYLE : undefined}
+          >
             <Rect
               x={x}
               y={tag.y - LEVEL_TAG_HEIGHT / 2}

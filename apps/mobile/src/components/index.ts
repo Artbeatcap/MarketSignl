@@ -12,3 +12,4 @@ export { GoogleLogo } from './GoogleLogo';
 export { AppleLogo } from './AppleLogo';
 export { DataFreshnessBadge } from './DataFreshnessBadge';
 export { DataFreshnessSheet } from './DataFreshnessSheet';
+export { LevelDetailSheet } from './LevelDetailSheet';
