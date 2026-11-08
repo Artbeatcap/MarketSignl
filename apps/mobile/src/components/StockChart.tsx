@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import Svg, { Rect, Line as SvgLine, G, Path } from 'react-native-svg';
+import Svg, { Rect, Line as SvgLine, G, Path, Text as SvgText } from 'react-native-svg';
 import type {
   MarketDataPoint,
   AILevel,
@@ -818,6 +818,14 @@ function SimpleCandlestickChart({
           );
         })}
 
+        {/* 6b — price tags at the right edge of each level line */}
+        <LevelTags
+          supportLevels={supportLevels}
+          resistanceLevels={resistanceLevels}
+          priceToY={priceToY}
+          rightEdge={rightEdge}
+        />
+
         {/* 7 — prediction overlay */}
         {hasPrediction && (() => {
           const layout = predictionLayout;
@@ -1086,6 +1094,13 @@ function SimpleLineChart({
             />
           ))}
 
+          <LevelTags
+            supportLevels={supportLevels}
+            resistanceLevels={resistanceLevels}
+            priceToY={priceToY}
+            rightEdge={rightEdge}
+          />
+
           {hasPrediction && (() => {
             const lastIndex = data.length - 1;
             const startX = xForIndex(lastIndex);
@@ -1155,6 +1170,75 @@ function SimpleLineChart({
 }
 
 // Helper components
+const LEVEL_TAG_HEIGHT = 14;
+const LEVEL_TAG_CHAR_WIDTH = 5.4;
+
+/**
+ * Small price tag on the right end of each level line ("R $352.10", "S $305.20 · entry"),
+ * so users do not need the legend to read a line. Tags that would overlap are skipped;
+ * levels with an Atlas role are placed first so their tags win.
+ */
+function LevelTags({
+  supportLevels,
+  resistanceLevels,
+  priceToY,
+  rightEdge,
+}: {
+  supportLevels: AILevel[];
+  resistanceLevels: AILevel[];
+  priceToY: (price: number) => number;
+  rightEdge: number;
+}) {
+  const candidates = [
+    ...supportLevels.map((level) => ({ level, color: CHART_COLORS.support, prefix: 'S' })),
+    ...resistanceLevels.map((level) => ({ level, color: CHART_COLORS.resistance, prefix: 'R' })),
+  ]
+    .map((t) => ({
+      ...t,
+      y: priceToY(t.level.price),
+      text: `${t.prefix} $${formatPrice(t.level.price)}${t.level.role ? ` · ${t.level.role}` : ''}`,
+    }))
+    .sort((a, b) => Number(!!b.level.role) - Number(!!a.level.role));
+
+  const placed: typeof candidates = [];
+  for (const tag of candidates) {
+    if (!Number.isFinite(tag.y)) continue;
+    if (placed.some((p) => Math.abs(p.y - tag.y) < LEVEL_TAG_HEIGHT + 1)) continue;
+    placed.push(tag);
+  }
+
+  return (
+    <G>
+      {placed.map((tag) => {
+        const width = Math.ceil(tag.text.length * LEVEL_TAG_CHAR_WIDTH) + 10;
+        const x = rightEdge - width;
+        return (
+          <G key={`tag-${tag.prefix}-${tag.level.id}`}>
+            <Rect
+              x={x}
+              y={tag.y - LEVEL_TAG_HEIGHT / 2}
+              width={width}
+              height={LEVEL_TAG_HEIGHT}
+              rx={4}
+              fill={tag.color}
+            />
+            <SvgText
+              x={x + width / 2}
+              y={tag.y + 3}
+              fontSize={9}
+              fontWeight="600"
+              fill="#FFFFFF"
+              textAnchor="middle"
+            >
+              {tag.text}
+            </SvgText>
+          </G>
+        );
+      })}
+    </G>
+  );
+}
+
 function TooltipRow({
   label,
   value,

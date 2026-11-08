@@ -1,6 +1,19 @@
-import type { MarketDataPoint, EnhancedAIAnalysis, AILevel, EnhancedAnalysisResponse, DataFreshness } from '@chartsignl/core';
+import type {
+  MarketDataPoint,
+  EnhancedAIAnalysis,
+  EnhancedAnalysisResponse,
+  DataFreshness,
+  ChartLevels,
+  ChartLevelsResponse,
+} from '@chartsignl/core';
 import { getAccessToken } from './supabase';
 import { API_URL } from './apiConfig';
+
+/**
+ * Bars sent to Atlas and to /api/levels. Must match LEVEL_WINDOW_BARS in
+ * apps/backend/src/lib/chartLevels.ts or the two sets of levels can differ.
+ */
+export const ANALYSIS_WINDOW_BARS = 100;
 
 // Analyze chart data using AI (via our backend)
 export async function analyzeChartData(
@@ -25,7 +38,7 @@ export async function analyzeChartData(
     body: JSON.stringify({
       symbol,
       interval,
-      data: data.slice(-100), // Send last 100 data points
+      data: data.slice(-ANALYSIS_WINDOW_BARS),
       ...(freshness ? { freshness } : {}),
       ...(options
         ? {
@@ -50,97 +63,30 @@ export async function analyzeChartData(
   return result.analysis;
 }
 
-// Local analysis - find support/resistance levels algorithmically
-// This runs without AI for instant feedback
-export function findLocalLevels(data: MarketDataPoint[]): {
-  support: AILevel[];
-  resistance: AILevel[];
-} {
-  if (data.length < 10) {
-    return { support: [], resistance: [] };
+/**
+ * POST /api/levels — the chart's support/resistance before Atlas runs.
+ * Same backend function Atlas uses, fed the same bar window, so the lines do not
+ * move or change price when Atlas runs. No AI call and no usage counted.
+ * Throws on failure: the caller shows "Levels unavailable" rather than
+ * drawing levels from some other calculation.
+ */
+export async function fetchChartLevels(
+  symbol: string,
+  interval: string,
+  data: MarketDataPoint[],
+): Promise<ChartLevels> {
+  const response = await fetch(`${API_URL}/api/levels`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ symbol, interval, data: data.slice(-ANALYSIS_WINDOW_BARS) }),
+  });
+  const result: ChartLevelsResponse = await response
+    .json()
+    .catch(() => ({ success: false, error: `Levels request failed (${response.status})` }));
+  if (!response.ok || !result.success || !result.levels) {
+    throw new Error(result.error || `Levels request failed (${response.status})`);
   }
-
-  const support: AILevel[] = [];
-  const resistance: AILevel[] = [];
-
-  // Find swing highs and lows
-  const swingWindow = 5;
-
-  for (let i = swingWindow; i < data.length - swingWindow; i++) {
-    const current = data[i];
-    let isSwingHigh = true;
-    let isSwingLow = true;
-
-    for (let j = i - swingWindow; j <= i + swingWindow; j++) {
-      if (j === i) continue;
-      if (data[j].high >= current.high) isSwingHigh = false;
-      if (data[j].low <= current.low) isSwingLow = false;
-    }
-
-    if (isSwingHigh) {
-      // Check if similar level already exists
-      const existingIdx = resistance.findIndex(
-        (r) => Math.abs(r.price - current.high) / current.high < 0.01
-      );
-      if (existingIdx >= 0) {
-        resistance[existingIdx].touches++;
-      } else {
-        resistance.push({
-          id: `r-${i}`,
-          type: 'resistance',
-          price: current.high,
-          strength: 'medium',
-          touches: 1,
-          description: `Swing high at $${current.high.toFixed(2)}`,
-        });
-      }
-    }
-
-    if (isSwingLow) {
-      const existingIdx = support.findIndex(
-        (s) => Math.abs(s.price - current.low) / current.low < 0.01
-      );
-      if (existingIdx >= 0) {
-        support[existingIdx].touches++;
-      } else {
-        support.push({
-          id: `s-${i}`,
-          type: 'support',
-          price: current.low,
-          strength: 'medium',
-          touches: 1,
-          description: `Swing low at $${current.low.toFixed(2)}`,
-        });
-      }
-    }
-  }
-
-  // Update strength based on touches
-  const updateStrength = (levels: AILevel[]) => {
-    levels.forEach((level) => {
-      if (level.touches >= 3) {
-        level.strength = 'strong';
-      } else if (level.touches === 1) {
-        level.strength = 'weak';
-      }
-    });
-  };
-
-  updateStrength(support);
-  updateStrength(resistance);
-
-  // Sort by price and take top levels
-  const sortedSupport = support
-    .sort((a, b) => b.touches - a.touches)
-    .slice(0, 3);
-  const sortedResistance = resistance
-    .sort((a, b) => b.touches - a.touches)
-    .slice(0, 3);
-
-  return {
-    support: sortedSupport,
-    resistance: sortedResistance,
-  };
+  return result.levels;
 }
 
 // Determine trend from data

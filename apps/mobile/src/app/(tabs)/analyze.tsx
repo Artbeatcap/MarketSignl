@@ -26,7 +26,7 @@ import { useChartLayers } from '../../store/chartLayerStore';
 import { useAuthStore } from '../../store/authStore';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { fetchMarketDataWithIndicators, formatPrice, calculatePriceChange } from '../../lib/marketData';
-import { findLocalLevels, detectTrend, analyzeChartData } from '../../lib/chartAnalysis';
+import { fetchChartLevels, detectTrend, analyzeChartData } from '../../lib/chartAnalysis';
 import { getUsage, getAnalysis, getPrediction, createPrediction, getCurrentUser, runGuestAnalyze, getGuestAnalyzeStatus } from '../../lib/api';
 import { getWeeklyAtlasLimit, getWeeklyAtlasUsed, isWeeklyAtlasLocked } from '../../lib/usage';
 import { friendlyAtlasError } from '../../lib/atlasError';
@@ -93,21 +93,19 @@ export default function AnalyzeScreen() {
     freshness?: DataFreshness;
     historical?: boolean;
   } | null>(null);
-  const [localLevels, setLocalLevels] = useState<{ support: AILevel[]; resistance: AILevel[] }>({
-    support: [],
-    resistance: [],
-  });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // AI Prediction state
   const [prediction, setPrediction] = useState<AIPrediction | null>(null);
   const [showPredictionOverlay, setShowPredictionOverlay] = useState(false);
 
-  const { analysisId, predictionId, symbol } = useLocalSearchParams<{
+  const { analysisId, predictionId, symbol, ticker } = useLocalSearchParams<{
     analysisId?: string;
     predictionId?: string;
     symbol?: string;
+    ticker?: string;
   }>();
+  const incomingSymbol = String(symbol || ticker || '').trim();
 
   // Load unified Atlas run when navigated from history
   useEffect(() => {
@@ -169,16 +167,16 @@ export default function AnalyzeScreen() {
   // When navigated from a push notification or history, preselect the symbol.
   // History also passes an analysis id; don't clear the run that's about to load.
   useEffect(() => {
-    if (!symbol) return;
+    if (!incomingSymbol) return;
 
-    setSelectedSymbol(String(symbol));
-    setSelectedName(String(symbol));
+    setSelectedSymbol(incomingSymbol.toUpperCase());
+    setSelectedName(incomingSymbol.toUpperCase());
 
     if (analysisId || predictionId) return;
 
     setAiAnalysis(null);
     setErrorMessage(null);
-  }, [symbol, analysisId, predictionId]);
+  }, [incomingSymbol, analysisId, predictionId]);
 
   // Clear push-alert feedback after a short delay.
   useEffect(() => {
@@ -296,13 +294,17 @@ export default function AnalyzeScreen() {
   const safeChartData = chartQuery?.data ?? [];
   const chartFreshness = chartQuery?.freshness;
 
-  // Calculate local levels when data changes
-  useEffect(() => {
-    if (safeChartData.length > 0) {
-      const levels = findLocalLevels(safeChartData);
-      setLocalLevels(levels);
-    }
-  }, [safeChartData]);
+  // Levels before Atlas runs: same backend function and bar window Atlas uses,
+  // so the lines keep their prices when Atlas results arrive.
+  const lastBarTimestamp =
+    safeChartData.length > 0 ? safeChartData[safeChartData.length - 1].timestamp : 0;
+  const levelsQuery = useQuery({
+    queryKey: ['chartLevels', selectedSymbol, selectedInterval, safeChartData.length, lastBarTimestamp],
+    queryFn: () => fetchChartLevels(selectedSymbol, selectedInterval, safeChartData),
+    enabled: chartLayers.levels && !aiAnalysis && safeChartData.length >= 20,
+    staleTime: 1000 * 60,
+    retry: 1,
+  });
 
   // Check for pending email verification on mount and trigger modal
   useEffect(() => {
@@ -435,16 +437,26 @@ export default function AnalyzeScreen() {
 
   const volumeProfile = aiAnalysis?.technicalDetails?.raw?.volumeProfile ?? null;
   const dataHasVolume = safeChartData.some((d) => (d.volume ?? 0) > 0);
-  const chartSupportLevels = chartLayers.levels
-    ? aiAnalysis
-      ? convertToAILevels(aiAnalysis.supportLevels)
-      : localLevels.support
-    : [];
-  const chartResistanceLevels = chartLayers.levels
-    ? aiAnalysis
-      ? convertToAILevels(aiAnalysis.resistanceLevels)
-      : localLevels.resistance
-    : [];
+  // Before Atlas: only the nearest support and nearest resistance.
+  // After Atlas: Atlas's levels (same engine, same ids), tagged with their trade-idea role.
+  const preAtlasLevels = levelsQuery.data;
+  const levelRoles = aiAnalysis ? tradeIdeaLevelRoles(aiAnalysis) : new Map<string, 'entry' | 'target'>();
+  const chartSupportLevels = !chartLayers.levels
+    ? []
+    : aiAnalysis
+      ? convertToAILevels(aiAnalysis.supportLevels, levelRoles)
+      : preAtlasLevels
+        ? convertToAILevels(nearestLevel(preAtlasLevels.supportLevels, 'support'))
+        : [];
+  const chartResistanceLevels = !chartLayers.levels
+    ? []
+    : aiAnalysis
+      ? convertToAILevels(aiAnalysis.resistanceLevels, levelRoles)
+      : preAtlasLevels
+        ? convertToAILevels(nearestLevel(preAtlasLevels.resistanceLevels, 'resistance'))
+        : [];
+  const levelsUnavailable =
+    chartLayers.levels && !aiAnalysis && safeChartData.length > 0 && levelsQuery.isError;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -663,6 +675,17 @@ export default function AnalyzeScreen() {
               showPrediction={showPredictionOverlay && !!prediction}
             />
           )}
+          {levelsUnavailable ? (
+            <TouchableOpacity
+              style={styles.levelsUnavailable}
+              onPress={() => levelsQuery.refetch()}
+              accessibilityRole="button"
+              accessibilityLabel="Levels unavailable. Tap to retry."
+            >
+              <Ionicons name="alert-circle-outline" size={14} color={colors.neutral[500]} />
+              <Text style={styles.levelsUnavailableText}>Levels unavailable · tap to retry</Text>
+            </TouchableOpacity>
+          ) : null}
         </Card>
 
         {/* Trend / Atlas summary */}
@@ -1059,7 +1082,40 @@ function trendDirectionColor(direction: 'bullish' | 'bearish' | 'neutral') {
   return colors.neutral[400];
 }
 
-function convertToAILevels(scoredLevels: ScoredLevel[]): AILevel[] {
+/** Level id → role, from Atlas trade ideas. A level used in two different roles gets none. */
+function tradeIdeaLevelRoles(analysis: EnhancedAIAnalysis): Map<string, 'entry' | 'target'> {
+  const roles = new Map<string, 'entry' | 'target'>();
+  const conflicted = new Set<string>();
+  const assign = (id: string | undefined, role: 'entry' | 'target') => {
+    if (!id || conflicted.has(id)) return;
+    const existing = roles.get(id);
+    if (existing && existing !== role) {
+      roles.delete(id);
+      conflicted.add(id);
+      return;
+    }
+    roles.set(id, role);
+  };
+  for (const idea of analysis.tradeIdeas ?? []) {
+    assign(idea.entryLevelId, 'entry');
+    assign(idea.targetLevelId, 'target');
+  }
+  return roles;
+}
+
+/** Closest level to price: highest support, lowest resistance. */
+function nearestLevel(levels: ScoredLevel[], type: 'support' | 'resistance'): ScoredLevel[] {
+  if (levels.length === 0) return [];
+  const pick = levels.reduce((best, l) =>
+    type === 'support' ? (l.price > best.price ? l : best) : (l.price < best.price ? l : best)
+  );
+  return [pick];
+}
+
+function convertToAILevels(
+  scoredLevels: ScoredLevel[],
+  roles?: Map<string, 'entry' | 'target'>
+): AILevel[] {
   return scoredLevels.map(level => ({
     id: level.id,
     type: level.type,
@@ -1067,6 +1123,7 @@ function convertToAILevels(scoredLevels: ScoredLevel[]): AILevel[] {
     strength: level.strength,
     touches: level.factors.historicalTouches.count,
     description: level.description,
+    role: roles?.get(level.id),
   }));
 }
 
@@ -1417,6 +1474,17 @@ const styles = StyleSheet.create({
     ...typography.bodyMd,
     color: colors.neutral[500],
     marginBottom: spacing.md,
+  },
+  levelsUnavailable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingTop: spacing.sm,
+  },
+  levelsUnavailableText: {
+    ...typography.bodySm,
+    color: colors.neutral[500],
   },
   chartErrorDetail: {
     ...typography.bodySm,

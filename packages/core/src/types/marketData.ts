@@ -33,6 +33,8 @@ export interface AILevel {
   strength: 'strong' | 'medium' | 'weak';
   touches: number;
   description: string;
+  /** Set when Atlas uses this level in a trade idea; shown on the chart tag. */
+  role?: 'entry' | 'target';
 }
 
 export interface AITrendLine {

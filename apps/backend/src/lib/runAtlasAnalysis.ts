@@ -8,11 +8,8 @@ import {
   type MarketDataPoint,
   type TechnicalIndicators,
 } from './technicalCalculator.js';
-import {
-  scoreLevels,
-  getExpandedLevels,
-  type ScoredAnalysis,
-} from './confluenceScorer.js';
+import type { ScoredAnalysis, ScoredLevel } from './confluenceScorer.js';
+import { levelsFromIndicators, pickTradeLevel, withReferencedLevels } from './chartLevels.js';
 import type {
   EnhancedAIAnalysis,
   TechnicalDetails,
@@ -311,8 +308,9 @@ export async function runAtlasAnalysis(input: {
     return { ok: false, error: 'Failed to calculate technical indicators', status: 500 };
   }
 
-  const scoredAnalysis = scoreLevels(indicators);
-  const expandedLevels = getExpandedLevels(scoredAnalysis, indicators.currentPrice);
+  // Same code path as POST /api/levels, so the pre-Atlas chart and Atlas agree.
+  const { scoredAnalysis, expanded: expandedLevels } = levelsFromIndicators(indicators);
+  const referencedLevels: ScoredLevel[] = [];
 
   const userPrompt = buildUserPrompt(
     symbol,
@@ -373,9 +371,11 @@ export async function runAtlasAnalysis(input: {
     const isLong = idea.direction === 'long';
     const entryLevels = isLong ? scoredAnalysis.supportLevels : scoredAnalysis.resistanceLevels;
     const targetLevels = isLong ? scoredAnalysis.resistanceLevels : scoredAnalysis.supportLevels;
+    const { support: displaySupport, resistance: displayResistance } = scoredAnalysis.displayLevels;
 
-    const entry = entryLevels[0];
-    const target = targetLevels[0];
+    // Prefer levels the chart draws, so every trade idea points at a visible line.
+    const entry = pickTradeLevel(entryLevels, isLong ? displaySupport : displayResistance);
+    const target = pickTradeLevel(targetLevels, isLong ? displayResistance : displaySupport);
 
     if (!entry || !target) {
       return {
@@ -393,6 +393,7 @@ export async function runAtlasAnalysis(input: {
       };
     }
 
+    referencedLevels.push(entry, target);
     const entryPrice = entry.price;
     const targetPrice = target.price;
     const stopDistance = indicators.atr.atr * 2;
@@ -410,6 +411,8 @@ export async function runAtlasAnalysis(input: {
       riskRewardRatio: parseFloat(rr.toFixed(2)),
       confidence: idea.confidence,
       invalidation: idea.invalidation,
+      entryLevelId: entry.id,
+      targetLevelId: target.id,
     };
   });
 
@@ -475,8 +478,15 @@ export async function runAtlasAnalysis(input: {
       summary: indicators.trend.biasReason,
     },
 
-    supportLevels: scoredAnalysis.displayLevels.support,
-    resistanceLevels: scoredAnalysis.displayLevels.resistance,
+    // Display set, plus any trade-idea level outside it (rare fallback) so it is drawn.
+    supportLevels: withReferencedLevels(
+      scoredAnalysis.displayLevels.support,
+      referencedLevels.filter((l) => l.type === 'support'),
+    ),
+    resistanceLevels: withReferencedLevels(
+      scoredAnalysis.displayLevels.resistance,
+      referencedLevels.filter((l) => l.type === 'resistance'),
+    ),
     allSupportLevels: expandedLevels.support,
     allResistanceLevels: expandedLevels.resistance,
 

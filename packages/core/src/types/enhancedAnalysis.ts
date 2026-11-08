@@ -199,6 +199,10 @@ export interface TradeIdea {
   riskRewardRatio: number;
   confidence: number;
   invalidation: string;
+  /** Id of the support/resistance level used as the entry (absent on older saved analyses). */
+  entryLevelId?: string;
+  /** Id of the support/resistance level used as the target (absent on older saved analyses). */
+  targetLevelId?: string;
 }
 
 // ============================================================================
@@ -297,6 +301,29 @@ export interface EnhancedAIAnalysis {
 // ============================================================================
 // API RESPONSE WRAPPER
 // ============================================================================
+
+/**
+ * POST /api/levels — the chart's levels before Atlas runs. Computed by the same
+ * backend function Atlas uses, so prices and ids match the later Atlas result.
+ */
+export interface ChartLevels {
+  symbol: string;
+  interval: string;
+  currentPrice: number;
+  atr: number;
+  asOfTimestamp: number;
+  barsUsed: number;
+  supportLevels: ScoredLevel[];
+  resistanceLevels: ScoredLevel[];
+  allSupportLevels: ScoredLevel[];
+  allResistanceLevels: ScoredLevel[];
+}
+
+export interface ChartLevelsResponse {
+  success: boolean;
+  error?: string;
+  levels?: ChartLevels;
+}
 
 export interface EnhancedAnalysisResponse {
   success: boolean;

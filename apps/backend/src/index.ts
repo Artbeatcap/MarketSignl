@@ -45,6 +45,7 @@ console.log(`  ENABLE_CALENDAR_CRON: ${process.env.ENABLE_CALENDAR_CRON === 'tru
 
 // Routes
 import analyzeDataRoute from './routes/analyzeData.js';
+import levelsRoute from './routes/levels.js';
 import historyRoute from './routes/history.js';
 import userRoute from './routes/user.js';
 import marketDataRoute from './routes/marketData.js';
@@ -122,6 +123,7 @@ app.get('/health', (c) => {
 
 // API Routes
 app.route('/api/analyze-data', analyzeDataRoute);
+app.route('/api/levels', levelsRoute);
 app.route('/api/analyses', historyRoute);
 app.route('/api/user', userRoute);
 app.route('/api/market-data', marketDataRoute);

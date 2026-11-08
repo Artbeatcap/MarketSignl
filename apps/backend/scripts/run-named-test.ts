@@ -9,6 +9,8 @@ for (const target of targets) {
     await import('../src/lib/__tests__/marketContext.test.ts');
   } else if (target.includes('briefStyle')) {
     await import('../src/lib/__tests__/briefStyle.test.ts');
+  } else if (target.includes('chartLevels')) {
+    await import('../src/lib/__tests__/chartLevels.test.ts');
   } else if (target.includes('briefQaGate')) {
     await import('../src/lib/__tests__/briefQaGate.test.ts');
   } else {

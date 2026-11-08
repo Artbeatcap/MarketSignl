@@ -16,6 +16,7 @@ import type {
 
 import { API_URL } from './apiConfig';
 import { getAccessToken } from './supabase';
+import { ANALYSIS_WINDOW_BARS } from './chartAnalysis';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 
@@ -228,7 +229,7 @@ export async function runGuestAnalyze(
     body: JSON.stringify({
       symbol,
       interval,
-      data: data.slice(-100),
+      data: data.slice(-ANALYSIS_WINDOW_BARS),
       ...(freshness ? { freshness } : {}),
     }),
   });
