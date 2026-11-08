@@ -250,6 +250,9 @@
             transform: translateY(-1px);
             box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset, 0 12px 28px rgba(13,148,136,0.35);
         }
+        .nav-links a.nav-cta,
+        .nav-links a.nav-cta:hover,
+        .nav-links a.nav-cta:focus-visible { color: #fff; }
         @media (max-width: 720px) {
             .nav-links a:not(.nav-cta) { display: none; }
         }
@@ -296,6 +299,26 @@
         .nl-form { width: 100%; max-width: 540px; }
         .nl-form.hero { margin-top: 28px; }
         .nl-form.footer { max-width: 420px; margin-top: 16px; }
+        .nl-form.mid {
+            margin: 0 auto;
+            max-width: 560px;
+            padding: 32px;
+            background: #fff;
+            border: 1px solid var(--stone-200);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-sm, 0 8px 24px rgba(28, 25, 23, 0.06));
+        }
+        .cta-note {
+            margin-top: 12px;
+            font-size: 14px;
+            color: var(--stone-500);
+        }
+        .plan-note {
+            font-size: 13px;
+            color: var(--stone-500);
+            margin: -10px 0 18px;
+            line-height: 1.45;
+        }
         .nl-headline {
             font-size: 20px;
             font-weight: 700;
@@ -474,6 +497,11 @@
             font-size: 11px;
             font-weight: 600;
         }
+        .chart-ticker .badge-delayed {
+            background: var(--stone-100, #F5F5F4);
+            color: var(--stone-600);
+            border: 1px solid var(--stone-200);
+        }
         .chart-price {
             text-align: right;
             font-variant-numeric: tabular-nums;
@@ -493,6 +521,11 @@
             gap: 8px;
             margin-top: 12px;
             flex-wrap: wrap;
+        }
+        .chart-disclosure {
+            margin: 10px 0 0;
+            font-size: 11.5px;
+            color: var(--stone-500);
         }
         .chip {
             display: inline-flex; align-items: center; gap: 6px;
@@ -916,6 +949,83 @@
             .reveal { opacity: 1; transform: none; }
             html { scroll-behavior: auto; }
         }
+
+        /* Landing refresh: restrained editorial layout with a product-led chart. */
+        :root { --stone-900:#152b27; --stone-800:#243c36; --stone-600:#52645e; --stone-500:#61736c; --stone-200:#dce5e0; }
+        body { background:#f7f9f6; background-attachment:scroll; }
+        body::before { display:none; }
+        .container,.nav-inner { max-width:1240px; }
+        .nav { background:rgba(247,249,246,.94); }
+        .nav-inner { padding-top:19px; padding-bottom:19px; }
+        .brand { font-size:20px; letter-spacing:-.045em; }
+        .nav-links .nav-cta,.btn-primary,.nl-row button { background:#126b54; color:#fff; box-shadow:none; border-radius:8px; }
+        .nav-links .nav-cta:hover,.btn-primary:hover { background:#0d5543; color:#fff; box-shadow:0 6px 16px #143f2315; }
+        .hero { padding:90px 0 0; }
+        .hero-grid { grid-template-columns:1fr 1.06fr; gap:54px; }
+        .hero h1 { font-size:clamp(42px,4.7vw,66px); line-height:1.06; letter-spacing:-.055em; margin:25px 0; }
+        .hero h1 .accent { background:none; color:#257b60; }
+        .eyebrow { background:transparent; border:0; border-radius:0; padding:0; box-shadow:none; font-size:12px; letter-spacing:.06em; }
+        .eyebrow .dot { box-shadow:none; background:#267b60; }
+        .hero p.lede { font-size:18px; line-height:1.7; max-width:470px; margin-bottom:26px; }
+        .btn { padding:15px 22px; border-radius:8px; }
+        .cta-note { font-size:12px; margin-top:15px; }
+        .data-note { font-size:12px; color:var(--stone-500); margin-top:5px; }
+        .store-row { margin-top:24px; gap:12px; }
+        .store-row img { height:38px; }
+        .hero-visual { display:grid; grid-template-columns:1fr 1fr; gap:10px; min-width:0; }
+        .chart-card { grid-column:1/-1; background:#FFFFFF; border:1px solid #dce5e0; border-radius:18px; padding:24px; box-shadow:0 20px 48px #153d2710; }
+        .chart-card::before { display:none; }
+        .chart-head { padding:0 0 18px; border-bottom:1px solid #e3e9e5; margin-bottom:20px; }
+        .chart-ticker,.chart-price .val { color:#152b27; }
+        .chart-price .val { font-size:21px; }
+        .chart-price .delta { color:#0F766E; }
+        .chart-ticker .badge { background:#edf4ee; color:#52645e; font-size:9px; letter-spacing:.08em; padding:5px 8px; }
+        .chart-ticker .badge-delayed {
+            background: var(--stone-100, #F5F5F4);
+            color: var(--stone-600);
+            border: 1px solid var(--stone-200);
+        }
+        .chart-ticker .badge-delayed svg { display: inline-block; }
+        .chart-svg-wrap { background:#FAFAF9; padding:0; border-radius:0; }
+        .chart-svg-wrap>svg { height:auto; }
+        .chart-tag { box-shadow:none; font-size:10px; border-radius:4px; padding:5px 7px; }
+        .chart-tag.resistance { background:#703b3c; }
+        .chart-tag.support { background:#22624e; }
+        .chart-footer { border-top:1px solid #e3e9e5; padding-top:16px; gap:6px; }
+        .chart-footer .chip { background:#f0f5f1; border-color:#dce5e0; color:#52645e; font-size:10px; }
+        .float-card { position:static; min-width:0; border-radius:10px; padding:17px; background:#fff; box-shadow:none; }
+        .float-card .label { font-size:9px; letter-spacing:.075em; }
+        .float-card .value { font-size:15px; margin-top:5px; }
+        .float-card .meta { font-size:11px; }
+        .trust { border-top:1px solid #dce5e0; border-bottom:1px solid #dce5e0; margin-top:65px; padding:22px 0; justify-content:space-between; gap:18px; font-size:12px; }
+        section.block { padding:90px 0; scroll-margin-top:80px; }
+        .section-heading { font-size:clamp(30px,3.5vw,44px); letter-spacing:-.045em; }
+        .section-sub { font-size:16px; margin-bottom:40px; }
+        .steps { gap:0; }
+        .step { border:0; border-left:1px solid #dce5e0; border-radius:0; background:transparent; box-shadow:none; padding:12px 32px; }
+        .step:first-child { border-left:0; }
+        .step:hover { transform:none; box-shadow:none; }
+        .step-num { background:none; border:0; width:auto; height:auto; font-size:13px; letter-spacing:.08em; color:#267b60; }
+        #features { background:#edf2ed; border-block:1px solid #dce5e0; }
+        .features { gap:14px; grid-template-columns:repeat(3,minmax(0,1fr)); }
+        .feature { display:block; padding:28px; border-radius:12px; background:#fdfefb; }
+        .feature-icon { margin-bottom:22px; border:0; background:#eaf2eb; border-radius:8px; }
+        .feature h4 { font-size:17px; }
+        .feature p { margin-top:8px; }
+        .atlas { background:#e6eee7; border:0; box-shadow:none; border-radius:18px; }
+        .atlas-card { box-shadow:none; border-radius:12px; }
+        .plan { box-shadow:none; border-radius:14px; }
+        .plan.featured { box-shadow:none; border:2px solid #267b60; }
+        .nl-form.mid { max-width:none; display:grid; grid-template-columns:1fr 1fr; gap:0 60px; background:#e7efe6; padding:36px; border:0; border-radius:14px; box-shadow:none; }
+        .nl-form.mid .nl-headline { grid-column:1; }
+        .nl-form.mid .nl-subhead { grid-column:1; margin-bottom:0; }
+        .nl-form.mid .nl-fields { grid-column:2; grid-row:1/3; align-self:center; }
+        .reveal { opacity:1; transform:none; }
+        @media(min-width:961px) { .hero-visual { transform:rotate(-1deg); } }
+        @media(max-width:960px) { .hero { padding-top:48px; } .hero-grid { grid-template-columns:1fr; gap:36px; } .hero-copy { max-width:640px; } .hero p.lede { max-width:580px; } .hero-visual { max-width:680px; width:100%; } .features { grid-template-columns:repeat(2,minmax(0,1fr)); } .steps { grid-template-columns:1fr; gap:24px; } .step,.step:first-child { border-left:2px solid #c9d8cc; padding:8px 24px; } .nl-form.mid { display:block; } .nl-form.mid .nl-fields { margin-top:20px; } }
+        @media(max-width:600px) { .container,.nav-inner { padding-left:20px; padding-right:20px; } .hero h1 { font-size:44px; } .hero p.lede { font-size:16px; } .hero { padding-top:34px; } .hero-visual { gap:8px; } .chart-card { padding:16px; } .float-card { padding:13px 10px; } .float-card .value { font-size:13px; } .float-card .meta { font-size:10px; } .trust { display:grid; grid-template-columns:1fr 1fr; margin-top:36px; font-size:11px; gap:16px; } section.block { padding:60px 0; } .features { grid-template-columns:1fr; } .feature { padding:24px; } .atlas { padding:24px; } .nl-form.mid { padding:24px; } .nav-links .nav-cta { padding:10px 12px; font-size:12px; } .brand { font-size:18px; } }
+        @media(prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+
     </style>
 </head>
 <body>
@@ -945,7 +1055,7 @@
             <a href="#features">Features</a>
             <a href="#pricing">Pricing</a>
             <a href="https://www.chartsignl.com/analyze" class="nav-cta">
-                Launch App
+                Try free analysis
                 <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M5 10h10M11 5l5 5-5 5"/>
                 </svg>
@@ -961,21 +1071,21 @@
     <div class="container hero-grid">
         <div class="hero-copy reveal">
             <span class="eyebrow"><span class="dot"></span> Meet Atlas — your AI chart guide</span>
-            <h1>Read stock charts with <span class="accent">confidence</span>.</h1>
+            <h1>See the levels.<br><span class="accent">Understand the chart.</span></h1>
             <p class="lede">
-                ChartSignl is an AI-powered mobile app that analyzes stock charts in real time.
-                Atlas surfaces the support and resistance levels that actually matter — without
-                the noise of traditional trading terminals.
+                Meet Atlas, your AI chart guide. Find key support and resistance, understand why each level matters, and build a clearer trading plan.
             </p>
             <div class="cta-row">
                 <a href="https://www.chartsignl.com/analyze" class="btn btn-primary">
-                    Launch app
+                    Try free analysis
                     <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M5 10h10M11 5l5 5-5 5"/>
                     </svg>
                 </a>
                 <a href="#how-it-works" class="btn btn-ghost">How it works</a>
             </div>
+            <p class="cta-note">One free analysis. No account needed.</p>
+            <p class="data-note">Market data is delayed at least 15 minutes.</p>
             <div class="store-row" aria-label="App downloads">
                 <a href="https://apps.apple.com/us/app/chartsignl/id6757512423" target="_blank" rel="noopener noreferrer" aria-label="Download on the App Store">
                     <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store">
@@ -984,19 +1094,6 @@
                     <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" alt="Get it on Google Play">
                 </a>
             </div>
-            <form class="nl-form hero" data-nl-source="landing_hero" action="#" method="post">
-                <p class="nl-headline">The levels, before the open.</p>
-                <p class="nl-subhead">A short daily brief on what's moving and where the lines are. Free.</p>
-                <div class="nl-fields">
-                    <label class="visually-hidden" for="nl-hero-email">Email</label>
-                    <div class="nl-row">
-                        <input id="nl-hero-email" type="email" name="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required>
-                        <button type="submit">Subscribe</button>
-                    </div>
-                    <input class="nl-hp" type="text" name="website" autocomplete="off" tabindex="-1" aria-hidden="true">
-                    <p class="nl-note" aria-live="polite">Free. One email each market morning. Unsubscribe anytime.</p>
-                </div>
-            </form>
         </div>
 
         <!-- Chart visual -->
@@ -1005,9 +1102,9 @@
                 <div class="chart-head">
                     <div class="chart-ticker">
                         AAPL
-                        <span class="badge">
-                            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="3" fill="#14B8A6"/></svg>
-                            LIVE
+                        <span class="badge badge-delayed">
+                            <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l2.5 2.5"/></svg>
+                            Delayed
                         </span>
                     </div>
                     <div class="chart-price">
@@ -1017,7 +1114,7 @@
                 </div>
 
                 <div class="chart-svg-wrap">
-                    <svg viewBox="0 0 460 240" width="100%" height="220" role="img" aria-label="Stylized chart showing support and resistance levels">
+                    <svg viewBox="0 0 460 240" width="100%" height="220" role="img" aria-label="Illustrative AAPL candlestick chart with support and resistance zones; not live market data">
                         <defs>
                             <linearGradient id="areaFill" x1="0" x2="0" y1="0" y2="1">
                                 <stop offset="0%"  stop-color="#14B8A6" stop-opacity="0.26"/>
@@ -1028,7 +1125,7 @@
                                 <stop offset="100%" stop-color="#14B8A6"/>
                             </linearGradient>
                             <pattern id="grid" width="46" height="40" patternUnits="userSpaceOnUse">
-                                <path d="M 46 0 L 0 0 0 40" fill="none" stroke="#E7E5E4" stroke-width="0.6"/>
+                                <path d="M 46 0 L 0 0 0 40" fill="none" stroke="#e1e7e2" stroke-width="0.6"/>
                             </pattern>
                         </defs>
 
@@ -1042,43 +1139,36 @@
                         <rect x="0" y="170" width="460" height="18" fill="#10B981" fill-opacity="0.12"/>
                         <line x1="0" y1="179" x2="460" y2="179" stroke="#10B981" stroke-width="1.2" stroke-dasharray="4 4" opacity="0.8"/>
 
-                        <!-- Area under price -->
-                        <path d="M 0 150
-                                 C 30 140, 45 120, 70 115
-                                 S 110 90, 135 105
-                                 S 175 160, 200 155
-                                 S 240 95, 270 85
-                                 S 315 130, 345 120
-                                 S 390 78, 420 70
-                                 L 460 72
-                                 L 460 240 L 0 240 Z"
-                              fill="url(#areaFill)"/>
-
-                        <!-- Price line -->
-                        <path d="M 0 150
-                                 C 30 140, 45 120, 70 115
-                                 S 110 90, 135 105
-                                 S 175 160, 200 155
-                                 S 240 95, 270 85
-                                 S 315 130, 345 120
-                                 S 390 78, 420 70
-                                 L 460 72"
-                              fill="none"
-                              stroke="url(#lineStroke)"
-                              stroke-width="2.4"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"/>
-
-                        <!-- EMA (lavender) -->
-                        <path d="M 0 160 C 60 150, 120 135, 180 130 S 300 110, 380 100 S 440 92, 460 90"
-                              fill="none" stroke="#A855F7" stroke-width="1.4" stroke-dasharray="2 3" opacity="0.85"/>
-
-                        <!-- Confluence point -->
-                        <circle cx="420" cy="70" r="5.5" fill="#fff" stroke="#0D9488" stroke-width="2.5"/>
-                        <circle cx="420" cy="70" r="10" fill="none" stroke="#0D9488" stroke-width="1" opacity="0.35"/>
-
-                        <!-- Swing low marker -->
-                        <circle cx="200" cy="155" r="3.5" fill="#10B981"/>
+<g stroke="#0D9488" fill="#0D9488"><line x1="10.0" x2="10.0" y1="148" y2="171"/><rect x="6.5" y="155" width="7" height="8" rx="1"/></g>
+<g stroke="#0D9488" fill="#0D9488"><line x1="25.5" x2="25.5" y1="140" y2="163"/><rect x="22.0" y="147" width="7" height="8" rx="1"/></g>
+<g stroke="#EF4444" fill="#EF4444"><line x1="41.0" x2="41.0" y1="140" y2="160"/><rect x="37.5" y="147" width="7" height="5" rx="1"/></g>
+<g stroke="#0D9488" fill="#0D9488"><line x1="56.5" x2="56.5" y1="129" y2="160"/><rect x="53.0" y="136" width="7" height="16" rx="1"/></g>
+<g stroke="#0D9488" fill="#0D9488"><line x1="72.0" x2="72.0" y1="122" y2="144"/><rect x="68.5" y="129" width="7" height="7" rx="1"/></g>
+<g stroke="#EF4444" fill="#EF4444"><line x1="87.5" x2="87.5" y1="122" y2="146"/><rect x="84.0" y="129" width="7" height="9" rx="1"/></g>
+<g stroke="#0D9488" fill="#0D9488"><line x1="103.0" x2="103.0" y1="112" y2="146"/><rect x="99.5" y="119" width="7" height="19" rx="1"/></g>
+<g stroke="#0D9488" fill="#0D9488"><line x1="118.5" x2="118.5" y1="102" y2="127"/><rect x="115.0" y="109" width="7" height="10" rx="1"/></g>
+<g stroke="#EF4444" fill="#EF4444"><line x1="134.0" x2="134.0" y1="102" y2="124"/><rect x="130.5" y="109" width="7" height="7" rx="1"/></g>
+<g stroke="#EF4444" fill="#EF4444"><line x1="149.5" x2="149.5" y1="109" y2="133"/><rect x="146.0" y="116" width="7" height="9" rx="1"/></g>
+<g stroke="#EF4444" fill="#EF4444"><line x1="165.0" x2="165.0" y1="118" y2="147"/><rect x="161.5" y="125" width="7" height="14" rx="1"/></g>
+<g stroke="#EF4444" fill="#EF4444"><line x1="180.5" x2="180.5" y1="132" y2="158"/><rect x="177.0" y="139" width="7" height="11" rx="1"/></g>
+<g stroke="#0D9488" fill="#0D9488"><line x1="196.0" x2="196.0" y1="136" y2="158"/><rect x="192.5" y="143" width="7" height="7" rx="1"/></g>
+<g stroke="#0D9488" fill="#0D9488"><line x1="211.5" x2="211.5" y1="117" y2="151"/><rect x="208.0" y="124" width="7" height="19" rx="1"/></g>
+<g stroke="#0D9488" fill="#0D9488"><line x1="227.0" x2="227.0" y1="101" y2="132"/><rect x="223.5" y="108" width="7" height="16" rx="1"/></g>
+<g stroke="#0D9488" fill="#0D9488"><line x1="242.5" x2="242.5" y1="91" y2="116"/><rect x="239.0" y="98" width="7" height="10" rx="1"/></g>
+<g stroke="#0D9488" fill="#0D9488"><line x1="258.0" x2="258.0" y1="82" y2="106"/><rect x="254.5" y="89" width="7" height="9" rx="1"/></g>
+<g stroke="#EF4444" fill="#EF4444"><line x1="273.5" x2="273.5" y1="82" y2="109"/><rect x="270.0" y="89" width="7" height="12" rx="1"/></g>
+<g stroke="#EF4444" fill="#EF4444"><line x1="289.0" x2="289.0" y1="94" y2="120"/><rect x="285.5" y="101" width="7" height="11" rx="1"/></g>
+<g stroke="#EF4444" fill="#EF4444"><line x1="304.5" x2="304.5" y1="105" y2="128"/><rect x="301.0" y="112" width="7" height="8" rx="1"/></g>
+<g stroke="#0D9488" fill="#0D9488"><line x1="320.0" x2="320.0" y1="102" y2="128"/><rect x="316.5" y="109" width="7" height="11" rx="1"/></g>
+<g stroke="#0D9488" fill="#0D9488"><line x1="335.5" x2="335.5" y1="90" y2="117"/><rect x="332.0" y="97" width="7" height="12" rx="1"/></g>
+<g stroke="#0D9488" fill="#0D9488"><line x1="351.0" x2="351.0" y1="79" y2="105"/><rect x="347.5" y="86" width="7" height="11" rx="1"/></g>
+<g stroke="#0D9488" fill="#0D9488"><line x1="366.5" x2="366.5" y1="73" y2="94"/><rect x="363.0" y="80" width="7" height="6" rx="1"/></g>
+<g stroke="#EF4444" fill="#EF4444"><line x1="382.0" x2="382.0" y1="73" y2="96"/><rect x="378.5" y="80" width="7" height="8" rx="1"/></g>
+<g stroke="#0D9488" fill="#0D9488"><line x1="397.5" x2="397.5" y1="69" y2="96"/><rect x="394.0" y="76" width="7" height="12" rx="1"/></g>
+<g stroke="#0D9488" fill="#0D9488"><line x1="413.0" x2="413.0" y1="62" y2="84"/><rect x="409.5" y="69" width="7" height="7" rx="1"/></g>
+<g stroke="#EF4444" fill="#EF4444"><line x1="428.5" x2="428.5" y1="62" y2="86"/><rect x="425.0" y="69" width="7" height="9" rx="1"/></g>
+<g stroke="#0D9488" fill="#0D9488"><line x1="444.0" x2="444.0" y1="65" y2="86"/><rect x="440.5" y="72" width="7" height="6" rx="1"/></g>
+<path d="M0 169 C80 151 120 133 180 143 S270 119 320 119 S410 94 460 88" fill="none" stroke="#9370c9" stroke-width="1.6" opacity=".8"/>
                     </svg>
 
                     <span class="chart-tag resistance" style="right: 14px; top: 44px;">Resistance · 278.50</span>
@@ -1088,15 +1178,16 @@
                 <div class="chart-footer">
                     <span class="chip teal">
                         <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l2.5 2.5"/></svg>
-                        1D · 5m · 1h · 1D · 1W
+                        Daily chart · Illustrative example
                     </span>
                     <span class="chip">EMA 20/50/200</span>
                     <span class="chip lav">Bollinger · Fib · VP</span>
                 </div>
+                <p class="chart-disclosure">Market data is delayed at least 15 minutes.</p>
             </div>
 
             <div class="float-card float-atlas" role="presentation">
-                <div class="label">Atlas says</div>
+                <div class="label">Atlas interpretation · example</div>
                 <div class="value">Bullish above 270</div>
                 <div class="meta">
                     <svg width="11" height="11" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l3 3 7-8"/></svg>
@@ -1104,7 +1195,7 @@
                 </div>
             </div>
             <div class="float-card float-score" role="presentation">
-                <div class="label">Next key level</div>
+                <div class="label">Support to watch</div>
                 <div class="value">$264.20 support</div>
                 <div class="meta">4 indicators align</div>
             </div>
@@ -1115,8 +1206,8 @@
     <div class="container">
         <div class="trust reveal">
             <span>
-                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2l2.5 5 5.5.8-4 3.9.9 5.5L10 14.8 5.1 17.2 6 11.7 2 7.8l5.5-.8z"/></svg>
-                Real-time market data
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"/><path d="M10 6v4l2.5 2.5"/></svg>
+                Delayed market data
             </span>
             <span>
                 <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h12M10 4v12"/></svg>
@@ -1138,14 +1229,14 @@
 <section class="block" id="how-it-works">
     <div class="container">
         <p class="section-label reveal">How it works</p>
-        <h2 class="section-heading reveal">Three steps to better chart reading</h2>
+        <h2 class="section-heading reveal">From ticker to a clearer picture.</h2>
         <p class="section-sub reveal">ChartSignl makes technical analysis accessible to every trader, regardless of experience level.</p>
 
         <div class="steps">
             <div class="step reveal">
                 <div class="step-num">01</div>
                 <h3>Search any stock</h3>
-                <p>Type a ticker — AAPL, SPY, TSLA — and ChartSignl pulls up a live interactive chart with real-time market data.</p>
+                <p>Type a ticker — AAPL, SPY, TSLA — and ChartSignl pulls up an interactive chart. Market data is delayed at least 15 minutes.</p>
             </div>
             <div class="step reveal">
                 <div class="step-num">02</div>
@@ -1154,10 +1245,29 @@
             </div>
             <div class="step reveal">
                 <div class="step-num">03</div>
-                <h3>Act with confidence</h3>
+                <h3>Build your plan</h3>
                 <p>See clear support and resistance directly on your chart, with trading ideas, entry/exit zones, and invalidation levels — everything you need to plan a trade.</p>
             </div>
         </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════ DAILY BRIEF ═══════════════════════ -->
+<section class="block" id="daily-brief" style="padding-top: 0;">
+    <div class="container">
+        <form class="nl-form mid reveal" data-nl-source="landing_mid" action="#" method="post">
+            <p class="nl-headline">Daily chart levels — delivered before market open</p>
+            <p class="nl-subhead">Already using Atlas? Get the morning levels as a daily habit — alongside the app, not instead of it.</p>
+            <div class="nl-fields">
+                <label class="visually-hidden" for="nl-mid-email">Email</label>
+                <div class="nl-row">
+                    <input id="nl-mid-email" type="email" name="email" autocomplete="email" inputmode="email" placeholder="you@example.com" required>
+                    <button type="submit">Subscribe</button>
+                </div>
+                <input class="nl-hp" type="text" name="website" autocomplete="off" tabindex="-1" aria-hidden="true">
+                <p class="nl-note" aria-live="polite">Free. One email each market morning. Unsubscribe anytime.</p>
+            </div>
+        </form>
     </div>
 </section>
 
@@ -1165,8 +1275,8 @@
 <section class="block" id="features" style="padding-top: 0;">
     <div class="container">
         <p class="section-label reveal">Features</p>
-        <h2 class="section-heading reveal">Everything a trader needs</h2>
-        <p class="section-sub reveal">Built from the ground up to reduce trading anxiety and surface actionable insights.</p>
+        <h2 class="section-heading reveal">Less guesswork. More context.</h2>
+        <p class="section-sub reveal">The tools to understand price levels, compare timeframes, and keep your analysis in view.</p>
 
         <div class="features">
             <div class="feature reveal">
@@ -1269,7 +1379,7 @@
                     </div>
                     <div>
                         <div class="t">AAPL · Key levels</div>
-                        <div class="s">Daily · 3mo window · 4 indicators aligned</div>
+                        <div class="s">Illustrative example · Daily chart</div>
                     </div>
                 </div>
                 <div class="level-row">
@@ -1321,14 +1431,15 @@
                 <h3>Free</h3>
                 <div class="price">$0<span class="unit">forever</span></div>
                 <ul>
-                    <li><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10l3 3 7-7"/></svg>3 Atlas analyses per week</li>
+                    <li><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10l3 3 7-7"/></svg>Try one analysis now</li>
                     <li><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10l3 3 7-7"/></svg>All timeframes</li>
                     <li><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10l3 3 7-7"/></svg>Support &amp; resistance levels</li>
                     <li class="muted"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l8 8M14 6l-8 8"/></svg>Unlimited analyses</li>
                     <li class="muted"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l8 8M14 6l-8 8"/></svg>Full analysis history</li>
                     <li class="muted"><svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l8 8M14 6l-8 8"/></svg>Priority support</li>
                 </ul>
-                <a href="https://www.chartsignl.com/analyze" class="btn btn-ghost">Start free</a>
+                <p class="plan-note">No account needed to try. Free accounts get 3 analyses per week.</p>
+                <a href="https://www.chartsignl.com/analyze" class="btn btn-ghost">Try free analysis</a>
             </div>
 
             <div class="plan featured reveal">
@@ -1386,7 +1497,7 @@
                 </a>
                 <p>AI-powered support &amp; resistance for retail traders. Calm, focused, and built for clarity.</p>
                 <form class="nl-form footer" data-nl-source="landing_footer" action="#" method="post">
-                    <p class="nl-footer-copy">Get the ChartSignl daily brief.</p>
+                    <p class="nl-footer-copy">Daily chart levels — delivered before market open.</p>
                     <div class="nl-fields">
                         <label class="visually-hidden" for="nl-footer-email">Email</label>
                         <div class="nl-row">
@@ -1403,7 +1514,7 @@
                 <a href="#how-it-works">How it works</a>
                 <a href="#features">Features</a>
                 <a href="#pricing">Pricing</a>
-                <a href="https://www.chartsignl.com/analyze">Launch app</a>
+                <a href="https://www.chartsignl.com/analyze">Try free analysis</a>
             </div>
             <div class="foot-col">
                 <h5>Get the app</h5>
@@ -1420,7 +1531,7 @@
         </div>
 
         <div class="foot-bottom">
-            <span>&copy; 2026 ChartSignl. All rights reserved.</span>
+            <span>&copy; 2026 ChartSignl. All rights reserved. Market data is delayed at least 15 minutes.</span>
             <div class="store-row">
                 <a href="https://apps.apple.com/us/app/chartsignl/id6757512423" target="_blank" rel="noopener noreferrer" aria-label="Download on the App Store">
                     <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store">
