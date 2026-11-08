@@ -179,7 +179,7 @@ predictionsRoute.get('/stats', async (c) => {
 predictionsRoute.get('/track-record/global', async (c) => {
   try {
     const { data, error } = await supabaseAdmin
-      .from('predictions')
+      .from('prediction_performance_records')
       .select('resolved_at, direction_hit');
 
     if (error) {
