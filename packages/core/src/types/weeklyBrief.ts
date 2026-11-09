@@ -25,6 +25,8 @@ export interface MoverItem {
   why: string;
   companyName?: string;
   reasonUrl?: string;
+  /** "Week" for Mon–Fri, or a weekday when the figure is a single session. */
+  windowLabel?: string;
   window?: MoverWindow;
   /** Set when a row also moved in the prior session. */
   priorSessionPct?: string;
@@ -92,6 +94,8 @@ export interface WeeklyContent {
   movers: MoverItem[];
   levels: Record<string, LevelSet>;
   week_ahead_bullets: WeekAheadBullet[];
+  /** Most anticipated earnings, grouped by day and session. Omitted on older artifacts. */
+  earnings_bullets?: WeekAheadBullet[];
   /** Model-supplied level calls. The support/resistance card stays in `levels`. */
   level_calls?: BriefLevelCall[];
   scenarios?: BriefScenario[];
