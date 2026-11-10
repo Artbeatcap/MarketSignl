@@ -29,7 +29,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     supportsTablet: true,
     bundleIdentifier: "com.optionsplungellc.chartsignl",
-    buildNumber: "28",
+    buildNumber: "32",
     associatedDomains: [
       "applinks:chartsignl.com",
       "applinks:www.chartsignl.com",
@@ -69,7 +69,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     package: "com.optionsplungellc.chartsignl",
     permissions: ["com.android.vending.BILLING"],
-    versionCode: 47,
+    versionCode: 52,
 
     // Required for the modern Expo Notifications API on Android
     useNextNotificationsApi: true,

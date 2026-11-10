@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet, Platform, Pressable } from 'react-native';
 import Svg, { Rect, Line as SvgLine, G, Path, Text as SvgText } from 'react-native-svg';
 import type {
   MarketDataPoint,
@@ -857,8 +857,6 @@ function SimpleCandlestickChart({
           resistanceLevels={resistanceLevels}
           priceToY={priceToY}
           rightEdge={rightEdge}
-          leftEdge={CHART_LEFT_MARGIN}
-          onLevelPress={onLevelPress}
         />
 
         {/* 7 — prediction overlay */}
@@ -878,6 +876,14 @@ function SimpleCandlestickChart({
           );
         })()}
       </Svg>
+      <LevelPressOverlays
+        supportLevels={supportLevels}
+        resistanceLevels={resistanceLevels}
+        priceToY={priceToY}
+        rightEdge={rightEdge}
+        leftEdge={CHART_LEFT_MARGIN}
+        onLevelPress={onLevelPress}
+      />
 
       {/* X-axis outside and below SVG */}
       <ChartXLabels
@@ -1138,8 +1144,6 @@ function SimpleLineChart({
             resistanceLevels={resistanceLevels}
             priceToY={priceToY}
             rightEdge={rightEdge}
-            leftEdge={CHART_LEFT_MARGIN}
-            onLevelPress={onLevelPress}
           />
 
           {hasPrediction && (() => {
@@ -1188,6 +1192,14 @@ function SimpleLineChart({
             );
           })()}
         </Svg>
+        <LevelPressOverlays
+          supportLevels={supportLevels}
+          resistanceLevels={resistanceLevels}
+          priceToY={priceToY}
+          rightEdge={rightEdge}
+          leftEdge={CHART_LEFT_MARGIN}
+          onLevelPress={onLevelPress}
+        />
       </View>
 
       {/* X-axis labels - outside and below SVG */}
@@ -1212,17 +1224,142 @@ function SimpleLineChart({
 
 // Helper components
 const LEVEL_TAG_HEIGHT = 14;
-/** Half the height of the invisible tap strip on each level line (24px total). */
-const LEVEL_HIT_HALF_HEIGHT = 12;
-/** Web-only. Native ignores unknown cursor styles. */
+/** Half the height of a level tap strip when the line has room around it (28px total). */
+const LEVEL_HIT_HALF_HEIGHT = 14;
+/** Price tags stay at least this far apart, even when the lines are closer. */
+const LEVEL_TAG_MIN_GAP = LEVEL_TAG_HEIGHT + 6;
 const LEVEL_PRESS_STYLE = Platform.OS === 'web' ? { cursor: 'pointer' as const } : undefined;
+
+type LevelMark = {
+  level: AILevel;
+  color: string;
+  prefix: 'S' | 'R';
+  /** Y of the level line. */
+  y: number;
+  /** Y of the price tag. Pushed apart when two lines would stack their tags. */
+  tagY: number;
+  text: string;
+};
+
+/** Spread sorted positions so each pair is at least minGap apart, centered on the cluster. */
+function separatedYs(ys: number[], minGap: number): number[] {
+  const order = ys.map((y, i) => ({ y, i })).sort((a, b) => a.y - b.y);
+  const placed = order.map((item) => item.y);
+  let start = 0;
+  while (start < order.length) {
+    let end = start;
+    while (end + 1 < order.length && order[end + 1].y - order[end].y < minGap) end += 1;
+    if (end > start) {
+      const cluster = order.slice(start, end + 1);
+      const mid = cluster.reduce((sum, item) => sum + item.y, 0) / cluster.length;
+      const top = mid - ((cluster.length - 1) * minGap) / 2;
+      cluster.forEach((_, k) => {
+        placed[start + k] = top + k * minGap;
+      });
+    }
+    start = end + 1;
+  }
+  const result = new Array<number>(ys.length);
+  order.forEach((item, sortedIndex) => {
+    result[item.i] = placed[sortedIndex];
+  });
+  return result;
+}
+
+/** Tap band for each line. Bands meet at the midpoint, so a close pair does not share one target. */
+function lineHitBands(ys: number[]): { top: number; height: number }[] {
+  const order = ys.map((y, i) => ({ y, i })).sort((a, b) => a.y - b.y);
+  const bands = new Array<{ top: number; height: number }>(ys.length);
+  order.forEach((item, sorted) => {
+    const prev = order[sorted - 1];
+    const next = order[sorted + 1];
+    let top = item.y - LEVEL_HIT_HALF_HEIGHT;
+    let bottom = item.y + LEVEL_HIT_HALF_HEIGHT;
+    if (prev) top = Math.max(top, (prev.y + item.y) / 2);
+    if (next) bottom = Math.min(bottom, (item.y + next.y) / 2);
+    bands[item.i] = { top, height: Math.max(0, bottom - top) };
+  });
+  return bands;
+}
+
+function levelMarks(
+  supportLevels: AILevel[],
+  resistanceLevels: AILevel[],
+  priceToY: (price: number) => number
+): LevelMark[] {
+  const marks = [
+    ...supportLevels.map((level) => ({ level, color: CHART_COLORS.support, prefix: 'S' as const })),
+    ...resistanceLevels.map((level) => ({ level, color: CHART_COLORS.resistance, prefix: 'R' as const })),
+  ]
+    .map((t) => ({
+      ...t,
+      y: priceToY(t.level.price),
+      text: levelTagText(t.level, t.prefix),
+    }))
+    .filter((t) => Number.isFinite(t.y));
+  const tagYs = separatedYs(
+    marks.map((t) => t.y),
+    LEVEL_TAG_MIN_GAP
+  );
+  return marks.map((t, i) => ({ ...t, tagY: tagYs[i] }));
+}
 
 /**
  * Small price tag on the right end of each level line ("R $352.10", "S $305.20 · entry"),
- * so users do not need the legend to read a line. Tags that would overlap are skipped;
- * levels with an Atlas role are placed first so their tags win.
+ * so users do not need the legend to read a line. Every level gets a tag.
+ * Tags that would sit on top of each other are pushed apart.
  */
 function LevelTags({
+  supportLevels,
+  resistanceLevels,
+  priceToY,
+  rightEdge,
+}: {
+  supportLevels: AILevel[];
+  resistanceLevels: AILevel[];
+  priceToY: (price: number) => number;
+  rightEdge: number;
+}) {
+  const tags = levelMarks(supportLevels, resistanceLevels, priceToY);
+
+  return (
+    <G>
+      {tags.map((tag) => {
+        const width = levelTagWidth(tag.text);
+        const x = rightEdge + LEVEL_TAG_GAP;
+        return (
+          <G key={`tag-${tag.prefix}-${tag.level.id}`}>
+            <Rect
+              x={x}
+              y={tag.tagY - LEVEL_TAG_HEIGHT / 2}
+              width={width}
+              height={LEVEL_TAG_HEIGHT}
+              rx={4}
+              fill={tag.color}
+            />
+            <SvgText
+              x={x + width / 2}
+              y={tag.tagY + 3}
+              fontSize={9}
+              fontWeight="600"
+              fill="#FFFFFF"
+              textAnchor="middle"
+            >
+              {tag.text}
+            </SvgText>
+          </G>
+        );
+      })}
+    </G>
+  );
+}
+
+/**
+ * Real press targets over each level line and price tag.
+ * Touches on the chart drawing itself are swallowed by the scrolling page on
+ * Android and iPhone, so the targets sit on top of the drawing.
+ */
+function LevelPressOverlays({
   supportLevels,
   resistanceLevels,
   priceToY,
@@ -1237,75 +1374,56 @@ function LevelTags({
   leftEdge: number;
   onLevelPress?: (levelId: string) => void;
 }) {
-  const candidates = [
-    ...supportLevels.map((level) => ({ level, color: CHART_COLORS.support, prefix: 'S' })),
-    ...resistanceLevels.map((level) => ({ level, color: CHART_COLORS.resistance, prefix: 'R' })),
-  ]
-    .map((t) => ({
-      ...t,
-      y: priceToY(t.level.price),
-      text: levelTagText(t.level, t.prefix),
-    }))
-    .sort((a, b) => Number(!!b.level.role) - Number(!!a.level.role));
-
-  const placed: typeof candidates = [];
-  for (const tag of candidates) {
-    if (!Number.isFinite(tag.y)) continue;
-    if (placed.some((p) => Math.abs(p.y - tag.y) < LEVEL_TAG_HEIGHT + 1)) continue;
-    placed.push(tag);
-  }
+  if (!onLevelPress) return null;
+  const marks = levelMarks(supportLevels, resistanceLevels, priceToY);
+  const bands = lineHitBands(marks.map((mark) => mark.y));
+  const lineWidth = Math.max(0, rightEdge - leftEdge);
 
   return (
-    <G>
-      {/* Invisible tap strips along every line (tags can be skipped; lines cannot). */}
-      {onLevelPress
-        ? candidates.map((tag) =>
-            Number.isFinite(tag.y) ? (
-              <Rect
-                key={`hit-${tag.prefix}-${tag.level.id}`}
-                x={leftEdge}
-                y={tag.y - LEVEL_HIT_HALF_HEIGHT}
-                width={Math.max(0, rightEdge - leftEdge)}
-                height={LEVEL_HIT_HALF_HEIGHT * 2}
-                fill="#000000"
-                fillOpacity={0.001}
-                style={LEVEL_PRESS_STYLE}
-                onPress={() => onLevelPress(tag.level.id)}
-              />
-            ) : null
-          )
-        : null}
-      {placed.map((tag) => {
-        const width = levelTagWidth(tag.text);
-        const x = rightEdge + LEVEL_TAG_GAP;
-        return (
-          <G
-            key={`tag-${tag.prefix}-${tag.level.id}`}
-            onPress={onLevelPress ? () => onLevelPress(tag.level.id) : undefined}
-            style={onLevelPress ? LEVEL_PRESS_STYLE : undefined}
-          >
-            <Rect
-              x={x}
-              y={tag.y - LEVEL_TAG_HEIGHT / 2}
-              width={width}
-              height={LEVEL_TAG_HEIGHT}
-              rx={4}
-              fill={tag.color}
-            />
-            <SvgText
-              x={x + width / 2}
-              y={tag.y + 3}
-              fontSize={9}
-              fontWeight="600"
-              fill="#FFFFFF"
-              textAnchor="middle"
-            >
-              {tag.text}
-            </SvgText>
-          </G>
-        );
-      })}
-    </G>
+    <>
+      {marks.map((tag, i) =>
+        bands[i].height >= 1 ? (
+          <Pressable
+            key={`hit-${tag.prefix}-${tag.level.id}`}
+            onPress={() => onLevelPress(tag.level.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`Details for ${tag.text}`}
+            style={[
+              {
+                position: 'absolute',
+                left: leftEdge,
+                top: bands[i].top,
+                width: lineWidth,
+                height: bands[i].height,
+                zIndex: 20,
+                backgroundColor: 'transparent',
+              },
+              LEVEL_PRESS_STYLE,
+            ]}
+          />
+        ) : null
+      )}
+      {marks.map((tag) => (
+        <Pressable
+          key={`tag-hit-${tag.prefix}-${tag.level.id}`}
+          onPress={() => onLevelPress(tag.level.id)}
+          accessibilityRole="button"
+          accessibilityLabel={`Details for ${tag.text}`}
+          style={[
+            {
+              position: 'absolute',
+              left: rightEdge + LEVEL_TAG_GAP,
+              top: tag.tagY - LEVEL_TAG_MIN_GAP / 2,
+              width: levelTagWidth(tag.text),
+              height: LEVEL_TAG_MIN_GAP,
+              zIndex: 21,
+              backgroundColor: 'transparent',
+            },
+            LEVEL_PRESS_STYLE,
+          ]}
+        />
+      ))}
+    </>
   );
 }
 
