@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
 import { FREE_PREDICTION_LIMIT } from '@chartsignl/core';
 import type { PredictRequest } from '@chartsignl/core';
-import type { MarketDataPoint } from '../lib/technicalCalculator.js';
+import { barsForAnalysis } from '../lib/marketBars.js';
 import { DEFAULT_HORIZON_BARS, runPrediction } from '../lib/runPrediction.js';
 import { clientMessageForError } from '../lib/openaiGuard.js';
 
@@ -57,16 +57,23 @@ predictRoute.post('/', async (c) => {
     }
 
     const body = (await c.req.json()) as PredictRequest;
-    const { symbol, interval, data, horizonBars = DEFAULT_HORIZON_BARS } = body;
+    const requestedHorizon = Number(body?.horizonBars);
+    const horizonBars =
+      Number.isInteger(requestedHorizon) && requestedHorizon >= 1 && requestedHorizon <= 60
+        ? requestedHorizon
+        : DEFAULT_HORIZON_BARS;
 
-    if (!symbol || !interval || !Array.isArray(data) || data.length === 0) {
-      return c.json({ success: false, error: 'Missing required fields' }, 400);
+    // Bars are fetched here, never taken from the request (lib/marketBars.ts).
+    const loaded = await barsForAnalysis(body, 'Predict');
+    if (!loaded.ok) {
+      return c.json({ success: false, error: loaded.error }, loaded.status);
     }
+    const { symbol, interval, bars } = loaded;
 
     const result = await runPrediction({
       symbol,
       interval,
-      data: data as MarketDataPoint[],
+      data: bars,
       horizonBars,
     });
 

@@ -3,7 +3,7 @@ import { supabaseAdmin, getUserFromToken } from '../lib/supabase.js';
 import { FREE_ANALYSIS_LIMIT } from '@chartsignl/core';
 import { notifyFirstAnalysis, notifyPaywallHit } from '../lib/growthhub.js';
 import { createAlertsFromAnalysis } from '../services/pushNotificationService.js';
-import type { MarketDataPoint } from '../lib/technicalCalculator.js';
+import { barsForAnalysis } from '../lib/marketBars.js';
 import { PROMPT_VERSION, runAtlasAnalysis } from '../lib/runAtlasAnalysis.js';
 import { clientMessageForError } from '../lib/openaiGuard.js';
 
@@ -63,25 +63,24 @@ analyzeDataRoute.post('/', async (c) => {
     }
 
     const body = await c.req.json();
-    const { symbol, interval, data, forecast, predictionId, freshness: rawFreshness } = body as {
-      symbol: string;
-      interval: string;
-      data: MarketDataPoint[];
+    const { forecast, predictionId } = (body ?? {}) as {
       forecast?: { direction: string; confidence: number } | null;
       predictionId?: string;
-      freshness?: unknown;
     };
 
-    if (!symbol || !interval || !Array.isArray(data) || data.length === 0) {
-      return c.json({ success: false, error: 'Missing required fields' }, 400);
+    // Bars are fetched here, never taken from the request (lib/marketBars.ts).
+    const loaded = await barsForAnalysis(body, 'Analysis');
+    if (!loaded.ok) {
+      return c.json({ success: false, error: loaded.error }, loaded.status);
     }
+    const { symbol, interval, bars, freshness } = loaded;
 
     const result = await runAtlasAnalysis({
       symbol,
       interval,
-      data,
+      data: bars,
       forecast,
-      rawFreshness,
+      freshness,
     });
 
     if (!result.ok) {

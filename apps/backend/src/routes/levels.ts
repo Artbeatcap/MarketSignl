@@ -1,32 +1,21 @@
 import { Hono } from 'hono';
-import { createHash } from 'node:crypto';
-import type { MarketDataPoint } from '../lib/technicalCalculator.js';
-import { computeChartLevels, LEVEL_WINDOW_BARS, type ChartLevelsResult } from '../lib/chartLevels.js';
+import { computeChartLevels, type ChartLevelsResult } from '../lib/chartLevels.js';
+import { barsForAnalysis } from '../lib/marketBars.js';
 
 /**
  * POST /api/levels — support/resistance for the chart before Atlas runs.
  *
  * No OpenAI call and no usage counted, so it is open to guests and signed-in
- * users alike. Uses the same level function as Atlas (lib/chartLevels.ts).
- * The client sends the same bars it would send to Atlas; we keep the last
- * LEVEL_WINDOW_BARS so the inputs match exactly.
+ * users alike. Uses the same level function as Atlas (lib/chartLevels.ts) on
+ * bars the server fetches itself (lib/marketBars.ts), the same bars Atlas
+ * gets. The request needs only { symbol, interval }.
  */
 const levelsRoute = new Hono();
 
-const VALID_INTERVALS = new Set(['1d', '5d', '1mo', '3mo', '6mo', '1y', '2y', '5y']);
-const MAX_BARS_ACCEPTED = 1000;
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 500;
 
 const cache = new Map<string, { at: number; value: ChartLevelsResult }>();
-
-function isBar(b: unknown): b is MarketDataPoint {
-  if (!b || typeof b !== 'object') return false;
-  const r = b as Record<string, unknown>;
-  return ['timestamp', 'open', 'high', 'low', 'close'].every(
-    (k) => typeof r[k] === 'number' && Number.isFinite(r[k] as number),
-  );
-}
 
 function readCache(key: string): ChartLevelsResult | null {
   const hit = cache.get(key);
@@ -54,35 +43,26 @@ levelsRoute.post('/', async (c) => {
     return c.json({ success: false, error: 'Invalid JSON body' }, 400);
   }
 
-  const { symbol, interval, data } = (body ?? {}) as {
-    symbol?: unknown;
-    interval?: unknown;
-    data?: unknown;
-  };
+  let loaded: Awaited<ReturnType<typeof barsForAnalysis>>;
+  try {
+    loaded = await barsForAnalysis(body, 'Levels');
+  } catch (error) {
+    console.error('[Levels] Failed to load bars:', error);
+    return c.json({ success: false, error: 'Failed to load price data' }, 502);
+  }
+  if (!loaded.ok) {
+    return c.json({ success: false, error: loaded.error }, loaded.status);
+  }
+  const { symbol, interval, bars } = loaded;
 
-  if (typeof symbol !== 'string' || symbol.length === 0 || symbol.length > 20) {
-    return c.json({ success: false, error: 'Invalid symbol' }, 400);
-  }
-  if (typeof interval !== 'string' || !VALID_INTERVALS.has(interval)) {
-    return c.json({ success: false, error: 'Invalid interval' }, 400);
-  }
-  if (!Array.isArray(data) || data.length === 0 || data.length > MAX_BARS_ACCEPTED) {
-    return c.json({ success: false, error: 'Invalid data' }, 400);
-  }
-
-  const bars = data.slice(-LEVEL_WINDOW_BARS).map((b) => ({ volume: 0, date: '', ...(b as object) }));
-  if (!bars.every(isBar)) {
-    return c.json({ success: false, error: 'Invalid bar in data' }, 400);
-  }
-
-  const key = createHash('sha256')
-    .update(JSON.stringify({ s: symbol.toUpperCase(), i: interval, b: bars }))
-    .digest('hex');
+  // Same bars give the same levels, so key on what identifies the bar set.
+  const last = bars[bars.length - 1];
+  const key = `${symbol}|${interval}|${bars.length}|${last.timestamp}|${last.close}`;
   const cached = readCache(key);
   if (cached) return c.json({ success: true, levels: cached });
 
   try {
-    const levels = computeChartLevels(symbol.toUpperCase(), interval, bars as MarketDataPoint[]);
+    const levels = computeChartLevels(symbol, interval, bars);
     if (!levels) {
       return c.json({ success: false, error: 'Not enough price history to calculate levels' }, 422);
     }

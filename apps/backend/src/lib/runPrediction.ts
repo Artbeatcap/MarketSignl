@@ -64,9 +64,9 @@ CURRENT STATE:
 - Trading Bias: ${trend.tradingBias}
 
 MOVING AVERAGES:
-- EMA 9: $${(ema.ema9 || 0).toFixed(2)}
-- EMA 21: $${(ema.ema21 || 0).toFixed(2)}
-- EMA 65: $${(ema.ema65 || 0).toFixed(2)}
+- EMA 9: ${ema.ema9 > 0 ? `$${ema.ema9.toFixed(2)}` : 'unavailable'}
+- EMA 21: ${ema.ema21 > 0 ? `$${ema.ema21.toFixed(2)}` : 'unavailable'}
+- EMA 65: ${ema.ema65 > 0 ? `$${ema.ema65.toFixed(2)}` : 'unavailable'}
 - Alignment: ${trend.emaAlignment || 'mixed'}
 
 VOLATILITY:

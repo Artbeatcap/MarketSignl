@@ -36,7 +36,8 @@ export interface AIPrediction {
 export interface PredictRequest {
   symbol: string;
   interval: ChartInterval;
-  data: Array<{
+  /** Ignored since 2026-11-09: the server fetches its own bars. Older app builds still send it. */
+  data?: Array<{
     timestamp: number;
     open: number;
     high: number;

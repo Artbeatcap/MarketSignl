@@ -260,7 +260,8 @@ console.log('\nfib / volume profile smoke\n');
 
 test('fibonacci: uptrend never null / never inverted', () => {
   const data = synthBars({ n: 80, start: 100, driftPerBar: 0.008, noise: 0.8 });
-  const fib = calculateFibonacci(data, '1d', { atr: 2 });
+  // Daily bars: use a daily-bar range key. '1d' is the 5-minute-bar chart.
+  const fib = calculateFibonacci(data, '3mo', { atr: 2 });
   assert.ok(fib, 'fib null on uptrend');
   assert.ok(fib!.swingHigh > fib!.swingLow);
   assert.ok(fib!.swingSource);
@@ -277,10 +278,16 @@ test('fibonacci: V-reversal never null / never inverted', () => {
     timestamp: Date.UTC(2024, 0, 1) + i * 86400000,
     date: new Date(Date.UTC(2024, 0, 1) + i * 86400000).toISOString().slice(0, 10),
   }));
-  // Use 1d — ChartInterval month keys are daily category after timeframe fix.
-  const fib = calculateFibonacci(data, '1d', { atr: 3 });
+  // Daily bars: use a daily-bar range key. '1d' is the 5-minute-bar chart.
+  const fib = calculateFibonacci(data, '3mo', { atr: 3 });
   assert.ok(fib, 'fib null on V-reversal');
   assert.ok(fib!.swingHigh >= fib!.swingLow);
+});
+
+test('fibonacci: skipped on the intraday-bar charts (1d, 5d)', () => {
+  const data = synthBars({ n: 80, start: 100, driftPerBar: 0.008, noise: 0.8 });
+  assert.equal(calculateFibonacci(data, '1d', { atr: 2 }), null);
+  assert.equal(calculateFibonacci(data, '5d', { atr: 2 }), null);
 });
 
 test('fibonacci: ChartInterval 3mo is eligible (not misclassified as intraday)', () => {

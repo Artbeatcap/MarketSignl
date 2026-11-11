@@ -1,6 +1,13 @@
 // Analysis Configuration Constants
 // All tunable parameters for the technical analysis system
 
+/**
+ * Bars used to find levels (swing points, Fibonacci, volume profile).
+ * Trend, EMAs, ATR and Bollinger Bands use the full history instead, so the
+ * 200 EMA exists. Atlas and /api/levels share this window.
+ */
+export const LEVEL_WINDOW_BARS = 100;
+
 export const ANALYSIS_CONFIG = {
   // === MOVING AVERAGES ===
   EMA_PERIODS: [9, 21, 65, 100, 200] as const,
@@ -142,16 +149,16 @@ export function getTimeframeCategory(
   const lowerTf = timeframe.toLowerCase();
 
   // ChartInterval keys used by the app (must be checked before the generic 'm' match).
-  if (
-    lowerTf === '1d' ||
-    lowerTf === '5d' ||
-    lowerTf === '1mo' ||
-    lowerTf === '3mo' ||
-    lowerTf === '6mo'
-  ) {
+  // These are chart RANGES; classify by the bar size each one fetches
+  // (INTERVAL_CONFIG in marketBars.ts): 1d = 5-minute bars, 5d = 30-minute bars,
+  // 1mo-1y = daily bars, 2y/5y = weekly bars.
+  if (lowerTf === '1d' || lowerTf === '5d') {
+    return 'intraday';
+  }
+  if (lowerTf === '1mo' || lowerTf === '3mo' || lowerTf === '6mo' || lowerTf === '1y') {
     return 'daily';
   }
-  if (lowerTf === '1y' || lowerTf === '2y' || lowerTf === '5y') {
+  if (lowerTf === '2y' || lowerTf === '5y') {
     return 'weekly';
   }
 

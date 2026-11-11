@@ -3,6 +3,7 @@
 
 import {
   ANALYSIS_CONFIG,
+  LEVEL_WINDOW_BARS,
   getSwingBars,
   isFibonacciTimeframe,
   type VolatilityRegime,
@@ -135,7 +136,10 @@ export interface TechnicalIndicators {
   currentPrice: number;
   priceChange: number;
   priceChangePercent: number;
+  /** Bars the levels were found in (at most LEVEL_WINDOW_BARS). */
   dataPoints: number;
+  /** All bars supplied; trend, EMAs, ATR and Bollinger Bands use these. */
+  historyBars?: number;
 
   ema: EMAData;
   trend: TrendState;
@@ -242,28 +246,59 @@ export function classifyTrendState(
   currentPrice: number,
   ema: EMAData
 ): TrendState {
-  const { ema9, ema21, ema65, ema100, ema200 } = ema;
+  // An EMA is 0 when there were too few bars to compute it. Treat that as
+  // missing, never as a price: comparing against 0 makes every stock look like
+  // it is above its long-term average.
+  const available = (
+    [
+      [9, ema.ema9],
+      [21, ema.ema21],
+      [65, ema.ema65],
+      [100, ema.ema100],
+      [200, ema.ema200],
+    ] as const
+  ).filter(([, value]) => value > 0);
 
-  // Count how many EMAs price is above
-  const emas = [ema9, ema21, ema65, ema100, ema200].filter((e) => e > 0);
+  if (available.length === 0) {
+    return {
+      direction: 'ranging',
+      emaAlignment: 'mixed',
+      strength: 30,
+      tradingBias: 'neutral',
+      biasReason: 'Not enough price history to read the trend',
+    };
+  }
+
+  const emas = available.map(([, value]) => value);
   const aboveCount = emas.filter((e) => currentPrice >= e).length;
   const totalEmas = emas.length;
 
-  // Check EMA stacking order
-  const isBullishStack =
-    ema9 >= ema21 && ema21 >= ema65 && ema65 >= ema100 && ema100 >= ema200;
-  const isBearishStack =
-    ema9 <= ema21 && ema21 <= ema65 && ema65 <= ema100 && ema100 <= ema200;
+  // The longest EMA available stands in for the long-term trend.
+  const [anchorPeriod, anchor] = available[available.length - 1];
+  const anchorName = `${anchorPeriod} EMA`;
+  const anchorNote = anchorPeriod === 200 ? '' : ` (200 EMA unavailable; using ${anchorName})`;
+
+  // EMA stacking order, over the EMAs that exist (needs at least two).
+  const isOrdered = (inOrder: (shorter: number, longer: number) => boolean) =>
+    emas.length >= 2 && emas.every((value, i) => i === 0 || inOrder(emas[i - 1], value));
+  const isBullishStack = isOrdered((shorter, longer) => shorter >= longer);
+  const isBearishStack = isOrdered((shorter, longer) => shorter <= longer);
+
+  // "Most" means all but one. With five EMAs that is the original 80% / 20%
+  // cut-off; counting keeps it right when fewer EMAs exist (3 of 4 is "most").
+  const aboveRatio = aboveCount / totalEmas;
+  const mostAbove = totalEmas >= 3 ? aboveCount >= totalEmas - 1 : aboveRatio >= 0.8;
+  const mostBelow = totalEmas >= 3 ? aboveCount <= 1 : aboveRatio <= 0.2;
 
   // Determine alignment
   let emaAlignment: TrendState['emaAlignment'];
   if (isBullishStack && aboveCount === totalEmas) {
     emaAlignment = 'perfectly_bullish';
-  } else if (aboveCount >= totalEmas * 0.8) {
+  } else if (mostAbove) {
     emaAlignment = 'mostly_bullish';
   } else if (isBearishStack && aboveCount === 0) {
     emaAlignment = 'perfectly_bearish';
-  } else if (aboveCount <= totalEmas * 0.2) {
+  } else if (mostBelow) {
     emaAlignment = 'mostly_bearish';
   } else {
     emaAlignment = 'mixed';
@@ -274,37 +309,36 @@ export function classifyTrendState(
   let tradingBias: TrendState['tradingBias'];
   let biasReason: string;
 
-  const aboveRatio = aboveCount / totalEmas;
-
   if (isBullishStack && aboveCount === totalEmas) {
     direction = 'strong_uptrend';
     tradingBias = 'long';
     biasReason = 'Price above all EMAs with perfect bullish alignment';
-  } else if (aboveRatio >= 0.8 && currentPrice > ema200) {
+  } else if (mostAbove && currentPrice > anchor) {
     direction = 'uptrend';
     tradingBias = 'long';
-    biasReason = 'Price above most EMAs and above 200 EMA';
-  } else if (currentPrice > ema200 && aboveRatio < 0.6) {
+    biasReason = `Price above most EMAs and above the ${anchorName}`;
+  } else if (currentPrice > anchor && aboveRatio < 0.6) {
     direction = 'weak_uptrend';
     tradingBias = 'neutral';
-    biasReason = 'Price above 200 EMA but below shorter-term EMAs';
+    biasReason = `Price above the ${anchorName} but below shorter-term EMAs`;
   } else if (isBearishStack && aboveCount === 0) {
     direction = 'strong_downtrend';
     tradingBias = 'short';
     biasReason = 'Price below all EMAs with perfect bearish alignment';
-  } else if (aboveRatio <= 0.2 && currentPrice < ema200) {
+  } else if (mostBelow && currentPrice < anchor) {
     direction = 'downtrend';
     tradingBias = 'short';
-    biasReason = 'Price below most EMAs and below 200 EMA';
-  } else if (currentPrice < ema200 && aboveRatio > 0.4) {
+    biasReason = `Price below most EMAs and below the ${anchorName}`;
+  } else if (currentPrice < anchor && aboveRatio > 0.4) {
     direction = 'weak_downtrend';
     tradingBias = 'neutral';
-    biasReason = 'Price below 200 EMA but above some shorter-term EMAs';
+    biasReason = `Price below the ${anchorName} but above some shorter-term EMAs`;
   } else {
     direction = 'ranging';
     tradingBias = 'neutral';
     biasReason = 'EMAs intertwined, no clear trend direction';
   }
+  biasReason += anchorNote;
 
   // Calculate strength (0-100)
   let strength = 50;
@@ -975,6 +1009,12 @@ export function calculateOverextension(
 // MAIN CALCULATOR FUNCTION
 // ============================================================================
 
+/**
+ * Trend inputs (EMAs, ATR, Bollinger Bands, trend, overextension) use every bar
+ * supplied, so long averages such as the 200 EMA exist. Level inputs (swing
+ * points, Fibonacci, volume profile) use only the last LEVEL_WINDOW_BARS, so
+ * levels come from recent structure. Callers should pass full history.
+ */
 export function calculateAllIndicators(
   data: MarketDataPoint[],
   symbol: string,
@@ -986,12 +1026,14 @@ export function calculateAllIndicators(
     return null;
   }
 
+  const levelBars = data.slice(-LEVEL_WINDOW_BARS);
+
   const currentPrice = data[data.length - 1].close;
-  const firstPrice = data[0].close;
+  const firstPrice = levelBars[0].close;
   const priceChange = currentPrice - firstPrice;
   const priceChangePercent = (priceChange / firstPrice) * 100;
 
-  // Calculate all indicators
+  // Trend inputs: full history
   const ema = calculateAllEMAs(data);
   if (!ema) {
     console.error('Failed to calculate EMAs');
@@ -1014,11 +1056,12 @@ export function calculateAllIndicators(
 
   const overextension = calculateOverextension(currentPrice, ema.ema21, atr.atr, { trendDirection: trend.direction, regime });
 
-  const fibonacci = calculateFibonacci(data, timeframe, { atr: atr.atr });
+  // Level inputs: recent window only
+  const fibonacci = calculateFibonacci(levelBars, timeframe, { atr: atr.atr });
 
-  const volumeProfile = calculateVolumeProfile(data, { atr: atr.atr });
+  const volumeProfile = calculateVolumeProfile(levelBars, { atr: atr.atr });
 
-  const swingPoints = detectSwingPoints(data, timeframe);
+  const swingPoints = detectSwingPoints(levelBars, timeframe);
 
   return {
     symbol,
@@ -1026,7 +1069,8 @@ export function calculateAllIndicators(
     currentPrice,
     priceChange,
     priceChangePercent,
-    dataPoints: data.length,
+    dataPoints: levelBars.length,
+    historyBars: data.length,
     ema,
     trend,
     atr,

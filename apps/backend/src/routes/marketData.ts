@@ -1,68 +1,21 @@
 import { Hono } from 'hono';
-import type { MarketDataPoint } from '@chartsignl/core';
 import {
-  fetchMarketOpen,
-  fetchSnapshotForFreshness,
-  resolveFeedFreshness,
-} from '../lib/feedFreshness.js';
+  LEGACY_1D_VISIBLE_BARS,
+  MarketBarsError,
+  getBars,
+  isChartInterval,
+  normalizeSymbol,
+} from '../lib/marketBars.js';
 
 const marketDataRoute = new Hono();
 
 // Massive.com configuration
 const MASSIVE_BASE_URL = 'https://api.massive.com';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 function getMassiveApiKey(): string | null {
   const apiKey = process.env.MASSIVE_API_KEY?.trim();
   return apiKey ? apiKey : null;
 }
-
-type MassiveTimespan = 'minute' | 'hour' | 'day' | 'week' | 'month' | 'quarter' | 'year';
-
-function baseMsForTimespan(timespan: MassiveTimespan): number {
-  switch (timespan) {
-    case 'minute':
-      return 60 * 1000;
-    case 'hour':
-      return 60 * 60 * 1000;
-    case 'day':
-      return DAY_MS;
-    case 'week':
-      return 7 * DAY_MS;
-    case 'month':
-      // Approximate; we don't use month/quarter/year in current intervalConfig.
-      return 30 * DAY_MS;
-    case 'quarter':
-      return 91 * DAY_MS;
-    case 'year':
-      return 365 * DAY_MS;
-    default: {
-      // Exhaustiveness guard
-      const _exhaustive: never = timespan;
-      return _exhaustive;
-    }
-  }
-}
-
-// Interval mapping for Massive.com
-// Massive uses: minute, hour, day, week, month, quarter, year
-// With multipliers like 1, 5, 15 for minutes
-const intervalConfig: Record<
-  string,
-  { timespan: MassiveTimespan; multiplier: number; daysBack: number; emaWarmupBars: number }
-> = {
-  // Intraday: use warmup to avoid EMA cutoff at chart start (market hours create gaps).
-  '1d': { timespan: 'minute', multiplier: 5, daysBack: 1, emaWarmupBars: 200 },
-  '5d': { timespan: 'minute', multiplier: 30, daysBack: 5, emaWarmupBars: 100 },
-  // Daily bars (Polygon hourly is stale; daily is current). 30 warmup bars; 45 daysBack ≈ 32 trading days.
-  '1mo': { timespan: 'day', multiplier: 1, daysBack: 45, emaWarmupBars: 30 },
-  '3mo': { timespan: 'day', multiplier: 1, daysBack: 140, emaWarmupBars: 30 },
-  '6mo': { timespan: 'day', multiplier: 1, daysBack: 180, emaWarmupBars: 30 },
-  '1y': { timespan: 'day', multiplier: 1, daysBack: 365, emaWarmupBars: 30 },
-  '2y': { timespan: 'week', multiplier: 1, daysBack: 730, emaWarmupBars: 30 },
-  '5y': { timespan: 'week', multiplier: 1, daysBack: 1825, emaWarmupBars: 30 },
-};
 
 // GET /api/market-data/status - Verify Massive API connectivity (ops / debugging)
 marketDataRoute.get('/status', async (c) => {
@@ -105,138 +58,40 @@ marketDataRoute.get('/status', async (c) => {
 
 // GET /api/market-data/:symbol
 marketDataRoute.get('/:symbol', async (c) => {
-  const symbol = c.req.param('symbol');
-  
   try {
-    const massiveApiKey = getMassiveApiKey();
-    console.log('[ROUTE] Market data route hit for symbol:', symbol, 'API key configured:', !!massiveApiKey);
-    
-    const symbolUpper = c.req.param('symbol').toUpperCase();
-    const chartInterval = c.req.query('interval') || '3mo';
-    
-    if (!massiveApiKey) {
-      console.error('[ROUTE ERROR] MASSIVE_API_KEY is not set or empty');
-      return c.json({ error: 'Massive API key not configured' }, 500);
+    const symbol = normalizeSymbol(c.req.param('symbol'));
+    if (!symbol) {
+      return c.json({ error: 'Invalid symbol' }, 400);
     }
+    const requested = c.req.query('interval');
+    const interval = isChartInterval(requested) ? requested : '3mo';
 
-    const config = intervalConfig[chartInterval] || intervalConfig['3mo'];
+    // Bars come from lib/marketBars.ts, the same source the analysis routes use.
+    const loaded = await getBars(symbol, interval);
+    const { bars, freshness } = loaded;
 
-    // Calculate date ranges:
-    // - requestedStartMs is the beginning of the visible window
-    // - fetchStartMs includes warmup bars so EMAs can be computed from the first visible bar
-    const endDate = new Date();
-    const nowMs = endDate.getTime();
+    // Current app builds send layout=sessions and get the two-session 1D chart.
+    // Older builds get the latest session's worth of bars (see LEGACY_1D_VISIBLE_BARS).
+    const wantsSessions = c.req.query('layout') === 'sessions';
+    const visibleStartIndex =
+      interval === '1d' && !wantsSessions
+        ? Math.max(loaded.visibleStartIndex, bars.length - LEGACY_1D_VISIBLE_BARS)
+        : loaded.visibleStartIndex;
 
-    const requestedStartMs = nowMs - config.daysBack * DAY_MS;
-    const warmupMs = config.emaWarmupBars * config.multiplier * baseMsForTimespan(config.timespan);
-    const fetchStartMs = requestedStartMs - warmupMs;
-
-    const fromParam = fetchStartMs;
-    const toParam = nowMs;
-
-    // Build Massive URL
-    // Format: /v2/aggs/ticker/{ticker}/range/{multiplier}/{timespan}/{from}/{to}
-    // Massive supports Unix ms timestamps for {from}/{to} path parameters.
-    const url = `${MASSIVE_BASE_URL}/v2/aggs/ticker/${encodeURIComponent(symbolUpper)}/range/${config.multiplier}/${config.timespan}/${fromParam}/${toParam}?adjusted=true&sort=asc&limit=5000&apiKey=${massiveApiKey}`;
-
-    let response: Response;
-    let snapshot: Awaited<ReturnType<typeof fetchSnapshotForFreshness>> = null;
-    let marketOpen: boolean | undefined;
-    try {
-      [response, snapshot, marketOpen] = await Promise.all([
-        fetch(url),
-        fetchSnapshotForFreshness(symbolUpper),
-        fetchMarketOpen(),
-      ]);
-    } catch (fetchError) {
-      throw fetchError;
-    }
-
-    if (!response.ok) {
-      let errorData: any;
-      try {
-        errorData = await response.json();
-      } catch (parseError) {
-        errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
-      }
-      console.error('Massive API error:', response.status, errorData);
-
-      if (response.status === 401) {
-        return c.json(
-          { error: 'Market data provider rejected the API key. Update MASSIVE_API_KEY on the server.' },
-          502
-        );
-      }
-      if (response.status === 403) {
-        return c.json({ error: 'API rate limit exceeded. Please try again later.' }, 429);
-      }
-      if (response.status === 404) {
-        return c.json({ error: 'Symbol not found' }, 404);
-      }
-      const providerMessage =
-        typeof errorData?.error === 'string' && errorData.error.trim()
-          ? errorData.error.trim()
-          : null;
-      return c.json(
-        { error: providerMessage ?? 'Failed to fetch market data' },
-        500
-      );
-    }
-
-    let json: any;
-    try {
-      json = await response.json();
-    } catch (parseError) {
-      return c.json({ error: 'Failed to parse API response' }, 500);
-    }
-
-    if (json.status === 'ERROR' || json.status === 'NOT_FOUND') {
-      return c.json({ error: json.error || 'Symbol not found' }, 404);
-    }
-
-    if (!json.results || json.results.length === 0) {
-      return c.json({ error: 'No data available for this symbol' }, 404);
-    }
-
-    // Determine where the "visible" data begins within the fetched dataset.
-    // (We fetch warmup bars before requestedStartMs to allow EMA initialization.)
-    const visibleStartIndexRaw = (json.results as any[]).findIndex(
-      (bar: any) => typeof bar?.t === 'number' && bar.t >= requestedStartMs
-    );
-    const visibleStartIndex = visibleStartIndexRaw >= 0 ? visibleStartIndexRaw : 0;
-    const emaWarmupBars = visibleStartIndex;
-
-    // Transform Massive data to our format
-    // Massive returns: t (timestamp), o (open), h (high), l (low), c (close), v (volume), vw (vwap), n (transactions)
-    const data: MarketDataPoint[] = json.results.map((bar: any) => ({
-      timestamp: bar.t, // Already in milliseconds
-      date: new Date(bar.t).toISOString(),
-      open: bar.o,
-      high: bar.h,
-      low: bar.l,
-      close: bar.c,
-      volume: bar.v || 0,
-    }));
-
-    const freshness = resolveFeedFreshness({
-      bars: json.results,
-      snapshot,
-      marketOpen,
-    });
-
-    const responseData = {
-      symbol: symbolUpper,
-      interval: chartInterval,
-      resultsCount: json.resultsCount,
-      data,
+    return c.json({
+      symbol,
+      interval,
+      resultsCount: bars.length,
+      data: bars,
       visibleStartIndex,
-      emaWarmupBars,
-      totalBars: data.length,
+      emaWarmupBars: visibleStartIndex,
+      totalBars: bars.length,
       ...(freshness ? { freshness } : {}),
-    };
-
-    return c.json(responseData);
+    });
   } catch (error) {
+    if (error instanceof MarketBarsError) {
+      return c.json({ error: error.message }, error.status);
+    }
     console.error('Market data error:', error);
     return c.json(
       { error: error instanceof Error ? error.message : 'Failed to fetch data' },

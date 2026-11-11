@@ -58,7 +58,7 @@ export async function fetchMarketData(
   symbol: string,
   interval: ChartInterval = '3mo'
 ): Promise<FetchMarketDataResult> {
-  const url = `${API_URL}/api/market-data/${encodeURIComponent(symbol)}?interval=${interval}`;
+  const url = `${API_URL}/api/market-data/${encodeURIComponent(symbol)}?interval=${interval}&layout=sessions`;
   
   let response: Response;
   try {
@@ -172,11 +172,25 @@ export function addIndicatorsAndTrim(data: MarketDataPoint[], visibleStartIndex:
 export async function fetchMarketDataWithIndicators(
   symbol: string,
   interval: ChartInterval = '3mo'
-): Promise<{ data: MarketDataPoint[]; freshness?: DataFreshness }> {
+): Promise<{ data: MarketDataPoint[]; history: MarketDataPoint[]; freshness?: DataFreshness }> {
   const { data, visibleStartIndex, freshness } = await fetchMarketData(symbol, interval);
   const trimmed = addIndicatorsAndTrim(data, visibleStartIndex);
   rememberFreshness(freshness);
-  return { data: trimmed, freshness };
+  return { data: trimmed, history: scrollableHistory(data, trimmed.length), freshness };
+}
+
+/** Bars at the very start have no EMA 21 yet; they are not offered for scroll-back. */
+const EMA_SETTLE_BARS = 21;
+
+/**
+ * Everything the chart can scroll back through: the visible bars plus the
+ * earlier bars the server sent for indicator warmup. Always ends with the same
+ * bars as the default view.
+ */
+export function scrollableHistory(data: MarketDataPoint[], visibleCount: number): MarketDataPoint[] {
+  const withIndicators = addIndicators(data);
+  const spare = withIndicators.length - visibleCount;
+  return withIndicators.slice(Math.max(0, Math.min(EMA_SETTLE_BARS, spare)));
 }
 
 // Format price for display
@@ -216,6 +230,29 @@ export function formatChartDate(timestamp: number, interval: ChartInterval): str
   } else {
     return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
   }
+}
+
+/**
+ * Price change for the 1D chart, which shows the last two sessions: the latest
+ * session's last close against the previous session's last close (the usual
+ * "day change"). Sessions are split on the overnight gap between bars. Falls
+ * back to first-to-last when only one session is present.
+ */
+export function calculateLatestSessionChange(data: MarketDataPoint[]): {
+  change: number;
+  changePercent: number;
+  isPositive: boolean;
+} {
+  // A regular session lasts 6.5 hours; the overnight break is at least 17.5.
+  const SESSION_GAP_MS = 8 * 60 * 60 * 1000;
+  for (let i = data.length - 1; i > 0; i--) {
+    if (data[i].timestamp - data[i - 1].timestamp > SESSION_GAP_MS) {
+      const priorClose = data[i - 1].close;
+      const change = data[data.length - 1].close - priorClose;
+      return { change, changePercent: (change / priorClose) * 100, isPositive: change >= 0 };
+    }
+  }
+  return calculatePriceChange(data);
 }
 
 // Calculate price change

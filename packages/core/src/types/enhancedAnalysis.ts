@@ -240,6 +240,18 @@ export interface AnalysisGuide {
 }
 
 export interface EnhancedAIAnalysis {
+  /**
+   * Bars the analysis was computed from (server-fetched). Timestamps are ms.
+   * Absent on analyses saved before 2026-11-09.
+   */
+  dataWindow?: {
+    firstBarTimestamp: number;
+    lastBarTimestamp: number;
+    /** All bars used for trend, EMAs, ATR and Bollinger Bands. */
+    historyBars: number;
+    /** Most recent bars the levels were found in. */
+    levelBars: number;
+  };
   /** Optional for compatibility with previously saved analyses. */
   marketContext?: MarketContext;
   guide?: AnalysisGuide;

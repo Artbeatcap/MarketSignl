@@ -25,8 +25,10 @@ import {
   type ScoredLevel,
 } from './confluenceScorer.js';
 
-/** Bars Atlas analyzes. The app sends this same window to /api/levels. */
-export const LEVEL_WINDOW_BARS = 100;
+import { LEVEL_WINDOW_BARS } from './analysisConstants.js';
+
+/** Bars levels are found in. calculateAllIndicators applies the window itself. */
+export { LEVEL_WINDOW_BARS };
 
 export interface LevelSet {
   scoredAnalysis: ScoredAnalysis;
@@ -48,6 +50,7 @@ export interface ChartLevelsResult {
   atr: number;
   /** Timestamp (ms) of the last bar the levels were computed from. */
   asOfTimestamp: number;
+  /** Bars the levels were found in (at most LEVEL_WINDOW_BARS). */
   barsUsed: number;
   /** Default display set (2 per side). Same lists Atlas returns as supportLevels/resistanceLevels. */
   supportLevels: ScoredLevel[];
@@ -62,8 +65,9 @@ export function computeChartLevels(
   interval: string,
   data: MarketDataPoint[],
 ): ChartLevelsResult | null {
-  const bars = data.slice(-LEVEL_WINDOW_BARS);
-  const indicators = calculateAllIndicators(bars, symbol, interval);
+  // Pass full history: trend inputs need it, and calculateAllIndicators takes
+  // the last LEVEL_WINDOW_BARS for the levels, exactly as it does for Atlas.
+  const indicators = calculateAllIndicators(data, symbol, interval);
   if (!indicators) return null;
   const { scoredAnalysis, expanded } = levelsFromIndicators(indicators);
   return {
@@ -71,8 +75,8 @@ export function computeChartLevels(
     interval,
     currentPrice: indicators.currentPrice,
     atr: indicators.atr.atr,
-    asOfTimestamp: bars[bars.length - 1].timestamp,
-    barsUsed: bars.length,
+    asOfTimestamp: data[data.length - 1].timestamp,
+    barsUsed: indicators.dataPoints,
     supportLevels: scoredAnalysis.displayLevels.support,
     resistanceLevels: scoredAnalysis.displayLevels.resistance,
     allSupportLevels: expanded.support,

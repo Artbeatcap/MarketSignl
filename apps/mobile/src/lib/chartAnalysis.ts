@@ -9,19 +9,15 @@ import type {
 import { getAccessToken } from './supabase';
 import { API_URL } from './apiConfig';
 
-/**
- * Bars sent to Atlas and to /api/levels. Must match LEVEL_WINDOW_BARS in
- * apps/backend/src/lib/chartLevels.ts or the two sets of levels can differ.
- */
-export const ANALYSIS_WINDOW_BARS = 100;
-
-// Analyze chart data using AI (via our backend)
+// Analyze a chart using AI (via our backend).
+// The backend fetches its own price bars for the symbol and interval, so no
+// bars are sent. `_data` and `_freshness` stay in the signature for callers.
 export async function analyzeChartData(
   symbol: string,
   interval: string,
-  data: MarketDataPoint[],
+  _data: MarketDataPoint[],
   options?: { direction: string; confidence: number; predictionId?: string } | null,
-  freshness?: DataFreshness,
+  _freshness?: DataFreshness,
 ): Promise<EnhancedAIAnalysis> {
   const token = await getAccessToken();
 
@@ -38,8 +34,6 @@ export async function analyzeChartData(
     body: JSON.stringify({
       symbol,
       interval,
-      data: data.slice(-ANALYSIS_WINDOW_BARS),
-      ...(freshness ? { freshness } : {}),
       ...(options
         ? {
             forecast: { direction: options.direction, confidence: options.confidence },
@@ -65,20 +59,20 @@ export async function analyzeChartData(
 
 /**
  * POST /api/levels — the chart's support/resistance before Atlas runs.
- * Same backend function Atlas uses, fed the same bar window, so the lines do not
- * move or change price when Atlas runs. No AI call and no usage counted.
+ * Same backend function Atlas uses, on bars the backend fetches itself, so the
+ * lines do not move or change price when Atlas runs. No AI call and no usage counted.
  * Throws on failure: the caller shows "Levels unavailable" rather than
  * drawing levels from some other calculation.
  */
 export async function fetchChartLevels(
   symbol: string,
   interval: string,
-  data: MarketDataPoint[],
+  _data: MarketDataPoint[],
 ): Promise<ChartLevels> {
   const response = await fetch(`${API_URL}/api/levels`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ symbol, interval, data: data.slice(-ANALYSIS_WINDOW_BARS) }),
+    body: JSON.stringify({ symbol, interval }),
   });
   const result: ChartLevelsResponse = await response
     .json()

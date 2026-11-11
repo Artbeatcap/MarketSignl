@@ -36,7 +36,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export const PROMPT_VERSION = '2026-11-07-context-and-clarity';
+export const PROMPT_VERSION = '2026-11-09-full-history-trend';
 
 export function atlasAnalysisCacheKey(input: {
   symbol: string; interval: string; data: MarketDataPoint[];
@@ -201,9 +201,12 @@ export function buildUserPrompt(
     .sort((a, b) => (a.distanceATR ?? a.distancePercent) - (b.distanceATR ?? b.distancePercent))
     .slice(0, 3);
 
-  const ema9Diff = ema.ema9 > 0 ? ((ema.ema9 - currentPrice) / currentPrice) * 100 : 0;
-  const ema21Diff = ema.ema21 > 0 ? ((ema.ema21 - currentPrice) / currentPrice) * 100 : 0;
-  const ema65Diff = ema.ema65 > 0 ? ((ema.ema65 - currentPrice) / currentPrice) * 100 : 0;
+  // An EMA of 0 was not computed (too few bars). Say so; never print $0.00.
+  const emaLine = (value: number): string => {
+    if (!(value > 0)) return 'unavailable (not enough history)';
+    const diff = ((value - currentPrice) / currentPrice) * 100;
+    return `$${value.toFixed(2)} (${diff > 0 ? '+' : ''}${diff.toFixed(2)}%)`;
+  };
 
   return `Analyze ${symbol} on the ${timeframe} timeframe.
 ${asOfFormatted ? `\nPRICE TIMESTAMP: as of ${asOfFormatted}. Anchor every price statement to this time. Do not say where price is right now.\n` : ''}
@@ -213,9 +216,11 @@ CURRENT STATE:
 - Trading Bias: ${trend.tradingBias} - ${trend.biasReason}
 
 MOVING AVERAGES:
-- EMA 9: $${(ema.ema9 || 0).toFixed(2)} (${ema9Diff > 0 ? '+' : ''}${ema9Diff.toFixed(2)}%)
-- EMA 21: $${(ema.ema21 || 0).toFixed(2)} (${ema21Diff > 0 ? '+' : ''}${ema21Diff.toFixed(2)}%)
-- EMA 65: $${(ema.ema65 || 0).toFixed(2)} (${ema65Diff > 0 ? '+' : ''}${ema65Diff.toFixed(2)}%)
+- EMA 9: ${emaLine(ema.ema9)}
+- EMA 21: ${emaLine(ema.ema21)}
+- EMA 65: ${emaLine(ema.ema65)}
+- EMA 100: ${emaLine(ema.ema100)}
+- EMA 200: ${emaLine(ema.ema200)}
 - Alignment: ${trend.emaAlignment || 'mixed'}
 
 VOLATILITY & MOMENTUM:
@@ -262,6 +267,9 @@ export async function runAtlasAnalysis(input: {
   interval: string;
   data: MarketDataPoint[];
   forecast?: { direction: string; confidence: number } | null;
+  /** Feed timestamp from the server's own fetch (lib/marketBars.ts). Trusted. */
+  freshness?: DataFreshness | null;
+  /** Client-supplied freshness. Validated; ignored when `freshness` is given. */
   rawFreshness?: unknown;
 }): Promise<RunAtlasResult> {
   const { symbol, interval, data, forecast, rawFreshness } = input;
@@ -277,7 +285,9 @@ export async function runAtlasAnalysis(input: {
   }
 
   let freshness: DataFreshness | undefined;
-  if (rawFreshness !== undefined && rawFreshness !== null) {
+  if (input.freshness) {
+    freshness = input.freshness;
+  } else if (rawFreshness !== undefined && rawFreshness !== null) {
     try {
       freshness = validateClientFreshness(rawFreshness);
     } catch (err) {
@@ -428,7 +438,9 @@ export async function runAtlasAnalysis(input: {
         indicator: 'EMA Alignment',
         value: indicators.trend.emaAlignment,
         status: indicators.trend.emaAlignment.includes('bullish') ? 'bullish' : indicators.trend.emaAlignment.includes('bearish') ? 'bearish' : 'neutral',
-        statusLabel: `9: ${indicators.ema.ema9.toFixed(2)}, 21: ${indicators.ema.ema21.toFixed(2)}, 65: ${indicators.ema.ema65.toFixed(2)}`,
+        statusLabel: indicators.ema.values.length
+          ? indicators.ema.values.slice(0, 3).map((e) => `${e.period}: ${e.value.toFixed(2)}`).join(', ')
+          : 'Not enough history',
       },
       {
         indicator: 'Volatility (ATR)',
@@ -460,6 +472,13 @@ export async function runAtlasAnalysis(input: {
     timeframe: interval,
     analyzedAt: new Date().toISOString(),
     ...(freshness ? { freshness } : {}),
+    // Which bars this analysis was computed from, so it can be replayed later.
+    dataWindow: {
+      firstBarTimestamp: data[0].timestamp,
+      lastBarTimestamp: data[data.length - 1].timestamp,
+      historyBars: data.length,
+      levelBars: indicators.dataPoints,
+    },
     marketContext,
     guide: buildAnalysisGuide(indicators, scoredAnalysis, contextApplies ? marketContext : undefined, interval),
 

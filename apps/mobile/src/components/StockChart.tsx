@@ -205,6 +205,27 @@ function formatCompact5DLabel(timestamp: number, data: MarketDataPoint[], tickIn
   return `${hour}:${m}${ampm}`;
 }
 
+/**
+ * A regular session lasts 6.5 hours and the overnight break is at least 17.5,
+ * so a gap this long between bars is a new session, never a quiet stretch.
+ */
+const SESSION_GAP_MS = 8 * 60 * 60 * 1000;
+
+/**
+ * Indices where a new session starts on the 1D chart, which shows the last two
+ * regular sessions back to back. Used to draw a separator between them.
+ * Found from the time gap between bars, so it does not depend on the device's
+ * time zone.
+ */
+function sessionStartIndices(data: MarketDataPoint[], interval: ChartInterval): number[] {
+  if (interval !== '1d') return [];
+  const starts: number[] = [];
+  for (let i = 1; i < data.length; i++) {
+    if (data[i].timestamp - data[i - 1].timestamp > SESSION_GAP_MS) starts.push(i);
+  }
+  return starts;
+}
+
 function getTickCount(dataLength: number, chartWidth: number): number {
   const maxTicks = chartWidth < 520 ? 4 : 6;
   return Math.min(maxTicks, dataLength);
@@ -353,8 +374,8 @@ export function StockChart({
       // Categorical axis - use array indices to avoid gaps
       const ticks = getCategoricalTicks(data.length, tickCount);
       
-      // Special formatter for 5D to show dates and times
-      if (interval === '5d') {
+      // 1D and 5D span several sessions: show the date at each day change, times in between
+      if (interval === '5d' || interval === '1d') {
         return {
           dataKey: 'index' as const,
           type: 'category' as const,
@@ -640,6 +661,9 @@ function SimpleCandlestickChart({
   const xForIndex = (index: number) =>
     CHART_LEFT_MARGIN + index * (candleWidth + candleSpacing) + candleWidth / 2;
 
+  const sessionStarts = useMemo(() => sessionStartIndices(data, interval), [data, interval]);
+  const sessionStartSet = useMemo(() => new Set(sessionStarts), [sessionStarts]);
+
   return (
     <View style={{ width, height, overflow: 'visible' }}>
       {/* Y-axis labels (left side for candlestick) */}
@@ -702,6 +726,23 @@ function SimpleCandlestickChart({
           strokeWidth="1"
           strokeDasharray="3,3"
         />
+
+        {/* Session separators (1D chart shows two sessions) */}
+        {sessionStarts.map((index) => {
+          const xPosition = (xForIndex(index - 1) + xForIndex(index)) / 2;
+          return (
+            <SvgLine
+              key={`session-${index}`}
+              x1={xPosition}
+              y1={10}
+              x2={xPosition}
+              y2={chartHeight + 10}
+              stroke={CHART_COLORS.grid}
+              strokeWidth="1"
+              strokeDasharray="2,4"
+            />
+          );
+        })}
 
         {/* X-axis tick marks */}
         {xAxisIndices.map((index) => {
@@ -769,7 +810,8 @@ function SimpleCandlestickChart({
                 if (point.ema9 !== undefined && point.ema9 !== null) {
                   const x = CHART_LEFT_MARGIN + index * (candleWidth + candleSpacing) + candleWidth / 2;
                   const y = priceToY(point.ema9);
-                  pathParts.push(`${isFirstPoint ? 'M' : 'L'} ${x} ${y}`);
+                  // Lift the pen at a new session so the line does not bridge the overnight gap.
+                  pathParts.push(`${isFirstPoint || sessionStartSet.has(index) ? 'M' : 'L'} ${x} ${y}`);
                   isFirstPoint = false;
                 }
               });
@@ -796,7 +838,8 @@ function SimpleCandlestickChart({
                 if (point.ema21 !== undefined && point.ema21 !== null) {
                   const x = CHART_LEFT_MARGIN + index * (candleWidth + candleSpacing) + candleWidth / 2;
                   const y = priceToY(point.ema21);
-                  pathParts.push(`${isFirstPoint ? 'M' : 'L'} ${x} ${y}`);
+                  // Lift the pen at a new session so the line does not bridge the overnight gap.
+                  pathParts.push(`${isFirstPoint || sessionStartSet.has(index) ? 'M' : 'L'} ${x} ${y}`);
                   isFirstPoint = false;
                 }
               });
@@ -891,7 +934,7 @@ function SimpleCandlestickChart({
         indices={xAxisIndices}
         xForIndex={xForIndex}
         labelFor={(index, tickIdx) =>
-          interval === '5d'
+          interval === '5d' || interval === '1d'
             ? formatCompact5DLabel(
                 data[index]?.timestamp ?? 0,
                 data,
@@ -970,6 +1013,9 @@ function SimpleLineChart({
       ? layout.xForHistoricalIndex(i, data.length)
       : CHART_LEFT_MARGIN + i * stepX;
 
+  const sessionStarts = useMemo(() => sessionStartIndices(data, interval), [data, interval]);
+  const sessionStartSet = useMemo(() => new Set(sessionStarts), [sessionStarts]);
+
   const tickCount = getTickCount(data.length, width);
   const xAxisIndices = useMemo(() => {
     if (data.length === 0) return [];
@@ -985,8 +1031,9 @@ function SimpleLineChart({
     return <View style={{ width, height }} />;
   }
 
+  // Lift the pen at a new session so the line does not bridge the overnight gap.
   const closePathD = data
-    .map((point, i) => `${i === 0 ? 'M' : 'L'} ${xForIndex(i)} ${priceToY(point.close)}`)
+    .map((point, i) => `${i === 0 || sessionStartSet.has(i) ? 'M' : 'L'} ${xForIndex(i)} ${priceToY(point.close)}`)
     .join(' ');
 
   return (
@@ -1050,6 +1097,23 @@ function SimpleLineChart({
             strokeDasharray="3,3"
           />
 
+          {/* Session separators (1D chart shows two sessions) */}
+          {sessionStarts.map((index) => {
+            const xPosition = (xForIndex(index - 1) + xForIndex(index)) / 2;
+            return (
+              <SvgLine
+                key={`session-${index}`}
+                x1={xPosition}
+                y1={10}
+                x2={xPosition}
+                y2={chartSvgHeight - 10}
+                stroke={CHART_COLORS.grid}
+                strokeWidth="1"
+                strokeDasharray="2,4"
+              />
+            );
+          })}
+
           {xAxisIndices.map((index) => {
             const xPosition = xForIndex(index);
             const bottomY = chartSvgHeight - 10;
@@ -1078,7 +1142,7 @@ function SimpleLineChart({
               const parts: string[] = [];
               data.forEach((point, i) => {
                 if (point.ema9 != null) {
-                  parts.push(`${parts.length ? 'L' : 'M'} ${xForIndex(i)} ${priceToY(point.ema9)}`);
+                  parts.push(`${parts.length && !sessionStartSet.has(i) ? 'L' : 'M'} ${xForIndex(i)} ${priceToY(point.ema9)}`);
                 }
               });
               return parts.length ? (
@@ -1097,7 +1161,7 @@ function SimpleLineChart({
               const parts: string[] = [];
               data.forEach((point, i) => {
                 if (point.ema21 != null) {
-                  parts.push(`${parts.length ? 'L' : 'M'} ${xForIndex(i)} ${priceToY(point.ema21)}`);
+                  parts.push(`${parts.length && !sessionStartSet.has(i) ? 'L' : 'M'} ${xForIndex(i)} ${priceToY(point.ema21)}`);
                 }
               });
               return parts.length ? (
@@ -1208,7 +1272,7 @@ function SimpleLineChart({
         indices={xAxisIndices}
         xForIndex={xForIndex}
         labelFor={(index, tickIdx) =>
-          interval === '5d'
+          interval === '5d' || interval === '1d'
             ? formatCompact5DLabel(
                 data[index]?.timestamp ?? 0,
                 data,

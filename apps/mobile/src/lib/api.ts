@@ -16,7 +16,6 @@ import type {
 
 import { API_URL } from './apiConfig';
 import { getAccessToken } from './supabase';
-import { ANALYSIS_WINDOW_BARS } from './chartAnalysis';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 
@@ -186,12 +185,13 @@ export async function createCustomerPortalSession(accessToken?: string | null): 
 export async function createPrediction(
   symbol: string,
   interval: string,
-  data: unknown[]
+  _data: unknown[]
 ): Promise<PredictResponse> {
   return apiFetch('/api/predict', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ symbol, interval, data }),
+    // The backend fetches its own price bars; none are sent.
+    body: JSON.stringify({ symbol, interval }),
   });
 }
 
@@ -213,8 +213,8 @@ export async function getPrediction(id: string): Promise<GetPredictionResponse> 
 export async function runGuestAnalyze(
   symbol: string,
   interval: string,
-  data: MarketDataPoint[],
-  freshness?: DataFreshness,
+  _data: MarketDataPoint[],
+  _freshness?: DataFreshness,
 ): Promise<{
   success: boolean;
   remaining?: 0 | 1;
@@ -226,12 +226,8 @@ export async function runGuestAnalyze(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({
-      symbol,
-      interval,
-      data: data.slice(-ANALYSIS_WINDOW_BARS),
-      ...(freshness ? { freshness } : {}),
-    }),
+    // The backend fetches its own price bars; none are sent.
+    body: JSON.stringify({ symbol, interval }),
   });
   const result = await response.json().catch(() => ({ success: false, error: 'Analysis failed' }));
   if (!response.ok) {

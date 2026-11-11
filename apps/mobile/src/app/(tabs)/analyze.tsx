@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, SymbolSearch, StockChart, EmailVerificationBanner, PredictionSummary, DataFreshnessBadge, DataFreshnessSheet, LevelDetailSheet } from '../../components';
+import { Button, Card, SymbolSearch, StockChart, ChartViewport, EmailVerificationBanner, PredictionSummary, DataFreshnessBadge, DataFreshnessSheet, LevelDetailSheet } from '../../components';
 import {
   InfoButton,
   AnalysisEducationFooter,
@@ -25,8 +25,9 @@ import { ChartLayerToggles } from '../../components/chart';
 import { useChartLayers } from '../../store/chartLayerStore';
 import { useAuthStore } from '../../store/authStore';
 import { useOnboardingStore } from '../../store/onboardingStore';
-import { fetchMarketDataWithIndicators, formatPrice, calculatePriceChange } from '../../lib/marketData';
+import { fetchMarketDataWithIndicators, formatPrice, calculatePriceChange, calculateLatestSessionChange } from '../../lib/marketData';
 import { fetchChartLevels, detectTrend, analyzeChartData } from '../../lib/chartAnalysis';
+import { viewRange, type ChartView } from '../../lib/chartViewport';
 import { getUsage, getAnalysis, getPrediction, createPrediction, getCurrentUser, runGuestAnalyze, getGuestAnalyzeStatus } from '../../lib/api';
 import { getWeeklyAtlasLimit, getWeeklyAtlasUsed, isWeeklyAtlasLocked } from '../../lib/usage';
 import { friendlyAtlasError } from '../../lib/atlasError';
@@ -293,6 +294,26 @@ export default function AnalyzeScreen() {
     retry: 2,
   });
   const safeChartData = chartQuery?.data ?? [];
+
+  // Zoom and scroll-back. `safeChartData` stays the default window that levels,
+  // the price change and Atlas describe; only the bars drawn change.
+  const chartHistory = chartQuery?.history ?? safeChartData;
+  const [chartView, setChartView] = useState<ChartView | null>(null);
+  useEffect(() => {
+    setChartView(null);
+  }, [selectedSymbol, selectedInterval]);
+  const defaultChartView = useMemo<ChartView>(
+    () => ({ count: safeChartData.length, endOffset: 0 }),
+    [safeChartData.length],
+  );
+  const activeChartView = chartView ?? defaultChartView;
+  const viewChartData = useMemo(() => {
+    if (!chartView) return safeChartData;
+    const { start, end } = viewRange(chartView, chartHistory.length);
+    return chartHistory.slice(start, end);
+  }, [chartView, chartHistory, safeChartData]);
+  // The forecast is drawn from the newest bar, so it only fits when that bar is on screen.
+  const chartShowsLatest = activeChartView.endOffset === 0;
   const chartFreshness = chartQuery?.freshness;
 
   // Levels before Atlas runs: same backend function and bar window Atlas uses,
@@ -317,8 +338,11 @@ export default function AnalyzeScreen() {
 
   // Price change calculation
   const priceChange = useMemo(() => {
-    return calculatePriceChange(safeChartData);
-  }, [safeChartData]);
+    // 1D shows two sessions; its change is the latest session against the prior close.
+    return selectedInterval === '1d'
+      ? calculateLatestSessionChange(safeChartData)
+      : calculatePriceChange(safeChartData);
+  }, [safeChartData, selectedInterval]);
 
   // Current price
   const currentPrice = safeChartData.length > 0 ? safeChartData[safeChartData.length - 1].close : 0;
@@ -699,8 +723,15 @@ export default function AnalyzeScreen() {
               <Button title="Retry" onPress={() => refetch()} variant="outline" size="sm" />
             </View>
           ) : (
+            <ChartViewport
+              total={chartHistory.length}
+              defaultView={defaultChartView}
+              view={activeChartView}
+              onChange={setChartView}
+              onReset={() => setChartView(null)}
+            >
             <StockChart
-              data={safeChartData}
+              data={viewChartData}
               symbol={selectedSymbol}
               interval={selectedInterval}
               viewType={viewType}
@@ -713,9 +744,10 @@ export default function AnalyzeScreen() {
               height={chartHeight}
               projectedPath={prediction?.projectedPath}
               expectedChangePct={prediction?.expectedChangePct}
-              showPrediction={showPredictionOverlay && !!prediction}
+              showPrediction={showPredictionOverlay && !!prediction && chartShowsLatest}
               onLevelPress={setSelectedLevelId}
             />
+            </ChartViewport>
           )}
           {levelsUnavailable ? (
             <TouchableOpacity

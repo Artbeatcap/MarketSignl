@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
-import type { MarketDataPoint } from '../lib/technicalCalculator.js';
+import { barsForAnalysis } from '../lib/marketBars.js';
 import { runPrediction } from '../lib/runPrediction.js';
 import { runAtlasAnalysis } from '../lib/runAtlasAnalysis.js';
 import {
@@ -75,22 +75,17 @@ analyzeGuestRoute.post('/', async (c) => {
     }
 
     const body = await c.req.json();
-    const { symbol, interval, data, freshness: rawFreshness } = body as {
-      symbol: string;
-      interval: string;
-      data: MarketDataPoint[];
-      freshness?: unknown;
-    };
-
-    if (!symbol || !interval || !Array.isArray(data) || data.length === 0) {
-      return c.json({ success: false, error: 'Missing required fields' }, 400);
+    // Bars are fetched here, never taken from the request (lib/marketBars.ts).
+    const loaded = await barsForAnalysis(body, 'Guest');
+    if (!loaded.ok) {
+      return c.json({ success: false, error: loaded.error }, loaded.status);
     }
+    const { symbol, interval, bars, freshness } = loaded;
 
-    const sliced = data.slice(-100);
     const predictionResult = await runPrediction({
       symbol,
       interval,
-      data: sliced,
+      data: bars,
     });
     if (!predictionResult.ok) {
       return c.json(
@@ -102,12 +97,12 @@ analyzeGuestRoute.post('/', async (c) => {
     const analysisResult = await runAtlasAnalysis({
       symbol,
       interval,
-      data: sliced,
+      data: bars,
       forecast: {
         direction: predictionResult.prediction.direction,
         confidence: predictionResult.prediction.confidence,
       },
-      rawFreshness,
+      freshness,
     });
     if (!analysisResult.ok) {
       return c.json(

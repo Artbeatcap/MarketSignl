@@ -9,6 +9,7 @@
     "start": "node dist/index.js",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist",
+    "test:engine": "tsx src/lib/__tests__/analysisEngine.test.ts && tsx src/lib/__tests__/sessionBars.test.ts && tsx src/lib/__tests__/marketBars.test.ts && tsx src/lib/__tests__/chartLevels.test.ts",
     "test:relevance": "tsx src/lib/__tests__/levelRelevance.test.ts",
     "test:movers": "tsx src/lib/__tests__/moversFilter.test.ts",
     "test:newsletter": "tsx src/lib/__tests__/newsletter.test.ts",
