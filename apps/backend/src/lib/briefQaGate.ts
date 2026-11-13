@@ -18,6 +18,8 @@ import { isWeekend } from './weekAhead.js';
 
 const MINUS = '\u2212';
 const PCT_TOL = 0.02;
+/** "over 7%" and "roughly 4%" can sit this far from the print and still be the same move. */
+const APPROX_TOL = 1.5;
 const PX_TOL = 0.01;
 
 const STOP = new Set([
@@ -209,7 +211,7 @@ export function logBriefQa(entry: BriefQaLog): void {
   if (entry.fixes > 3) {
     console.warn(`[brief_qa] ${entry.fixes} fixes in one brief — the prompt is drifting`);
   }
-  if (entry.status === 'blocked' || entry.status === 'crashed') {
+  if (entry.status === 'blocked' || entry.status === 'crashed' || entry.status === 'rewrite_missed') {
     console.error(`[brief_qa] ${entry.status} ${entry.edition} ${entry.asOf}`);
   }
 }
@@ -427,7 +429,7 @@ export interface ResolveArgs {
 }
 
 export interface GateResolution {
-  status: 'pass' | 'fixed' | 'blocked' | 'crashed';
+  status: 'pass' | 'fixed' | 'blocked' | 'crashed' | 'rewrite_missed';
   draft: BriefDraft;
   sendProse: boolean;
   gaps: CoverageGap[];
@@ -473,11 +475,16 @@ export async function resolveGatedDraft(args: ResolveArgs): Promise<GateResoluti
         (startedWithBias && !result.draft.fields.opening_bias?.trim());
       if (biasDropped) {
         result.issues.push(...notes);
+        const rewriteMissed = notes.some((issue) => issue.code === 'rewrite_not_run');
         await safeAlert(
           args.alert,
-          `BRIEF QA BLOCKED ${args.facts.edition} ${args.facts.asOf}`,
+          `${rewriteMissed ? 'BRIEF QA REWRITE MISSED' : 'BRIEF QA BLOCKED'} ${args.facts.edition} ${args.facts.asOf}`,
           formatIssues(result.issues)
         );
+        if (rewriteMissed) {
+          logResolution(args, 'rewrite_missed', result, gaps, started);
+          return { status: 'rewrite_missed', draft: args.draft, sendProse: true, gaps, result };
+        }
         logResolution(args, 'blocked', result, gaps, started);
         return { status: 'blocked', draft: result.draft, sendProse: false, gaps, result };
       }
@@ -761,11 +768,11 @@ function judgeSentence(
       reasons.push(problem);
       continue;
     }
-    if (!claim.ticker) continue;
+    if (!claim.ticker || claim.approx) continue;
     const fact = facts.tickers[claim.ticker];
     if (!fact) continue;
     const target = targetFor(claim, fact, facts, sentence);
-    if (target == null || claim.approx) continue;
+    if (target == null) continue;
     if (!apart(claim.value, target, claimTolerance(claim))) continue;
     reps.push({ start: claim.start, end: claim.end, next: renderClaim(claim, target) });
   }
@@ -900,7 +907,7 @@ function claimProblem(claim: Claim, sentence: string, facts: BriefFacts, dupeKey
   }
   if (target == null) return 'not_in_facts';
   if (!apart(claim.value, target, tol)) return null;
-  if (claim.approx) return 'not_in_facts';
+  if (claim.approx) return apart(claim.value, target, APPROX_TOL) ? 'not_in_facts' : null;
   if (claim.metric.startsWith('intraday')) return 'not_in_facts';
   return null;
 }
@@ -1116,10 +1123,12 @@ function wordCount(sentence: string): number {
 
 function collectClaims(text: string, facts: BriefFacts): Claim[] {
   const claims: Claim[] = [];
-  const pct = /(?<approx>≈|~|about\s+)?(?:(?<sign>[+\-\u2212])\s*)?(?<num>\d{1,3}(?:\.\d{1,2})?)\s*%/gi;
+  const pct =
+    /(?<approx>≈|~|\b(?:about|over|under|nearly|roughly|approximately|around)\s+)?(?:(?<sign>[+\-\u2212])\s*)?(?<num>\d{1,3}(?:\.\d{1,2})?)\s*%/gi;
   for (const match of text.matchAll(pct)) {
     const start = match.index ?? 0;
-    if (isVolumeContext(text, start)) continue;
+    const end = start + match[0].length;
+    if (isVolumeContext(text, start) || isDrawdownAside(text, end)) continue;
     const line = lineAt(text, start);
     const num = Number(match.groups?.num);
     if (!Number.isFinite(num)) continue;
@@ -1511,6 +1520,14 @@ function capsTickers(text: string): string[] {
 
 function isVolumeContext(text: string, index: number): boolean {
   return /\bvolume\b|\bshares\b/i.test(text.slice(Math.max(0, index - 40), index));
+}
+
+/** "30% from its October peak" is context, not a second print of the session move. */
+function isDrawdownAside(text: string, end: number): boolean {
+  const after = text.slice(end, end + 56);
+  return /\bfrom\s+(?:its|their|the)\s+(?:(?:record|all-time|recent|prior|last|january|february|march|april|may|june|july|august|september|october|november|december|\d{4})\s+){0,3}(?:peak|high|highs)\b/i.test(
+    after
+  );
 }
 
 function apart(a: number, b: number, tol: number): boolean {

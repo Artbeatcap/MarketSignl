@@ -443,7 +443,7 @@ await test('surviving sentences that are only figures count as missing_why', () 
   assert.ok(result.issues.some((issue) => issue.code === 'missing_why' && issue.field === 'opening_bias'));
 });
 
-await test('a rewrite that cannot run is reported, not counted as done', async () => {
+await test('a rewrite that cannot run keeps the written brief and reports the miss', async () => {
   const alerts: string[] = [];
   const resolved = await resolveGatedDraft({
     draft: { fields: { opening_bias: NOV5_VERBATIM } },
@@ -451,14 +451,43 @@ await test('a rewrite that cannot run is reported, not counted as done', async (
     regenerate: async () => {
       throw new Error('ANTHROPIC_API_KEY is not set');
     },
-    alert: async (_subject, body) => {
-      alerts.push(body);
+    alert: async (subject, body) => {
+      alerts.push(`${subject}\n${body}`);
     },
   });
-  assert.equal(resolved.sendProse, false);
+  assert.equal(resolved.status, 'rewrite_missed');
+  assert.equal(resolved.sendProse, true);
+  assert.equal(resolved.draft.fields.opening_bias, NOV5_VERBATIM);
   assert.ok(resolved.result?.issues.some((issue) => issue.code === 'rewrite_not_run'));
   assert.equal(alerts.length, 1);
+  assert.ok(alerts[0].includes('BRIEF QA REWRITE MISSED'));
   assert.ok(alerts[0].includes('rewrite did not run: ANTHROPIC_API_KEY is not set'));
+});
+
+await test('a from-peak drawdown does not knock out the premarket sentence', () => {
+  const facts = nov5Facts();
+  facts.edition = 'morning';
+  facts.tickers.NVDA = buildTickerFact({
+    close: 181.6,
+    prevClose: 200,
+    high: 196,
+    low: 181,
+    open: 196,
+    volume: 0,
+    premarketPrice: 185,
+  });
+  const text = [
+    'The Indexes are in the red this morning with $NVDA leading the damage — down over 7% in premarket after falling roughly 30% from its October peak.',
+    'This is not a rotation story.',
+    'It is a name-specific confidence break tied to AI valuation compression across the sector.',
+    'SPY and QQQ are both opening lower and the tone is risk-off.',
+  ].join(' ');
+  const result = runBriefQa(draft(text), facts);
+  assert.equal(result.droppedFields.includes('opening_bias'), false);
+  const bias = result.draft.fields.opening_bias;
+  assert.ok(bias.includes('over 7%'));
+  assert.ok(bias.includes('roughly 30% from its October peak'));
+  assert.ok(bias.includes('This is not a rotation story.'));
 });
 
 await test('a That-sentence that follows a removed sentence is removed with it', () => {
