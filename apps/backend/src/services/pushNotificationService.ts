@@ -5,6 +5,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 const MASSIVE_BASE_URL = 'https://api.massive.com';
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+const EXPO_RECEIPTS_URL = 'https://exp.host/--/api/v2/push/getReceipts';
+const RECEIPT_CHUNK = 300;
 
 // ============================================================================
 // TYPES
@@ -25,6 +27,12 @@ interface ExpoPushMessage {
 interface ExpoPushTicket {
   status: 'ok' | 'error';
   id?: string;
+  message?: string;
+  details?: { error?: string };
+}
+
+export interface ExpoPushReceipt {
+  status?: 'ok' | 'error';
   message?: string;
   details?: { error?: string };
 }
@@ -108,6 +116,29 @@ export async function sendExpoPushNotifications(
   }
 
   return allTickets;
+}
+
+export async function fetchExpoPushReceipts(
+  ids: string[]
+): Promise<Record<string, ExpoPushReceipt>> {
+  const out: Record<string, ExpoPushReceipt> = {};
+  for (let i = 0; i < ids.length; i += RECEIPT_CHUNK) {
+    const chunk = ids.slice(i, i + RECEIPT_CHUNK);
+    const response = await fetch(EXPO_RECEIPTS_URL, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ ids: chunk }),
+    });
+    if (!response.ok) {
+      throw new Error(`Expo receipts HTTP ${response.status}`);
+    }
+    const json = (await response.json()) as { data?: Record<string, ExpoPushReceipt> };
+    Object.assign(out, json.data ?? {});
+  }
+  return out;
 }
 
 export function isValidExpoPushToken(token: string): boolean {

@@ -489,6 +489,11 @@ export function renderDailyBriefEmail(options: RenderEmailOptions): string {
         ${renderTape(content, brand)}
         ${greeting}
         ${openingBias}
+        <tr>
+          <td class="px" style="padding-top:12px;">
+            <a href="https://app.chartsignl.com/brief?src=email" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;font-weight:600;color:${brand.accent};text-decoration:underline;">Read this brief in the app →</a>
+          </td>
+        </tr>
         ${renderPriorLevels(options.priorLevels)}
         ${sessionSetup}
         ${renderSectors(content, brand)}

@@ -1,0 +1,22 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TWTN5CG47N.com.optionsplungellc.chartsignl",
+        "paths": [
+          "/analyze",
+          "/analyze/*",
+          "/history",
+          "/history/*",
+          "/profile",
+          "/profile/*",
+          "/premium",
+          "/premium/*",
+          "/brief",
+          "/brief/*"
+        ]
+      }
+    ]
+  }
+}

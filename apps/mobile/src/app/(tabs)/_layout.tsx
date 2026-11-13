@@ -31,6 +31,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="brief"
+        options={{
+          title: 'Brief',
+          tabBarIcon: ({ color }) => <TabIcon icon="📰" color={color} />,
+        }}
+      />
+      <Tabs.Screen
         name="history"
         options={{
           title: 'History',

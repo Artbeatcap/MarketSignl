@@ -1,0 +1,123 @@
+{
+  "name": "Morning Brief Push Receipts",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "50 8 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "brief-receipts-schedule",
+      "name": "Weekday 8:50",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "notes": "Cron matches the 08:30 ET send plus 20 minutes. Set the workflow timezone to America/New_York so this is not UTC."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.chartsignl.com/api/internal/daily-brief/push-receipts",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "brief-receipts-http",
+      "name": "POST push-receipts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [280, 0],
+      "notes": "Header Auth credential. The header name is x-cron-secret and the value is the cron secret. Do not use an expression or $env. Never Error stays on so the IF node can see a non-success body.",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "CONFIGURE_ME",
+          "name": "ChartSignl x-cron-secret"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "not-success",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "has-errors",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "or"
+        }
+      },
+      "id": "brief-receipts-if",
+      "name": "Not success or errors",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [560, 0]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "channel": "#chartsignl",
+        "text": "=Morning brief push receipts need a look: {{ JSON.stringify($json) }}"
+      },
+      "id": "brief-receipts-slack",
+      "name": "Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [840, -80],
+      "notes": "Attach the Slack credential and the channel you already use for brief alerts. This node runs only when the IF is true.",
+      "credentials": {
+        "slackApi": {
+          "id": "CONFIGURE_ME",
+          "name": "Slack"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Weekday 8:50": {
+      "main": [[{ "node": "POST push-receipts", "type": "main", "index": 0 }]]
+    },
+    "POST push-receipts": {
+      "main": [[{ "node": "Not success or errors", "type": "main", "index": 0 }]]
+    },
+    "Not success or errors": {
+      "main": [[{ "node": "Slack", "type": "main", "index": 0 }], []]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York"
+  },
+  "active": false
+}

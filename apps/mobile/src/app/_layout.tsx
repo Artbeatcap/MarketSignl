@@ -166,7 +166,10 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     const webGuestTab =
       Platform.OS === 'web' &&
       segments[0] === '(tabs)' &&
-      (segments[1] === 'analyze' || segments[1] === 'history' || segments[1] === 'profile');
+      (segments[1] === 'analyze' ||
+        segments[1] === 'brief' ||
+        segments[1] === 'history' ||
+        segments[1] === 'profile');
     const isGuestAnalyzeRoute = webGuestTab;
     
     // Exclude reset-password from redirect - it needs a session (from recovery token) but user should stay on screen

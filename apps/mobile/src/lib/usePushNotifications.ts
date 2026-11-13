@@ -3,10 +3,11 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
-import { useRouter } from 'expo-router';
+import { useRouter, type Router } from 'expo-router';
 
 import { useAuthStore } from '../store/authStore';
 import { API_URL } from './apiConfig';
+import { updateNotificationPreferences } from './api';
 
 let latestExpoPushToken: string | null = null;
 
@@ -102,6 +103,12 @@ async function registerForPushNotifications(): Promise<RegisterResult> {
         sound: 'default',
         description: 'Notifications when support/resistance levels are crossed',
       });
+      await Notifications.setNotificationChannelAsync('daily-brief', {
+        name: 'Morning Brief',
+        importance: Notifications.AndroidImportance.DEFAULT,
+        sound: null,
+        description: 'A silent notification each market morning that opens the brief',
+      });
     }
 
     const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
@@ -181,6 +188,41 @@ export async function unregisterPushToken(
 
 let registrationPromise: Promise<void> | null = null;
 let lastRegisteredAccessToken: string | null = null;
+let handledNotificationId: string | null = null;
+let pushAuthReady = false;
+let pendingNotificationResponse: Notifications.NotificationResponse | null = null;
+
+function routeFromNotification(
+  data: Record<string, unknown> | undefined,
+  router: Pick<Router, 'push'>
+): void {
+  if (data?.type === 'price_alert') {
+    const symbol = typeof data.symbol === 'string' ? data.symbol : null;
+    if (!symbol) return;
+    router.push({ pathname: '/(tabs)/analyze', params: { symbol } });
+    return;
+  }
+  if (data?.type === 'daily_brief') {
+    router.push({ pathname: '/(tabs)/brief', params: { src: 'push' } });
+  }
+}
+
+function consumeNotificationResponse(
+  response: Notifications.NotificationResponse,
+  router: Pick<Router, 'push'>
+): void {
+  const id = response.notification.request.identifier;
+  if (handledNotificationId === id) return;
+  if (!pushAuthReady) {
+    pendingNotificationResponse = response;
+    return;
+  }
+  handledNotificationId = id;
+  const data = response.notification.request.content.data as
+    | Record<string, unknown>
+    | undefined;
+  routeFromNotification(data, router);
+}
 
 async function runPushRegistration(accessToken: string): Promise<void> {
   const tokenResult = await registerForPushNotifications();
@@ -199,6 +241,16 @@ async function runPushRegistration(accessToken: string): Promise<void> {
   );
   if (!backendResult.ok) {
     updateSnapshot({ error: backendResult.error });
+    return;
+  }
+
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (timezone) {
+    try {
+      await updateNotificationPreferences({ timezone });
+    } catch (error) {
+      console.error('[PUSH] Timezone preference was not saved:', error);
+    }
   }
 }
 
@@ -235,6 +287,26 @@ export function usePushNotifications(): PushNotificationState {
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
+    const ready = isInitialized && !!session?.access_token;
+    pushAuthReady = ready;
+    if (!ready) return;
+
+    const queued = pendingNotificationResponse;
+    pendingNotificationResponse = null;
+    if (queued) consumeNotificationResponse(queued, router);
+
+    let cancelled = false;
+    void Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (cancelled || !response) return;
+      consumeNotificationResponse(response, router);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isInitialized, session?.access_token, router]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
     if (listenersAttached.current) return;
     listenersAttached.current = true;
 
@@ -245,19 +317,7 @@ export function usePushNotifications(): PushNotificationState {
 
     responseListener.current =
       Notifications.addNotificationResponseReceivedListener((response) => {
-        const data = response.notification.request.content.data as
-          | Record<string, unknown>
-          | undefined;
-
-        if (data?.type !== 'price_alert') return;
-
-        const symbol = typeof data?.symbol === 'string' ? data.symbol : null;
-        if (!symbol) return;
-
-        router.push({
-          pathname: '/(tabs)/analyze',
-          params: { symbol },
-        });
+        consumeNotificationResponse(response, router);
       });
 
     return () => {

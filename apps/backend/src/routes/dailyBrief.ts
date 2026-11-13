@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { mkdir, writeFile } from 'fs/promises';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { supabaseAdmin } from '../lib/supabase.js';
+import { getUserFromToken, supabaseAdmin } from '../lib/supabase.js';
 import { saveArtifact, getLatestArtifact } from '../services/dailyBrief/store.js';
 import { checkArtifactFreshness } from '../services/dailyBrief/freshness.js';
 import { postDailyBriefAlert } from '../services/dailyBrief/alert.js';
@@ -24,7 +24,15 @@ import { ZodError } from 'zod';
 import { loadWeekAhead } from '../lib/weekAheadLoad.js';
 import { buildThisWeekBlock, ATLAS_HARD_RULE, ATLAS_CALENDAR_OUTPUT_RULES } from '../lib/weekAhead.js';
 import { refreshEarningsCalendar } from '../lib/earningsCalendarRefresh.js';
+import { unsubscribeByToken } from '../lib/newsletter.js';
 import { buildLiveAtlasPrompt, flagStalePrompt, prepareDailyContent } from '../lib/briefQaLive.js';
+import { supabaseBriefDb } from '../services/dailyBrief/briefStore.js';
+import { publishGatedBrief, type PublishResult } from '../services/dailyBrief/publish.js';
+import { sendDailyBriefPush, type BriefPushResult } from '../services/dailyBrief/push.js';
+import { checkDailyBriefReceipts } from '../services/dailyBrief/receipts.js';
+import { registerPublicBriefRoutes } from '../services/dailyBrief/publicRead.js';
+import type { DailyContent, StoredDailyBrief } from '../services/dailyBrief/types.js';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -32,6 +40,43 @@ const DRY_RUN_PATH = resolve(__dirname, '../../tmp/daily-brief-dryrun.html');
 
 const internalDailyBriefRoute = new Hono();
 const publicDailyBriefRoute = new Hono();
+
+type SendHooks = {
+  loadArtifact?: (supabase: SupabaseClient) => Promise<StoredDailyBrief | null>;
+  prepare?: typeof prepareDailyContent;
+  publish?: (content: DailyContent) => Promise<PublishResult>;
+  push?: (input: { asOf: string; content: DailyContent; onlyUserId?: string }) => Promise<BriefPushResult>;
+  fetchRecipients?: typeof fetchRecipients;
+  sendBatch?: typeof sendBatchInBackground;
+  sendTest?: typeof sendTestEmail;
+  loadWeekAhead?: () => Promise<{ rows: Awaited<ReturnType<typeof loadWeekAhead>>['rows'] }>;
+};
+
+let sendHooks: SendHooks | null = null;
+
+export function setDailyBriefSendHooksForTests(next: SendHooks | null): void {
+  sendHooks = next;
+}
+
+let publicDbOverride: ReturnType<typeof supabaseBriefDb> | null = null;
+
+export function setBriefPublicDbForTests(
+  next: ReturnType<typeof supabaseBriefDb> | null
+): void {
+  publicDbOverride = next;
+}
+
+function briefDb() {
+  return publicDbOverride ?? supabaseBriefDb(supabaseAdmin);
+}
+
+registerPublicBriefRoutes(publicDailyBriefRoute, {
+  db: briefDb,
+  userFromAuthHeader: async (header) => {
+    if (!header?.startsWith('Bearer ')) return null;
+    return getUserFromToken(header.slice(7));
+  },
+});
 
 /** Shared ingest secret with weekly; optional DAILY_CONTENT_INGEST_SECRET override. */
 function checkIngestSecret(c: { req: { header: (name: string) => string | undefined } }): boolean {
@@ -106,7 +151,7 @@ internalDailyBriefRoute.post('/send', async (c) => {
   const dryRun = c.req.query('dryRun') === '1';
   const testEmail = c.req.query('testEmail');
 
-  const stored = await getLatestArtifact(supabaseAdmin);
+  const stored = await (sendHooks?.loadArtifact ?? getLatestArtifact)(supabaseAdmin);
   const freshness = checkArtifactFreshness(stored);
 
   if (!freshness.ok) {
@@ -115,7 +160,7 @@ internalDailyBriefRoute.post('/send', async (c) => {
   }
 
   const storedContent = stored!.artifact;
-  const prepared = await prepareDailyContent({
+  const prepared = await (sendHooks?.prepare ?? prepareDailyContent)({
     content: storedContent,
     edition: 'morning',
     notify: !dryRun,
@@ -123,7 +168,9 @@ internalDailyBriefRoute.post('/send', async (c) => {
   });
   const content = prepared.content;
   const placeholderUnsub = `${getApiBaseUrl()}/api/daily-brief/unsubscribe?token=preview`;
-  const weekAhead = await loadWeekAhead();
+  const weekAhead = sendHooks?.loadWeekAhead
+    ? await sendHooks.loadWeekAhead()
+    : await loadWeekAhead();
   const calendar = weekAhead.rows;
 
   if (dryRun) {
@@ -151,7 +198,8 @@ internalDailyBriefRoute.post('/send', async (c) => {
   }
 
   if (testEmail) {
-    const result = await sendTestEmail(content, testEmail, calendar, prepared.gradedLines);
+    const sendTest = sendHooks?.sendTest ?? sendTestEmail;
+    const result = await sendTest(content, testEmail, calendar, prepared.gradedLines);
     if (!result.ok) {
       await postDailyBriefAlert(`Test send failed to ${testEmail}: ${result.error}`);
       return c.json({ success: false, error: result.error }, 500);
@@ -164,18 +212,37 @@ internalDailyBriefRoute.post('/send', async (c) => {
     });
   }
 
-  const recipients = await fetchRecipients(supabaseAdmin);
+  const published = sendHooks?.publish
+    ? await sendHooks.publish(content)
+    : await publishGatedBrief(briefDb(), content);
+
+  const recipients = await (sendHooks?.fetchRecipients ?? fetchRecipients)(supabaseAdmin);
   if (recipients.length === 0) {
     await postDailyBriefAlert('Send skipped: no opted-in verified recipients');
     return c.json({ success: false, error: 'No recipients', skipped: true }, 409);
   }
 
-  void sendBatchInBackground(content, recipients, calendar, prepared.gradedLines).catch(async (err) => {
+  const sendBatch = sendHooks?.sendBatch ?? sendBatchInBackground;
+  void sendBatch(content, recipients, calendar, prepared.gradedLines).catch(async (err) => {
     console.error('[daily-brief] Background send failed:', err);
     await postDailyBriefAlert(
       `Background send failed: ${err instanceof Error ? err.message : String(err)}`
     );
   });
+
+  const pushEnabled = process.env.BRIEF_PUSH_ENABLED === 'true';
+  const pushStarted = pushEnabled && published.status === 'stored';
+  if (pushStarted) {
+    const push =
+      sendHooks?.push ??
+      ((input: { asOf: string; content: DailyContent }) =>
+        sendDailyBriefPush(supabaseAdmin, input));
+    void push({ asOf: published.asOf, content }).catch(async (err) => {
+      await postDailyBriefAlert(
+        `Brief push failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    });
+  }
 
   return c.json({
     success: true,
@@ -183,7 +250,48 @@ internalDailyBriefRoute.post('/send', async (c) => {
     recipientCount: recipients.length,
     date_label: content.date_label,
     qa: prepared.qa,
+    push: pushStarted ? 'started' : 'disabled',
   });
+});
+
+internalDailyBriefRoute.post('/push-test', async (c) => {
+  if (!checkCronSecret(c)) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+  const userId = c.req.query('userId') ?? '';
+  if (!/^[0-9a-f-]{36}$/i.test(userId)) {
+    return c.json({ success: false, error: 'userId is required' }, 400);
+  }
+  const row = await briefDb().getNewestPublished();
+  if (!row) return c.json({ success: false, error: 'no_brief' }, 404);
+  try {
+    const result = await (sendHooks?.push
+      ? sendHooks.push({ asOf: row.as_of, content: row.content, onlyUserId: userId })
+      : sendDailyBriefPush(supabaseAdmin, {
+          asOf: row.as_of,
+          content: row.content,
+          onlyUserId: userId,
+        }));
+    return c.json({ success: true, asOf: row.as_of, ...result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await postDailyBriefAlert(`Brief push-test failed: ${message}`);
+    return c.json({ success: false, error: message }, 500);
+  }
+});
+
+internalDailyBriefRoute.post('/push-receipts', async (c) => {
+  if (!checkCronSecret(c)) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+  try {
+    const result = await checkDailyBriefReceipts(supabaseAdmin);
+    return c.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await postDailyBriefAlert(`Brief push receipts failed: ${message}`);
+    return c.json({ success: false, error: message }, 500);
+  }
 });
 
 /** FACTS + PRIOR CALLS + hard rules for Options Plunge / n8n. No reference-note text. */
@@ -257,6 +365,18 @@ publicDailyBriefRoute.get('/unsubscribe', async (c) => {
     .select('id')
     .maybeSingle();
 
+  if (!error && data?.id) {
+    await supabaseAdmin
+      .from('newsletter_subscribers')
+      .update({
+        status: 'unsubscribed',
+        unsubscribed_at: new Date().toISOString(),
+        unsubscribe_reason: 'email_link',
+      })
+      .eq('user_id', data.id)
+      .eq('status', 'subscribed');
+  }
+
   if (error) {
     console.error('[daily-brief] Unsubscribe error:', error);
     return c.html(
@@ -266,10 +386,13 @@ publicDailyBriefRoute.get('/unsubscribe', async (c) => {
   }
 
   if (!data) {
-    return c.html(
-      '<html><body style="font-family:sans-serif;padding:40px;text-align:center;"><h1>Link not found</h1><p>This unsubscribe link is invalid or has already been used.</p></body></html>',
-      404
-    );
+    const newsletter = await unsubscribeByToken(token, 'email_link');
+    if (!newsletter.ok) {
+      return c.html(
+        '<html><body style="font-family:sans-serif;padding:40px;text-align:center;"><h1>Link not found</h1><p>This unsubscribe link is invalid or has already been used.</p></body></html>',
+        404
+      );
+    }
   }
 
   return c.html(`<!DOCTYPE html>

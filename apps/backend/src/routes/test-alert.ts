@@ -4,12 +4,14 @@
 
 import { Hono } from 'hono';
 import { getUserFromToken, supabaseAdmin } from '../lib/supabase.js';
-import { isValidExpoPushToken } from '../services/pushNotificationService.js';
+import {
+  fetchExpoPushReceipts,
+  isValidExpoPushToken,
+} from '../services/pushNotificationService.js';
 
 const route = new Hono();
 
 const EXPO_SEND = 'https://exp.host/--/api/v2/push/send';
-const EXPO_RECEIPTS = 'https://exp.host/--/api/v2/push/getReceipts';
 
 const TEST_TITLE = 'ChartSignl test alert';
 const TEST_BODY =
@@ -99,18 +101,9 @@ route.post('/', async (c) => {
   if (ticketIds.length > 0) {
     await new Promise((r) => setTimeout(r, 3000));
     try {
-      const res = await fetch(EXPO_RECEIPTS, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({ ids: ticketIds }),
-      });
-      const json = (await res.json()) as { data?: Record<string, unknown> };
-      receipts = json?.data ?? {};
+      receipts = await fetchExpoPushReceipts(ticketIds);
     } catch {
-      /* best-effort */
+      /* best-effort; the brief receipts job is what fails loudly */
     }
   }
 

@@ -25,6 +25,7 @@ export interface UserProfile {
   freeAnalysesUsed: number;
   pushNotificationsEnabled?: boolean | null;
   alertSoundEnabled?: boolean | null;
+  briefPushEnabled?: boolean | null;
 }
 
 // Onboarding Types

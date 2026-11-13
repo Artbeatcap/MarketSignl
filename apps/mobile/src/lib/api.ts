@@ -113,6 +113,8 @@ export async function updateProfile(data: Record<string, unknown>): Promise<{ su
 export interface NotificationPreferencesUpdate {
   pushEnabled?: boolean;
   soundEnabled?: boolean;
+  briefPushEnabled?: boolean;
+  timezone?: string;
 }
 
 export async function updateNotificationPreferences(
@@ -254,7 +256,7 @@ export async function getGuestAnalyzeStatus(): Promise<{ remaining: 0 | 1 }> {
 
 export async function subscribeToNewsletter(input: {
   email: string;
-  source: 'landing_hero' | 'landing_footer' | 'landing_mid';
+  source: 'landing_hero' | 'landing_footer' | 'landing_mid' | 'brief';
   website?: string;
 }): Promise<{ ok: boolean; invalid?: boolean }> {
   const response = await fetch(`${API_URL}/api/newsletter/subscribe`, {

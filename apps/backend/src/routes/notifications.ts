@@ -299,6 +299,7 @@ notificationRoutes.put('/preferences', async (c) => {
   let body: {
     pushEnabled?: boolean;
     soundEnabled?: boolean;
+    briefPushEnabled?: boolean;
     timezone?: string;
   };
   try {
@@ -313,6 +314,9 @@ notificationRoutes.put('/preferences', async (c) => {
   }
   if (body.soundEnabled !== undefined) {
     updates.alert_sound_enabled = body.soundEnabled;
+  }
+  if (typeof body.briefPushEnabled === 'boolean') {
+    updates.brief_push_enabled = body.briefPushEnabled;
   }
   if (body.timezone) {
     updates.timezone = body.timezone;

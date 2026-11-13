@@ -11,6 +11,7 @@ export type SubscriberStatus =
 export type SubscriberSource =
   | 'landing_hero'
   | 'landing_footer'
+  | 'brief'
   | 'app_signup'
   | 'settings_toggle'
   | 'manual'
@@ -213,7 +214,7 @@ export function warnNewsletter(event: Record<string, unknown>): void {
  */
 export async function subscribePublic(input: {
   email: string;
-  source: 'landing_hero' | 'landing_footer';
+  source: 'landing_hero' | 'landing_footer' | 'brief';
   ip?: string;
   userAgent?: string;
   website?: string;

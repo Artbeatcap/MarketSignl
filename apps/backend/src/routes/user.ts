@@ -83,6 +83,7 @@ userRoute.get('/me', async (c) => {
         freeAnalysesUsed: effectiveUsed,
         pushNotificationsEnabled: profile.push_notifications_enabled ?? true,
         alertSoundEnabled: profile.alert_sound_enabled ?? true,
+        briefPushEnabled: profile.brief_push_enabled ?? true,
       },
     });
 

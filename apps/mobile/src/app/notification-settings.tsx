@@ -54,7 +54,8 @@ export default function NotificationSettingsScreen() {
   const [pushEnabled, setPushEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [briefEnabled, setBriefEnabled] = useState(false);
-  const [savingKey, setSavingKey] = useState<'push' | 'sound' | 'brief' | null>(null);
+  const [briefPushEnabled, setBriefPushEnabled] = useState(true);
+  const [savingKey, setSavingKey] = useState<'push' | 'sound' | 'brief' | 'briefPush' | null>(null);
   const [isClearingAll, setIsClearingAll] = useState(false);
   const [pendingAlertId, setPendingAlertId] = useState<string | null>(null);
 
@@ -64,6 +65,7 @@ export default function NotificationSettingsScreen() {
 
     setPushEnabled(user.pushNotificationsEnabled ?? true);
     setSoundEnabled(user.alertSoundEnabled ?? true);
+    setBriefPushEnabled(user.briefPushEnabled ?? true);
   }, [profileData]);
 
   useEffect(() => {
@@ -138,6 +140,21 @@ export default function NotificationSettingsScreen() {
     } catch (error) {
       setBriefEnabled(previous);
       Alert.alert('Update Failed', 'Could not update the daily brief preference.');
+    } finally {
+      setSavingKey(null);
+    }
+  };
+
+  const handleToggleBriefPush = async (nextValue: boolean) => {
+    const previous = briefPushEnabled;
+    setBriefPushEnabled(nextValue);
+    setSavingKey('briefPush');
+    try {
+      await updateNotificationPreferences({ briefPushEnabled: nextValue });
+      await queryClient.invalidateQueries({ queryKey: ['profile'] });
+    } catch (error) {
+      setBriefPushEnabled(previous);
+      Alert.alert('Update Failed', 'Could not update the morning brief notification.');
     } finally {
       setSavingKey(null);
     }
@@ -309,6 +326,25 @@ export default function NotificationSettingsScreen() {
                   disabled={isBusy}
                   trackColor={{ false: colors.neutral[200], true: colors.primary[200] }}
                   thumbColor={briefEnabled ? colors.primary[500] : colors.neutral[400]}
+                  ios_backgroundColor={colors.neutral[200]}
+                />
+              </View>
+
+              <View style={styles.rowDivider} />
+
+              <View style={styles.row}>
+                <View style={styles.rowText}>
+                  <Text style={styles.rowTitle}>Morning brief notification</Text>
+                  <Text style={styles.mutedNote}>
+                    A notification each market morning that opens the brief in the app.
+                  </Text>
+                </View>
+                <Switch
+                  value={briefPushEnabled}
+                  onValueChange={handleToggleBriefPush}
+                  disabled={isBusy || !pushEnabled}
+                  trackColor={{ false: colors.neutral[200], true: colors.primary[200] }}
+                  thumbColor={briefPushEnabled && pushEnabled ? colors.primary[500] : colors.neutral[400]}
                   ios_backgroundColor={colors.neutral[200]}
                 />
               </View>

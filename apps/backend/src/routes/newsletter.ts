@@ -122,7 +122,9 @@ newsletterRoute.post('/subscribe', async (c) => {
   }
 
   const source =
-    body.source === 'landing_footer' || body.source === 'landing_hero'
+    body.source === 'landing_footer' ||
+    body.source === 'landing_hero' ||
+    body.source === 'brief'
       ? body.source
       : null;
   if (!source) {
