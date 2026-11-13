@@ -9,7 +9,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { DailyContent } from '../types.js';
 import { buildPreheader, renderDailyBriefEmail } from '../renderEmail.js';
 import { publishGatedBrief } from '../publish.js';
-import { sendDailyBriefPush } from '../push.js';
+import { accountForMorningPush, holdMorningPush, sendDailyBriefPush } from '../push.js';
 import { checkDailyBriefReceipts } from '../receipts.js';
 import { registerPublicBriefRoutes } from '../publicRead.js';
 import { fetchExpoPushReceipts } from '../../pushNotificationService.js';
@@ -455,7 +455,7 @@ await test('receipt helper requests Expo in chunks of 300', async () => {
   assert.deepEqual(sizes, [300, 1]);
 });
 
-await test('/send dryRun and testEmail publish nothing; a push throw does not stop the email', async () => {
+await test('/send dryRun and testEmail publish nothing, and the real send does not push', async () => {
   const route = await import('../../../routes/dailyBrief.js');
   const brief = content();
   const published: string[] = [];
@@ -530,10 +530,10 @@ await test('/send dryRun and testEmail publish nothing; a push throw does not st
     assert.equal(real.status, 200);
     assert.equal(realBody.success, true);
     assert.equal(realBody.status, 'sending');
-    assert.equal(realBody.push, 'started');
+    assert.equal(realBody.push, 'deferred');
     assert.equal(batches, 1);
     await new Promise((resolve) => setTimeout(resolve, 20));
-    assert.deepEqual(pushes, ['push']);
+    assert.deepEqual(pushes, []);
     assert.deepEqual(published, ['publish']);
   } finally {
     route.setDailyBriefSendHooksForTests(null);
@@ -542,6 +542,119 @@ await test('/send dryRun and testEmail publish nothing; a push throw does not st
     if (previousSecret === undefined) delete process.env.CRON_SECRET;
     else process.env.CRON_SECRET = previousSecret;
   }
+});
+
+await test('a brief younger than 15 minutes is not claimed and makes no Expo call', async () => {
+  const db = new MemoryDb();
+  const brief = content();
+  const now = new Date('2026-11-12T13:31:00.000Z');
+  db.seedMorning({
+    as_of: '2026-11-12',
+    content: brief,
+    complete: true,
+    published_at: '2026-11-12T13:20:00.000Z',
+  });
+  db.tokens = [{ userId: 'u1', token: 'ExponentPushToken[one]', platform: 'android', isActive: true }];
+  db.profiles = [{ id: 'u1', push_notifications_enabled: true, brief_push_enabled: true }];
+  let calls = 0;
+  const early = await sendDailyBriefPush(supabase, { asOf: '2026-11-12', content: brief }, {
+    db,
+    enabled: true,
+    now: () => now,
+    alert: async () => {},
+    send: async () => {
+      calls += 1;
+      return [];
+    },
+  });
+  assert.deepEqual(early, { skipped: 'too_young' });
+  assert.equal(calls, 0);
+  assert.equal(db.published.get('2026-11-12')?.push_claimed_at, null);
+
+  db.published.get('2026-11-12')!.published_at = '2026-11-12T13:00:00.000Z';
+  const ready = await sendDailyBriefPush(supabase, { asOf: '2026-11-12', content: brief }, {
+    db,
+    enabled: true,
+    now: () => now,
+    alert: async () => {},
+    send: async (messages) => {
+      calls += 1;
+      return messages.map((_, index) => ({ status: 'ok' as const, id: `late-${index}` }));
+    },
+  });
+  assert.equal('skipped' in ready, false);
+  assert.equal(calls, 1);
+  const again = await sendDailyBriefPush(supabase, { asOf: '2026-11-12', content: brief }, {
+    db,
+    enabled: true,
+    now: () => now,
+    alert: async () => {},
+    send: async () => {
+      calls += 1;
+      return [];
+    },
+  });
+  assert.deepEqual(again, { skipped: 'already_sent' });
+  assert.equal(calls, 1);
+});
+
+await test('a hold cancels the push, and the closing check stays quiet', async () => {
+  const db = new MemoryDb();
+  const brief = content();
+  db.seedMorning({
+    as_of: '2026-11-12',
+    content: brief,
+    complete: true,
+    published_at: '2026-11-12T12:00:00.000Z',
+  });
+  const held = await holdMorningPush(supabase, '2026-11-12', { db });
+  assert.deepEqual(held, { held: true, asOf: '2026-11-12' });
+  let calls = 0;
+  const result = await sendDailyBriefPush(supabase, { asOf: '2026-11-12', content: brief }, {
+    db,
+    enabled: true,
+    now: () => new Date('2026-11-12T14:00:00.000Z'),
+    alert: async () => {},
+    send: async () => {
+      calls += 1;
+      return [];
+    },
+  });
+  assert.deepEqual(result, { skipped: 'held' });
+  assert.equal(calls, 0);
+  const alerts: string[] = [];
+  const check = await accountForMorningPush(supabase, {
+    db,
+    enabled: true,
+    now: () => new Date('2026-11-12T14:35:00.000Z'),
+    alert: async (message) => {
+      alerts.push(message);
+    },
+  });
+  assert.deepEqual(check, { accounted: true, reason: 'held' });
+  assert.deepEqual(alerts, []);
+});
+
+await test('the closing check alerts when no push went out and nothing was recorded', async () => {
+  const db = new MemoryDb();
+  db.seedMorning({
+    as_of: '2026-11-12',
+    content: content(),
+    complete: true,
+    published_at: '2026-11-12T12:00:00.000Z',
+  });
+  const alerts: string[] = [];
+  const check = await accountForMorningPush(supabase, {
+    db,
+    enabled: true,
+    now: () => new Date('2026-11-12T14:35:00.000Z'),
+    alert: async (message) => {
+      alerts.push(message);
+    },
+  });
+  assert.equal(check.accounted, false);
+  assert.equal(alerts.length, 1);
+  assert.match(alerts[0], /no push went out and no reason was recorded/);
 });
 
 await test('publish stores the gated brief and leaves an existing claim alone', async () => {

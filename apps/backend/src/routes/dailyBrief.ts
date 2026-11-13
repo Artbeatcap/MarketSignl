@@ -28,7 +28,13 @@ import { unsubscribeByToken } from '../lib/newsletter.js';
 import { buildLiveAtlasPrompt, flagStalePrompt, prepareDailyContent } from '../lib/briefQaLive.js';
 import { supabaseBriefDb } from '../services/dailyBrief/briefStore.js';
 import { publishGatedBrief, type PublishResult } from '../services/dailyBrief/publish.js';
-import { sendDailyBriefPush, type BriefPushResult } from '../services/dailyBrief/push.js';
+import {
+  accountForMorningPush,
+  holdMorningPush,
+  sendDailyBriefPush,
+  type BriefPushResult,
+} from '../services/dailyBrief/push.js';
+import { easternDay } from '../services/dailyBrief/easternDay.js';
 import { checkDailyBriefReceipts } from '../services/dailyBrief/receipts.js';
 import { registerPublicBriefRoutes } from '../services/dailyBrief/publicRead.js';
 import type { DailyContent, StoredDailyBrief } from '../services/dailyBrief/types.js';
@@ -230,28 +236,52 @@ internalDailyBriefRoute.post('/send', async (c) => {
     );
   });
 
-  const pushEnabled = process.env.BRIEF_PUSH_ENABLED === 'true';
-  const pushStarted = pushEnabled && published.status === 'stored';
-  if (pushStarted) {
-    const push =
-      sendHooks?.push ??
-      ((input: { asOf: string; content: DailyContent }) =>
-        sendDailyBriefPush(supabaseAdmin, input));
-    void push({ asOf: published.asOf, content }).catch(async (err) => {
-      await postDailyBriefAlert(
-        `Brief push failed: ${err instanceof Error ? err.message : String(err)}`
-      );
-    });
-  }
-
   return c.json({
     success: true,
     status: 'sending',
     recipientCount: recipients.length,
     date_label: content.date_label,
     qa: prepared.qa,
-    push: pushStarted ? 'started' : 'disabled',
+    push: published.status === 'stored' ? 'deferred' : 'disabled',
   });
+});
+
+internalDailyBriefRoute.post('/push', async (c) => {
+  if (!checkCronSecret(c)) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+  const asOf = easternDay(Date.now());
+  const row = await briefDb().getMorning(asOf);
+  if (!row) return c.json({ success: true, skipped: 'no_brief', asOf });
+  try {
+    const result = await sendDailyBriefPush(supabaseAdmin, { asOf, content: row.content });
+    return c.json({ success: true, asOf, ...result });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await postDailyBriefAlert(`Brief push failed: ${message}`);
+    return c.json({ success: false, error: message }, 500);
+  }
+});
+
+internalDailyBriefRoute.post('/push-hold', async (c) => {
+  if (!checkCronSecret(c)) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+  const asOf = c.req.query('asOf') || easternDay(Date.now());
+  const result = await holdMorningPush(supabaseAdmin, asOf);
+  if ('skipped' in result && result.skipped === 'no_brief') {
+    return c.json({ success: false, ...result }, 404);
+  }
+  if ('skipped' in result) return c.json({ success: false, ...result }, 409);
+  return c.json({ success: true, ...result });
+});
+
+internalDailyBriefRoute.post('/push-check', async (c) => {
+  if (!checkCronSecret(c)) {
+    return c.json({ success: false, error: 'Unauthorized' }, 401);
+  }
+  const result = await accountForMorningPush(supabaseAdmin);
+  return c.json({ success: true, ...result });
 });
 
 internalDailyBriefRoute.post('/push-test', async (c) => {

@@ -1,0 +1,166 @@
+{
+  "name": "Morning Brief Push Delay",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "45,50,55 8 * * 1-5" }]
+        }
+      },
+      "id": "brief-push-early",
+      "name": "08:45 to 08:55",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "notes": "Weekdays, America/New_York. First of the 5-minute retries. The API waits until the brief is 15 minutes old and claims the row once."
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0,5,10,15,20,25,30 9 * * 1-5" }]
+        }
+      },
+      "id": "brief-push-late",
+      "name": "09:00 to 09:30",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 180],
+      "notes": "Continues the same retry through 09:30 ET. A claim already taken returns already_sent and does not send again."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.chartsignl.com/api/internal/daily-brief/push",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "id": "brief-push-http",
+      "name": "POST push",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [320, 80],
+      "notes": "Header Auth credential. Header name x-cron-secret. Do not use $env. Never Error stays on.",
+      "credentials": {
+        "httpHeaderAuth": { "id": "CONFIGURE_ME", "name": "ChartSignl x-cron-secret" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "push-not-success",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "brief-push-if",
+      "name": "Push call failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [580, 80]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "35 9 * * 1-5" }]
+        }
+      },
+      "id": "brief-push-check-schedule",
+      "name": "09:35 check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 400],
+      "notes": "After the retry window. Alerts only when no push went out and no reason was recorded."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.chartsignl.com/api/internal/daily-brief/push-check",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": { "response": { "response": { "neverError": true } } }
+      },
+      "id": "brief-push-check-http",
+      "name": "POST push-check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [320, 400],
+      "credentials": {
+        "httpHeaderAuth": { "id": "CONFIGURE_ME", "name": "ChartSignl x-cron-secret" }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose" },
+          "conditions": [
+            {
+              "id": "not-accounted",
+              "leftValue": "={{ $json.accounted }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "notEquals" }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "brief-push-check-if",
+      "name": "Push not accounted",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [580, 400]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "channel": "#chartsignl",
+        "text": "=Morning brief push needs a look: {{ JSON.stringify($json) }}"
+      },
+      "id": "brief-push-slack",
+      "name": "Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [840, 240],
+      "notes": "Same Slack credential as the other brief alerts. The hold itself is not a schedule: POST /api/internal/daily-brief/push-hold with the cron secret before 08:45.",
+      "credentials": {
+        "slackApi": { "id": "CONFIGURE_ME", "name": "Slack" }
+      }
+    }
+  ],
+  "connections": {
+    "08:45 to 08:55": {
+      "main": [[{ "node": "POST push", "type": "main", "index": 0 }]]
+    },
+    "09:00 to 09:30": {
+      "main": [[{ "node": "POST push", "type": "main", "index": 0 }]]
+    },
+    "POST push": {
+      "main": [[{ "node": "Push call failed", "type": "main", "index": 0 }]]
+    },
+    "Push call failed": {
+      "main": [[{ "node": "Slack", "type": "main", "index": 0 }], []]
+    },
+    "09:35 check": {
+      "main": [[{ "node": "POST push-check", "type": "main", "index": 0 }]]
+    },
+    "POST push-check": {
+      "main": [[{ "node": "Push not accounted", "type": "main", "index": 0 }]]
+    },
+    "Push not accounted": {
+      "main": [[{ "node": "Slack", "type": "main", "index": 0 }], []]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/New_York"
+  },
+  "active": false
+}

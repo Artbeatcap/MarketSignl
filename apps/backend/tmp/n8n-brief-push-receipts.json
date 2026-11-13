@@ -7,17 +7,17 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "50 8 * * 1-5"
+              "expression": "50 9 * * 1-5"
             }
           ]
         }
       },
       "id": "brief-receipts-schedule",
-      "name": "Weekday 8:50",
+      "name": "Weekday 9:50",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [0, 0],
-      "notes": "Cron matches the 08:30 ET send plus 20 minutes. Set the workflow timezone to America/New_York so this is not UTC."
+      "notes": "20 minutes after the last push slot at 09:30 ET. The push itself is not sent at 08:30. Timezone is America/New_York."
     },
     {
       "parameters": {
@@ -105,7 +105,7 @@
     }
   ],
   "connections": {
-    "Weekday 8:50": {
+    "Weekday 9:50": {
       "main": [[{ "node": "POST push-receipts", "type": "main", "index": 0 }]]
     },
     "POST push-receipts": {

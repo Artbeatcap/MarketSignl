@@ -12,6 +12,7 @@ import {
   type RecipientSkipReason,
 } from './briefStore.js';
 import { buildPreheader } from './renderEmail.js';
+import { easternDay } from './easternDay.js';
 import type { DailyContent } from './types.js';
 
 export type BriefPushSkip =
@@ -20,7 +21,11 @@ export type BriefPushSkip =
   | 'already_sent'
   | 'no_lead'
   | 'no_brief'
+  | 'too_young'
+  | 'held'
   | RecipientSkipReason;
+
+const PUSH_WAIT_MS = 15 * 60 * 1000;
 
 export type BriefPushResult =
   | { skipped: BriefPushSkip }
@@ -66,16 +71,26 @@ export async function sendDailyBriefPush(
   const now = deps.now ?? (() => new Date());
   const { asOf, content, onlyUserId } = input;
 
-  if (!onlyUserId && !enabled) return { skipped: 'disabled' };
-
   const row = await db.getMorning(asOf);
   if (!row) {
-    await alert(`BRIEF PUSH SKIPPED no published row ${asOf}`);
     return { skipped: 'no_brief' };
   }
+  if (!onlyUserId && row.push_summary?.holdReason) return { skipped: 'held' };
+  if (!onlyUserId && !enabled) return { skipped: 'disabled' };
+  const publishedAt = Date.parse(row.published_at);
+  if (
+    !onlyUserId &&
+    Number.isFinite(publishedAt) &&
+    publishedAt + PUSH_WAIT_MS > now().getTime()
+  ) {
+    return { skipped: 'too_young' };
+  }
   if (!row.complete) {
-    await alert(`BRIEF PUSH SKIPPED thin ${asOf}: ${missingSections(row.missing)}`);
-    return { skipped: 'thin' };
+    return recordSkip(db, alert, asOf, 'thin', `BRIEF PUSH SKIPPED thin ${asOf}: ${missingSections(row.missing)}`);
+  }
+  const lead = buildPreheader(content, 150);
+  if (!lead) {
+    return recordSkip(db, alert, asOf, 'no_lead', `BRIEF PUSH SKIPPED no lead ${asOf}`);
   }
 
   if (!onlyUserId) {
@@ -94,12 +109,7 @@ export async function sendDailyBriefPush(
     return empty;
   }
 
-  const body = buildPreheader(content, 150);
-  if (!body) {
-    await alert(`BRIEF PUSH SKIPPED no lead ${asOf}`);
-    return { skipped: 'no_lead' };
-  }
-
+  const body = lead;
   const title = briefPushTitle(asOf);
   const messages = recipients.map((recipient) => ({
     to: recipient.token,
@@ -159,4 +169,58 @@ export async function sendDailyBriefPush(
     await alert(`BRIEF PUSH FAILED: 0 of ${summary.recipients} tickets accepted`);
   }
   return summary;
+}
+
+async function recordSkip(
+  db: BriefInAppDb,
+  alert: (message: string) => Promise<void>,
+  asOf: string,
+  reason: BriefPushSkip,
+  message: string
+): Promise<{ skipped: BriefPushSkip }> {
+  const row = await db.getMorning(asOf);
+  if (row?.push_summary?.skipReason === reason) return { skipped: reason };
+  await db.mergePushSummary(asOf, { skipReason: reason });
+  await alert(message);
+  return { skipped: reason };
+}
+
+export async function holdMorningPush(
+  supabase: SupabaseClient,
+  asOf: string,
+  deps: { db?: BriefInAppDb } = {}
+): Promise<{ held: true; asOf: string } | { skipped: 'no_brief' | 'already_sent' }> {
+  const db = deps.db ?? supabaseBriefDb(supabase);
+  const row = await db.getMorning(asOf);
+  if (!row) return { skipped: 'no_brief' };
+  if (row.push_claimed_at) return { skipped: 'already_sent' };
+  await db.mergePushSummary(asOf, { holdReason: 'held' });
+  return { held: true, asOf };
+}
+
+export async function accountForMorningPush(
+  supabase: SupabaseClient,
+  deps: BriefPushDeps = {}
+): Promise<{ accounted: true; reason: string } | { accounted: false; asOf: string }> {
+  const db = deps.db ?? supabaseBriefDb(supabase);
+  const alert = deps.alert ?? postDailyBriefAlert;
+  const enabled = deps.enabled ?? process.env.BRIEF_PUSH_ENABLED === 'true';
+  const now = deps.now ?? (() => new Date());
+  const asOf = easternDay(now().getTime());
+  const row = await db.getMorning(asOf);
+  if (!enabled) return { accounted: true, reason: 'disabled' };
+  if (!row) {
+    await alert(`BRIEF PUSH MISSING ${asOf}: no published brief and no recorded reason`);
+    return { accounted: false, asOf };
+  }
+  if (row.push_claimed_at) return { accounted: true, reason: 'sent' };
+  const reason = row.push_summary?.holdReason ?? row.push_summary?.skipReason;
+  if (typeof reason === 'string' && reason) return { accounted: true, reason };
+  const publishedAt = Date.parse(row.published_at);
+  if (Number.isFinite(publishedAt) && publishedAt + PUSH_WAIT_MS > now().getTime()) {
+    await alert(`BRIEF PUSH MISSING ${asOf}: the brief was not 15 minutes old before the window closed`);
+    return { accounted: false, asOf };
+  }
+  await alert(`BRIEF PUSH MISSING ${asOf}: no push went out and no reason was recorded`);
+  return { accounted: false, asOf };
 }
