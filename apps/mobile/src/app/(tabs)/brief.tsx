@@ -10,6 +10,7 @@ import {
   Platform,
   Linking,
   ActivityIndicator,
+  type TextStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -52,6 +53,11 @@ function formatTapePct(pct: number | null): string {
   if (pct == null || Number.isNaN(pct)) return '';
   const sign = pct > 0 ? '+' : '';
   return `${sign}${pct.toFixed(2)}%`;
+}
+
+function pctTone(pct: number | null): 'up' | 'down' | 'flat' {
+  if (pct == null || Number.isNaN(pct) || pct === 0) return 'flat';
+  return pct < 0 ? 'down' : 'up';
 }
 
 async function fetchLatestBrief(): Promise<LatestBrief> {
@@ -111,10 +117,11 @@ export default function BriefScreen() {
   };
 
   const content = query.data?.content;
-  const bias = content?.sections.opening_bias?.trim() ?? '';
+  const bias = htmlToBlocks(content?.sections.opening_bias);
   const setup = htmlToBlocks(content?.sections.session_setup_html);
   const watch = htmlToBlocks(content?.sections.todays_watch_html);
-  const risk = content?.sections.biggest_risk?.trim() ?? '';
+  const risk = htmlToBlocks(content?.sections.biggest_risk);
+  const headlines = (content?.headlines ?? []).filter((item) => item.headline?.trim());
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -128,6 +135,7 @@ export default function BriefScreen() {
           />
         }
       >
+        <View style={styles.column}>
         <Text style={styles.kicker}>ChartSignl · Morning Brief</Text>
         {query.isLoading ? (
           <Skeleton />
@@ -152,10 +160,10 @@ export default function BriefScreen() {
               </Text>
             ) : null}
 
-            {bias ? (
+            {bias.length ? (
               <Card style={styles.biasCard}>
                 <Text style={styles.kickerAccent}>Opening bias</Text>
-                <Text style={styles.biasText}>{bias}</Text>
+                <RichBlocks blocks={bias} />
               </Card>
             ) : null}
 
@@ -163,15 +171,21 @@ export default function BriefScreen() {
 
             {content.tape?.length ? (
               <Section title="Tape">
-                {content.tape.map((item) => (
-                  <Pressable key={item.symbol} onPress={() => openSymbol(item.symbol)} style={styles.row}>
-                    <Text style={styles.symbol}>{item.symbol}</Text>
-                    <Text style={styles.price}>{item.price}</Text>
-                    <Text style={[styles.pct, item.pct != null && item.pct < 0 ? styles.down : styles.up]}>
-                      {formatTapePct(item.pct)}
-                    </Text>
-                  </Pressable>
-                ))}
+                <View style={styles.tapeGrid}>
+                  {content.tape.map((item) => (
+                    <Pressable
+                      key={item.symbol}
+                      onPress={() => openSymbol(item.symbol)}
+                      style={styles.tapeCell}
+                    >
+                      <Text style={styles.tapeSymbol}>{item.symbol}</Text>
+                      <Text style={styles.tapePrice}>{item.price}</Text>
+                      <Text style={[styles.tapePct, styles[pctTone(item.pct)]]}>
+                        {formatTapePct(item.pct)}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
               </Section>
             ) : null}
 
@@ -181,26 +195,48 @@ export default function BriefScreen() {
               </Section>
             ) : null}
 
-            {content.movers?.length ? (
-              <Section title="Movers">
-                {content.movers.map((mover) => (
-                  <View key={mover.ticker} style={styles.mover}>
-                    <Pressable onPress={() => openSymbol(mover.ticker)}>
-                      <View style={styles.row}>
-                        <Text style={styles.symbol}>{mover.ticker}</Text>
-                        <Text style={[styles.pct, mover.dir === 'down' ? styles.down : styles.up]}>
-                          {mover.pct} · {mover.dir === 'down' ? 'Down' : 'Up'}
-                        </Text>
-                      </View>
-                      {mover.why ? <Text style={styles.body}>{mover.why}</Text> : null}
-                    </Pressable>
-                    {mover.reasonUrl ? (
-                      <Pressable onPress={() => void Linking.openURL(mover.reasonUrl!)}>
-                        <Text style={styles.link}>Source</Text>
-                      </Pressable>
-                    ) : null}
+            {content.sectors?.length ? (
+              <Section title="Sectors">
+                {content.sectors.map((sector) => (
+                  <View key={sector.etf} style={styles.sectorRow}>
+                    <Text style={styles.sectorName} numberOfLines={1}>
+                      {sector.name}
+                    </Text>
+                    <Text style={styles.sectorEtf}>{sector.etf}</Text>
+                    <Text style={[styles.sectorPct, styles[pctTone(sector.pct)]]}>
+                      {formatTapePct(sector.pct)}
+                    </Text>
                   </View>
                 ))}
+              </Section>
+            ) : null}
+
+            {content.movers?.length ? (
+              <Section title="Movers">
+                {content.movers.map((mover) => {
+                  const why = htmlToBlocks(mover.why);
+                  const flowDriven = why.length === 0 || mover.why?.trim() === 'No headline — flow-driven';
+                  return (
+                    <View key={mover.ticker} style={styles.mover}>
+                      <Pressable onPress={() => openSymbol(mover.ticker)}>
+                        <View style={styles.moverHead}>
+                          <Text style={styles.symbol}>{mover.ticker}</Text>
+                          <Text style={[styles.pct, mover.dir === 'down' ? styles.down : styles.up]}>
+                            {mover.pct} · {mover.dir === 'down' ? 'Down' : 'Up'}
+                          </Text>
+                        </View>
+                        {why.length ? (
+                          <RichBlocks blocks={why} textStyle={flowDriven ? styles.muted : undefined} />
+                        ) : null}
+                      </Pressable>
+                      {mover.reasonUrl ? (
+                        <Pressable onPress={() => void Linking.openURL(mover.reasonUrl!)}>
+                          <Text style={styles.link}>Source</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  );
+                })}
               </Section>
             ) : null}
 
@@ -208,13 +244,13 @@ export default function BriefScreen() {
               <Section title="Levels for Today">
                 {Object.entries(content.levels).map(([symbol, level]) => (
                   <Card key={symbol} style={styles.levelCard}>
-                    <Text style={styles.symbol}>{symbol}</Text>
+                    <Text style={styles.symbol}>{symbol.toUpperCase()}</Text>
                     <LevelLines level={level} />
                     <Button
                       title="See the chart"
                       variant="outline"
                       size="sm"
-                      onPress={() => openSymbol(symbol)}
+                      onPress={() => openSymbol(symbol.toUpperCase())}
                     />
                   </Card>
                 ))}
@@ -234,12 +270,12 @@ export default function BriefScreen() {
               </Section>
             ) : null}
 
-            {content.headlines?.length ? (
+            {headlines.length ? (
               <Section title="Headlines in Focus">
-                {content.headlines.map((item, index) => (
+                {headlines.map((item, index) => (
                   <View key={`${item.headline}-${index}`} style={styles.bullet}>
                     <Text style={styles.heading}>{item.headline}</Text>
-                    {item.summary ? <Text style={styles.body}>{item.summary}</Text> : null}
+                    {item.summary.trim() ? <RichBlocks blocks={htmlToBlocks(item.summary)} /> : null}
                     {item.url ? (
                       <Pressable onPress={() => void Linking.openURL(item.url!)}>
                         <Text style={styles.link}>Open story</Text>
@@ -250,14 +286,15 @@ export default function BriefScreen() {
               </Section>
             ) : null}
 
-            {risk ? (
+            {risk.length ? (
               <Card style={styles.riskCard}>
                 <Text style={styles.riskKicker}>The biggest risk</Text>
-                <Text style={styles.biasText}>{risk}</Text>
+                <RichBlocks blocks={risk} />
               </Card>
             ) : null}
           </>
         )}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -272,11 +309,11 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function RichBlocks({ blocks }: { blocks: HtmlBlock[] }) {
+function RichBlocks({ blocks, textStyle }: { blocks: HtmlBlock[]; textStyle?: TextStyle }) {
   return (
     <View style={styles.blocks}>
       {blocks.map((block, index) => (
-        <Text key={index} style={styles.body}>
+        <Text key={index} style={[styles.body, textStyle]}>
           {block.runs.map((run, runIndex) => (
             <Text key={runIndex} style={run.bold ? styles.bold : undefined}>
               {run.text}
@@ -410,11 +447,24 @@ function GuestCard() {
   );
 }
 
+const WEB_COLUMN = 720;
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
-  scroll: { padding: spacing.lg, gap: spacing.md, paddingBottom: spacing.xl },
+  scroll: {
+    flexGrow: 1,
+    width: '100%',
+    ...(Platform.OS === 'web' && { alignItems: 'center' }),
+  },
+  column: {
+    width: '100%',
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
+    gap: spacing.md,
+    ...(Platform.OS === 'web' && { maxWidth: WEB_COLUMN }),
+  },
   kicker: { ...typography.labelSm, color: colors.primary[700], letterSpacing: 1.2, textTransform: 'uppercase' },
-  kickerAccent: { ...typography.labelSm, color: colors.primary[700], marginBottom: spacing.xs },
+  kickerAccent: { ...typography.labelSm, color: colors.primary[700] },
   date: { ...typography.headingLg, color: colors.neutral[900] },
   disclosure: { ...typography.bodySm, color: colors.neutral[500] },
   banner: {
@@ -423,10 +473,9 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   bannerText: { ...typography.bodySm, color: colors.neutral[800] },
-  biasCard: { backgroundColor: colors.primary[50] },
-  biasText: { ...typography.bodyMd, color: colors.neutral[900] },
-  riskCard: { backgroundColor: colors.red[50] },
-  riskKicker: { ...typography.labelSm, color: colors.error, marginBottom: spacing.xs },
+  biasCard: { backgroundColor: colors.primary[50], gap: spacing.xs },
+  riskCard: { backgroundColor: colors.red[50], gap: spacing.xs },
+  riskKicker: { ...typography.labelSm, color: colors.error },
   section: { gap: spacing.sm },
   sectionTitle: {
     ...typography.headingSm,
@@ -435,13 +484,48 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.neutral[100],
     paddingBottom: spacing.xs,
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xs },
   symbol: { ...typography.bodyMd, fontWeight: '700', color: colors.neutral[900] },
-  price: { ...typography.bodyMd, color: colors.neutral[700], flex: 1 },
   pct: { ...typography.bodySm, fontWeight: '600' },
   up: { color: colors.success },
   down: { color: colors.error },
-  mover: { gap: spacing.xs, paddingVertical: spacing.sm },
+  flat: { color: colors.neutral[500] },
+  tapeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  tapeCell: {
+    flexGrow: 1,
+    flexBasis: '46%',
+    minWidth: 128,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.neutral[200],
+    borderRadius: borderRadius.lg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    gap: 2,
+  },
+  tapeSymbol: {
+    ...typography.labelSm,
+    color: colors.neutral[500],
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  tapePrice: { ...typography.headingSm, color: colors.neutral[900] },
+  tapePct: { ...typography.bodySm, fontWeight: '700' },
+  sectorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  sectorName: { ...typography.bodyMd, fontWeight: '600', color: colors.neutral[900], flex: 1 },
+  sectorEtf: { ...typography.bodySm, color: colors.neutral[500], width: 48, textAlign: 'right' },
+  sectorPct: { ...typography.bodySm, fontWeight: '700', width: 72, textAlign: 'right' },
+  mover: {
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.neutral[100],
+  },
+  moverHead: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm },
   body: { ...typography.bodyMd, color: colors.neutral[800] },
   bold: { fontWeight: '700' },
   muted: { ...typography.bodySm, color: colors.neutral[500] },
