@@ -13,6 +13,8 @@ for (const target of targets) {
     await import('../src/lib/__tests__/chartLevels.test.ts');
   } else if (target.includes('briefQaGate')) {
     await import('../src/lib/__tests__/briefQaGate.test.ts');
+    await import('../src/lib/__tests__/briefQaGate.nov13.test.ts');
+    await import('../src/lib/__tests__/briefRenderQa.test.ts');
   } else if (target.includes('briefPush')) {
     await import('../src/services/dailyBrief/__tests__/briefPush.test.ts');
   } else {

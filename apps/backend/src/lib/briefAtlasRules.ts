@@ -7,7 +7,7 @@ import { createHash } from 'crypto';
 const CORE_RULES = [
   'Use only numbers that appear in FACTS. Do not compute, round differently, or restate a change with a different value. If a number is not in FACTS, do not write it.',
   'Every level you give must include a condition and a timeframe: "a daily close above 212", not "212 is resistance".',
-  'HEADLINES are numbered [H1], [H2] and so on. A sentence that gives a cause, or says when news landed, ends with the tag of the headline it comes from, like [H3]. Every name in that sentence must appear in that headline. A clock time must be one the headline states, or the headline\'s own time written as when it was reported ("a 4:55 PM ET report"), never as when the event happened. The same goes for "before the open", "after the close" and similar: they must match the headline\'s time. If no headline explains a move, write "No company news explains it." Tags are removed before sending.',
+  'HEADLINES are numbered [H1], [H2] and so on. A sentence that gives a cause, or says when news landed, ends with the tag of the headline it comes from, like [H3]. Every name in that sentence must appear in that headline. A clock time must be one the headline states, or the headline\'s own time written as when it was reported ("a 4:55 PM ET report"), never as when the event happened. The same goes for "before the open", "after the close" and similar: they must match the headline\'s time. If no headline explains a move, write "No confirmed catalyst in our feed." Do not write "No company news explains it" or "flow-driven". Tags are removed before sending.',
   'If PRIOR CALLS is (none), start with the move. Do not mention prior calls.',
   'A sector word means its ETF in FACTS: chips SMH, energy XLE, oil USO, staples XLP, utilities XLU, tech XLK, bonds TLT, credit HYG, bitcoin IBIT. Only say a sector rose, fell, or held if its ETF did.',
   "The first sentence of the Opening Bias states how yesterday's main level played out, using the PRIOR CALLS block. Do not skip a failed call.",
@@ -20,7 +20,7 @@ const CORE_RULES = [
 /** Word for word. Teaches the shape. It is not a source of facts for a live brief. */
 export const EXPLAIN_THE_MOVE = `**How to explain a move.** Every paragraph about a move follows this order, one short sentence per step:
 1. **What happened**: the fact, with a number from FACTS.
-2. **Why**: the cause, taken from HEADLINES, with *when* it landed ("before the open", "after the 2 PM decision"). If no headline explains the move, say so plainly ("No company news explains it; it moved with the chip group."). Never invent a cause.
+2. **Why**: the cause, taken from HEADLINES, with *when* it landed ("before the open", "after the 2 PM decision"). If no headline explains the move, write "No confirmed catalyst in our feed." Never invent a cause, and never say the move was flow-driven.
 3. **How it travels**: the one-link chain from the cause to the price ("fewer data-center approvals → less hyperscaler spending → lower chip revenue"). Keep it to one chain, two links at most.
 4. **The contrast**: what did *not* move, or moved the other way, using the RANK line in FACTS ("Apple fell 1.7% while the chip ETF fell 11%"). The contrast is the proof the cause is real.
 5. **What decides next**: a level with a condition and a timeframe, or the next scheduled event from THIS WEEK.
@@ -36,7 +36,7 @@ Bonds did not move; XBND rose 0.1%, so this was a company problem, not a rates s
 What decides next is XCHP's 88 close: a daily close back above 92 says the selling is done.`;
 
 export const EXAMPLE_MORNING = `Yesterday's call held: XIDX stayed above 210, with an overnight low of 210.40.
-XCHP is up 3.1% before the open, but no company news explains it; its group is lifting together.
+XCHP is up 3.1% before the open. No confirmed catalyst in our feed; its group is lifting together.
 A bounce without news is usually positioning, so the test is the jobs report at 8:30 [H1].
 Watch XIDX 212: holding it through the first hour keeps the bounce; losing it puts 210 back in play.`;
 

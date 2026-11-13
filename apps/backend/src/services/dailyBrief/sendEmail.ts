@@ -37,15 +37,17 @@ export function renderForRecipient(
   content: DailyContent,
   unsubscribeToken: string,
   calendar?: CalendarRow[],
-  priorLevels?: string[]
+  priorLevels?: string[],
+  tapeCaption?: string
 ): { html: string; subject: string; preheader: string } {
-  const preheader = buildPreheader(content);
+  const preheader = content.preheader || buildPreheader(content);
   const html = renderDailyBriefEmail({
     content,
     preheader,
     unsubscribeUrl: buildUnsubscribeUrl(unsubscribeToken),
     calendar,
     priorLevels,
+    tapeCaption,
   });
 
   return {
@@ -60,13 +62,15 @@ export async function sendToRecipient(
   to: string,
   unsubscribeToken: string,
   calendar?: CalendarRow[],
-  priorLevels?: string[]
+  priorLevels?: string[],
+  tapeCaption?: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { html, subject, preheader } = renderForRecipient(
     content,
     unsubscribeToken,
     calendar,
-    priorLevels
+    priorLevels,
+    tapeCaption
   );
 
   try {
@@ -93,7 +97,8 @@ export async function sendBatchInBackground(
   content: DailyContent,
   recipients: DailyBriefRecipient[],
   calendar?: CalendarRow[],
-  priorLevels?: string[]
+  priorLevels?: string[],
+  tapeCaption?: string
 ): Promise<void> {
   let sent = 0;
   let failed = 0;
@@ -107,7 +112,8 @@ export async function sendBatchInBackground(
           recipient.email,
           recipient.unsubscribe_token,
           calendar,
-          priorLevels
+          priorLevels,
+          tapeCaption
         );
         if (result.ok) {
           sent += 1;
@@ -130,8 +136,9 @@ export async function sendTestEmail(
   content: DailyContent,
   testEmail: string,
   calendar?: CalendarRow[],
-  priorLevels?: string[]
+  priorLevels?: string[],
+  tapeCaption?: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const testToken = '00000000-0000-0000-0000-000000000000';
-  return sendToRecipient(content, testEmail, testToken, calendar, priorLevels);
+  return sendToRecipient(content, testEmail, testToken, calendar, priorLevels, tapeCaption);
 }

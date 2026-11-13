@@ -8,7 +8,9 @@ import {
   EMAIL_SURFACE,
 } from './brand.js';
 import { EMAIL_FONT, emailClientCss } from '../briefShared/emailCss.js';
+import { analyzeHref, clipPreheader, displayCompanyName } from '../briefShared/emailText.js';
 import { sanitizeAiField, sanitizeDailySections } from '../../lib/briefSanitize.js';
+import { NO_CATALYST, cleanHeadlines, explainableMovers, repairCard, replaceForbidden } from '../../lib/briefReason.js';
 import type { CalendarRow } from '../../lib/weekAhead.js';
 
 export interface RenderEmailOptions {
@@ -21,6 +23,8 @@ export interface RenderEmailOptions {
   calendar?: CalendarRow[];
   /** Graded calls from the previous brief. Omitted when empty. */
   priorLevels?: string[];
+  /** Names the window the four tape cells share. */
+  tapeCaption?: string;
 }
 
 function pctColor(pct: number | null, brand: DailyBrand): string {
@@ -50,31 +54,39 @@ function escapeHtml(text: string): string {
     .replace(/"/g, '&quot;');
 }
 
-function renderTape(content: DailyContent, brand: DailyBrand): string {
+function renderTape(content: DailyContent, brand: DailyBrand, caption = 'Overnight / premarket change'): string {
   if (!content.tape?.length) return '';
 
-  const cellWidth = Math.floor(100 / content.tape.length);
-  const cells = content.tape
-    .map((t, i) => {
-      const borderLeft = i === 0 ? 'none' : `1px solid ${EMAIL_BORDER}`;
-      const color = pctColor(t.pct, brand);
-      return `
-                <td class="tape-cell" align="center" width="${cellWidth}%" style="padding:12px 4px;font-family:${EMAIL_FONT};border-left:${borderLeft};">
-                  <div class="tape-sym" style="font-size:11px;font-weight:700;color:${EMAIL_MUTED};letter-spacing:0.04em;">${escapeHtml(t.symbol)}</div>
-                  <div class="tape-price" style="font-size:15px;font-weight:800;color:${EMAIL_INK};margin-top:3px;white-space:nowrap;">${escapeHtml(t.price)}</div>
-                  <div class="tape-pct" style="font-size:12px;font-weight:700;margin-top:2px;color:${color};white-space:nowrap;">${formatPct(t.pct)}</div>
+  const cells = content.tape.map((t) => {
+    const color = pctColor(t.pct, brand);
+    const change = t.pct === null
+      ? ''
+      : `<div class="tape-pct" style="font-size:13px;font-weight:700;margin-top:2px;color:${color};">${formatPct(t.pct)}</div>`;
+    return `
+                <td class="tape-cell" width="50%" valign="top" style="padding:6px;font-family:${EMAIL_FONT};">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${EMAIL_SURFACE};border:1px solid ${EMAIL_BORDER};border-radius:10px;">
+                    <tr>
+                      <td style="padding:12px 14px;">
+                        <div class="tape-sym" style="font-size:12px;font-weight:700;color:${EMAIL_MUTED};letter-spacing:0.06em;"><a href="${analyzeHref(t.symbol)}" style="color:${EMAIL_MUTED};text-decoration:none;">${escapeHtml(t.symbol)}</a></div>
+                        <div class="tape-price" style="font-size:18px;font-weight:800;color:${EMAIL_INK};margin-top:2px;">${escapeHtml(t.price)}</div>
+                        ${change}
+                      </td>
+                    </tr>
+                  </table>
                 </td>`;
-    })
-    .join('');
+  });
+  const rows: string[] = [];
+  for (let i = 0; i < cells.length; i += 2) {
+    rows.push(`<tr>${cells[i]}${cells[i + 1] ?? '<td width="50%"></td>'}</tr>`);
+  }
 
   return `
         <tr>
-          <td class="tape-wrap" style="background:#ffffff;padding:0 16px 22px 16px;">
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${EMAIL_SURFACE};border:1px solid ${EMAIL_BORDER};border-radius:12px;">
-              <tr>${cells}
-              </tr>
+          <td class="tape-wrap" style="background:#ffffff;padding:8px 16px 18px 16px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              ${rows.join('')}
             </table>
-            <div style="font-size:11px;color:${EMAIL_MUTED};text-align:center;padding-top:8px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">Overnight / premarket change</div>
+            <div style="font-size:11px;color:${EMAIL_MUTED};text-align:center;padding-top:6px;font-family:${EMAIL_FONT};">${escapeHtml(caption)}</div>
           </td>
         </tr>`;
 }
@@ -137,14 +149,18 @@ function renderMovers(content: DailyContent, _brand: DailyBrand): string {
 
   const priorLabel = priorSessionLabel(content.date_label);
 
-  const cards = content.movers
+  const visible = explainableMovers(content.movers).rows.map((mover) => {
+    const repaired = repairCard(mover);
+    return { ...mover, why: repaired.why };
+  });
+  const cards = visible
     .map((m) => {
       const pctColor = m.dir === 'down' ? '#EF4444' : '#10B981';
-      const flowDriven = !m.why || m.why === 'No headline — flow-driven';
+      const whyText = replaceForbidden(m.why || '') || NO_CATALYST;
+      const flowDriven = whyText === NO_CATALYST;
       const whyColor = flowDriven ? '#9aa6b5' : '#4a586b';
-      const whyText = m.why || 'No headline — flow-driven';
       const name = m.companyName
-        ? `<span style="font-size:13px;color:#78716C;margin-left:8px;">${escapeHtml(m.companyName)}</span>`
+        ? `<span style="font-size:13px;color:#78716C;margin-left:8px;">${escapeHtml(displayCompanyName(m.companyName))}</span>`
         : '';
 
       // The badge carries the percentage's meaning. A row reading "$DKS -1.14%"
@@ -155,7 +171,7 @@ function renderMovers(content: DailyContent, _brand: DailyBrand): string {
           : m.window === 'premarket'
             ? badge('Premarket', '#E0F2F1', '#0F766E')
             : badge(priorLabel, '#F5F5F4', '#78716C');
-      const earningsBadge = m.isEarnings ? ` ${badge('Earnings', '#FEF3C7', '#92400E')}` : '';
+      const earningsBadge = m.isEarnings && !flowDriven ? ` ${badge('Earnings', '#FEF3C7', '#92400E')}` : '';
 
       const priorClause = m.priorSessionPct
         ? ` — <span style="color:${m.priorSessionPct.trim().startsWith('-') ? '#EF4444' : '#10B981'};font-weight:600;">${escapeHtml(m.priorSessionPct)} ${escapeHtml(priorLabel.toLowerCase())}</span>`
@@ -176,7 +192,7 @@ function renderMovers(content: DailyContent, _brand: DailyBrand): string {
               <tr>
                 <td style="padding:13px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
                   ${windowBadge}${earningsBadge}
-                  <span style="font-size:15px;font-weight:800;color:#0b1220;margin-left:8px;">$${escapeHtml(m.ticker)}</span>
+                  <a href="${analyzeHref(m.ticker)}" style="font-size:15px;font-weight:800;color:#0b1220;margin-left:8px;text-decoration:none;">$${escapeHtml(m.ticker)}</a>
                   <span style="font-size:14px;font-weight:700;margin-left:8px;color:${pctColor};">${escapeHtml(m.pct)}</span>
                   ${name}
                   <div style="${reasonStyle}">${escapeHtml(whyText)}${priorClause}</div>
@@ -186,7 +202,7 @@ function renderMovers(content: DailyContent, _brand: DailyBrand): string {
     })
     .join('');
 
-  const hasPremarket = content.movers.some((m) => m.window === 'premarket');
+  const hasPremarket = visible.some((m) => m.window === 'premarket');
   const caption = hasPremarket
     ? `
             <div style="font-size:12px;line-height:1.5;color:#9aa6b5;margin-top:2px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">Premarket prints are thin and can reverse at the open.</div>`
@@ -223,17 +239,21 @@ function renderCalendar(rows: CalendarRow[] | undefined): string {
 
       const name =
         !isMacro && row.companyName
-          ? `<span style="font-size:13px;color:#78716C;margin-left:8px;">${escapeHtml(row.companyName)}</span>`
+          ? `<span style="font-size:13px;color:#78716C;margin-left:8px;">${escapeHtml(displayCompanyName(row.companyName))}</span>`
           : '';
 
       const body = injectEstMarker(row.body, row.weekday, row.estimated);
+      const tickerMatch = row.headline.match(/^\$([A-Za-z]{1,5})$/);
+      const headline = tickerMatch
+        ? `<a href="${analyzeHref(tickerMatch[1])}" style="color:#0b1220;text-decoration:none;">${escapeHtml(row.headline)}</a>`
+        : escapeHtml(row.headline);
 
       return `
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px;background:#fafbfc;border:1px solid #eef1f6;border-radius:10px;">
               <tr>
                 <td style="padding:13px 16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
                   ${badgeHtml}
-                  <span style="font-size:15px;font-weight:800;color:#0b1220;margin-left:8px;">${escapeHtml(row.headline)}</span>
+                  <span style="font-size:15px;font-weight:800;color:#0b1220;margin-left:8px;">${headline}</span>
                   ${name}
                   <div style="font-size:13.5px;line-height:1.55;color:#3d4a5c;margin-top:6px;">${body}</div>
                 </td>
@@ -344,21 +364,25 @@ function renderPriorLevels(lines: string[] | undefined): string {
 }
 
 function renderHeadlines(content: DailyContent): string {
-  if (!content.headlines?.length) return '';
-
-  const rows = content.headlines
-    .map(
-      (h) => `
+  const linked = cleanHeadlines(content.headlines);
+  const rows = (linked.length ? linked : content.headlines.filter((item) => item.headline.trim()))
+    .filter((item) => item.headline.trim())
+    .map((h) => {
+      const title = h.url
+        ? `<a href="${escapeHtml(h.url)}" style="color:#0b1220;text-decoration:none;">${escapeHtml(h.headline)}</a>`
+        : escapeHtml(h.headline);
+      return `
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:10px;">
               <tr>
                 <td style="padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-                  <div style="font-size:15px;font-weight:700;color:#0b1220;line-height:1.4;">${escapeHtml(h.headline)}</div>
+                  <div style="font-size:15px;font-weight:700;color:#0b1220;line-height:1.4;">${title}</div>
                   ${h.summary ? `<div style="font-size:14px;line-height:1.5;color:#4a586b;margin-top:4px;">${escapeHtml(h.summary)}</div>` : ''}
                 </td>
               </tr>
-            </table>`
-    )
+            </table>`;
+    })
     .join('');
+  if (!rows) return '';
 
   return `
         <tr>
@@ -369,12 +393,11 @@ function renderHeadlines(content: DailyContent): string {
         </tr>`;
 }
 
-export function buildPreheader(content: DailyContent, maxLen = 120): string {
+export function buildPreheader(content: DailyContent, maxLen = 90): string {
   // Sanitize here too: artifacts ingested before greetings became their own
   // field can still carry "Hey guys…" at the head of opening_bias.
   const text = sanitizeAiField(content.preheader || content.sections.opening_bias || '');
-  if (text.length <= maxLen) return text;
-  return `${text.slice(0, maxLen - 1).trim()}…`;
+  return clipPreheader(text, maxLen);
 }
 
 export function renderDailyBriefEmail(options: RenderEmailOptions): string {
@@ -383,7 +406,12 @@ export function renderDailyBriefEmail(options: RenderEmailOptions): string {
   // still carry greetings inside the callout fields.
   const content: DailyContent = {
     ...options.content,
-    sections: sanitizeDailySections(options.content.sections),
+    sections: Object.fromEntries(
+      Object.entries(sanitizeDailySections(options.content.sections)).map(([key, value]) => [
+        key,
+        typeof value === 'string' ? replaceForbidden(value) : value,
+      ])
+    ) as DailyContent['sections'],
   };
   const preheader = options.preheader ?? buildPreheader(content);
   const preferencesUrl = options.preferencesUrl ?? brand.appUrl;
@@ -486,7 +514,7 @@ export function renderDailyBriefEmail(options: RenderEmailOptions): string {
           </td>
         </tr>
 
-        ${renderTape(content, brand)}
+        ${renderTape(content, brand, options.tapeCaption)}
         ${greeting}
         ${openingBias}
         <tr>
@@ -502,8 +530,8 @@ export function renderDailyBriefEmail(options: RenderEmailOptions): string {
         ${renderCatalysts(content, brand)}
         ${renderHeadlines(content)}
         ${biggestRisk}
-        ${signoff}
         ${renderCalendar(options.calendar)}
+        ${signoff}
 
         <tr>
           <td class="px" style="padding-top:30px;padding-bottom:6px;" align="center">

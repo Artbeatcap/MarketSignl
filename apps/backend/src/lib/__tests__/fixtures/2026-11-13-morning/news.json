@@ -1,0 +1,53 @@
+{
+  "reconstructed": true,
+  "note": "Reconstructed after the send. The original snapshot and model output were not persisted. Thursday closes used below were checked against daily bars.",
+  "spy": {
+    "closeToCloseInto2026-11-12": -0.35,
+    "window": "prior_session",
+    "note": "SPY close 757.12 on Nov 12 vs 759.81 on Nov 11 is -0.35%. The prose calling it yesterday is the prior session. The tape label Overnight / premarket is the wrong window."
+  },
+  "adig": {
+    "closeToCloseInto2026-11-12": -49.85,
+    "nov12": { "open": 15.46, "close": 9.82, "volume": 5705134 },
+    "realPrint": true
+  },
+  "nvda": [
+    {
+      "title": "Zacks Earnings Trends Highlights: Micron, Nvidia and Alphabet",
+      "description": "Q3 earnings for the S&P 500 show strong broad-based growth of +24.6% on +13.5% higher revenues, with 82.5% of companies beating EPS estimates.",
+      "tickers": ["NVDA", "MU", "GOOGL"],
+      "publishedUtc": "2026-11-13T06:53:00Z",
+      "url": "https://example.com/zacks-earnings"
+    },
+    {
+      "title": "The AI Trade Just Cracked. Here's the Price at Which I'd Start Buying Nvidia.",
+      "description": "Nvidia stock plummeted following CEO Jensen Huang's resignation amid personal scandals.",
+      "tickers": ["NVDA"],
+      "publishedUtc": "2026-11-13T10:12:02Z",
+      "url": "https://example.com/huang"
+    },
+    {
+      "title": "Compared to Estimates, Cerebras (CBRS) Q3 Earnings: A Look at Key Metrics",
+      "description": "A metrics roundup.",
+      "tickers": ["CBRS"],
+      "publishedUtc": "2026-11-13T09:00:00Z",
+      "url": "https://example.com/cbrs"
+    }
+  ],
+  "nbis": [
+    {
+      "title": "Zacks Investment Ideas feature highlights: Nebius, CoreWeave, IREN and NVIDIA",
+      "description": "A four-name listicle.",
+      "tickers": ["NBIS", "CRWV", "IREN", "NVDA"],
+      "publishedUtc": "2026-11-13T06:52:00Z",
+      "url": "https://example.com/zacks-ideas"
+    },
+    {
+      "title": "Stock Market Today, Nov. 12: Nebius Group Sinks Nearly 17% After Lowering 2026 Outlook",
+      "description": "Nebius lowered its 2026 revenue outlook after data-center delays.",
+      "tickers": ["NBIS"],
+      "publishedUtc": "2026-11-12T22:28:40Z",
+      "url": "https://example.com/nbis-outlook"
+    }
+  ]
+}

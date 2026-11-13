@@ -26,6 +26,7 @@ import { buildThisWeekBlock, ATLAS_HARD_RULE, ATLAS_CALENDAR_OUTPUT_RULES } from
 import { refreshEarningsCalendar } from '../lib/earningsCalendarRefresh.js';
 import { unsubscribeByToken } from '../lib/newsletter.js';
 import { buildLiveAtlasPrompt, flagStalePrompt, prepareDailyContent } from '../lib/briefQaLive.js';
+import { guardMorningSend, priorCloseWeekday, renderQa, saveBriefRun } from '../lib/briefRenderQa.js';
 import { supabaseBriefDb } from '../services/dailyBrief/briefStore.js';
 import { publishGatedBrief, type PublishResult } from '../services/dailyBrief/publish.js';
 import {
@@ -172,7 +173,16 @@ internalDailyBriefRoute.post('/send', async (c) => {
     notify: !dryRun,
     persist: !dryRun && !testEmail,
   });
-  const content = prepared.content;
+  const guarded = guardMorningSend({
+    content: prepared.content,
+    weekday: priorCloseWeekday(prepared.content.date_label),
+  });
+  const content = guarded.content;
+  if (guarded.status !== 'pass') {
+    await postDailyBriefAlert(
+      `BRIEF QA FIXED morning ${content.date_label}\nrepairs: ${guarded.repairs.join(', ') || 'none'}\nomitted: ${guarded.omitted.join(', ') || 'none'}`
+    );
+  }
   const placeholderUnsub = `${getApiBaseUrl()}/api/daily-brief/unsubscribe?token=preview`;
   const weekAhead = sendHooks?.loadWeekAhead
     ? await sendHooks.loadWeekAhead()
@@ -182,10 +192,27 @@ internalDailyBriefRoute.post('/send', async (c) => {
   if (dryRun) {
     const html = renderDailyBriefEmail({
       content,
-      preheader: buildPreheader(content),
+      preheader: content.preheader || buildPreheader(content),
       unsubscribeUrl: placeholderUnsub,
-      calendar,
+      calendar: guarded.calendar.length ? guarded.calendar : calendar,
       priorLevels: prepared.gradedLines,
+      tapeCaption: guarded.tapeCaption,
+    });
+    const renderCodes = renderQa({
+      html,
+      tapeCaption: guarded.tapeCaption,
+      expectedCaption: guarded.tapeCaption,
+      topStory: guarded.topStory,
+      calendarBlocks: (guarded.calendar.length ? guarded.calendar : calendar).length ? 1 : 0,
+    });
+    const renderStatus = guarded.repairs.length || renderCodes.length ? 'fixed' : 'pass';
+    console.log(JSON.stringify({ event: 'brief_qa', asOf: content.date_label, edition: 'morning', status: prepared.qa.status }));
+    console.log(JSON.stringify({ event: 'render_qa', status: renderStatus, repairs: guarded.repairs, codes: renderCodes }));
+    await saveBriefRun({
+      asOf: content.date_label,
+      edition: 'morning',
+      payload: { content, qa: prepared.qa, render: renderCodes, repairs: guarded.repairs },
+      alert: async (subject, body) => postDailyBriefAlert(`${subject}\n${body}`),
     });
 
     await mkdir(resolve(__dirname, '../../tmp'), { recursive: true });
@@ -199,13 +226,13 @@ internalDailyBriefRoute.post('/send', async (c) => {
       htmlPath: DRY_RUN_PATH,
       subject: buildSubject(content),
       preheader: buildPreheader(content),
-      qa: prepared.qa,
+      qa: { ...prepared.qa, status: renderStatus, renderCodes },
     });
   }
 
   if (testEmail) {
     const sendTest = sendHooks?.sendTest ?? sendTestEmail;
-    const result = await sendTest(content, testEmail, calendar, prepared.gradedLines);
+    const result = await sendTest(content, testEmail, calendar, prepared.gradedLines, guarded.tapeCaption);
     if (!result.ok) {
       await postDailyBriefAlert(`Test send failed to ${testEmail}: ${result.error}`);
       return c.json({ success: false, error: result.error }, 500);
@@ -218,6 +245,13 @@ internalDailyBriefRoute.post('/send', async (c) => {
     });
   }
 
+  await saveBriefRun({
+    asOf: content.date_label,
+    edition: 'morning',
+    payload: { content, qa: prepared.qa, repairs: guarded.repairs, omitted: guarded.omitted },
+    alert: async (subject, body) => postDailyBriefAlert(`${subject}\n${body}`),
+  });
+
   const published = sendHooks?.publish
     ? await sendHooks.publish(content)
     : await publishGatedBrief(briefDb(), content);
@@ -229,7 +263,7 @@ internalDailyBriefRoute.post('/send', async (c) => {
   }
 
   const sendBatch = sendHooks?.sendBatch ?? sendBatchInBackground;
-  void sendBatch(content, recipients, calendar, prepared.gradedLines).catch(async (err) => {
+  void sendBatch(content, recipients, guarded.calendar.length ? guarded.calendar : calendar, prepared.gradedLines, guarded.tapeCaption).catch(async (err) => {
     console.error('[daily-brief] Background send failed:', err);
     await postDailyBriefAlert(
       `Background send failed: ${err instanceof Error ? err.message : String(err)}`
